@@ -8,8 +8,7 @@ Hệ thống tích hợp tự động crawl dữ liệu tồn đọng từ Power
 
 ```text
 tools-bdld-vnp/
-├── crawler-backend/             # Python Backend (Crawl dữ liệu từ Power BI & Phục vụ giao diện UI gộp)
-│   ├── frontend/                # Mã nguồn trang Dashboard UI gộp (Dashboard + Định vị)
+├── crawler-backend/             # Python Backend (Crawl dữ liệu từ Power BI)
 │   ├── database.py              # Xử lý kết nối và các câu lệnh SQL Server (live/staging)
 │   ├── main.py                  # API Server (FastAPI), phân quyền & quản lý tài khoản
 │   ├── pbi_crawler.py           # Kịch bản giả lập crawl dữ liệu từ Power BI
@@ -22,6 +21,12 @@ tools-bdld-vnp/
 │   ├── vnpost-client.js         # API client kết nối VNPost (login, fetch chi tiết bưu gửi)
 │   ├── server.js                # API Server (Express) điều phối đa luồng định vị
 │   └── Dockerfile               # Cấu hình đóng gói Docker cho dinhvi-backend
+│
+├── frontend/                    # Giao diện UI gộp (Dashboard hàng tồn + Định vị bưu gửi)
+│   ├── index.html               # Trang giao diện chính
+│   ├── app.js                   # Logic xử lý gọi API tương đối
+│   ├── nginx.conf               # Cấu hình phân tuyến Nginx proxy cho API
+│   └── Dockerfile               # Cấu hình đóng gói Docker (Nginx alpine)
 │
 ├── docker-compose.yml           # File deploy Stack Portainer cho toàn bộ hệ thống
 └── README.md                    # Tài liệu hướng dẫn sử dụng và triển khai
@@ -56,7 +61,7 @@ tools-bdld-vnp/
 
 ## 🌐 3. Danh sách các API Endpoints
 
-### 🐍 Python Backend (FastAPI - Cổng `8000` / Giao diện gộp cổng `9999`)
+### 🐍 Python Backend (FastAPI - Cổng `8000` nội bộ)
 
 #### 📊 Dashboard & Crawl
 * `GET /api/status`: Lấy trạng thái hoạt động của crawler (đang chạy, thời gian chạy gần nhất, kết quả).
@@ -105,4 +110,4 @@ Sử dụng file `docker-compose.yml` trong repository này để triển khai. 
 *   User: `sa`
 *   Password: `Sadmin123`
 *   Database: `caw_powerbi_db`
-*   Frontend gộp được mở duy nhất ở cổng **`9999`**.
+*   Giao diện gộp được mở duy nhất ở cổng **`9999`** (Nginx container tự động điều phối yêu cầu API sang các container backend tương ứng).

@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lâm Đồng - Dashboard Hàng Tồn TMS</title>
+    <!-- Google Fonts Outfit, Plus Jakarta Sans, JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Style CSS -->
+     <link rel="stylesheet" href="/static/style.css?v=1.3.6">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="login-container" class="login-wrapper">
+        <div class="login-card">
+            <div class="login-header">
+                <i class="fa-solid fa-truck-fast login-logo-icon"></i>
+                <h2>VNPOST LÂM ĐỒNG</h2>
+                <p>Hệ thống Tra cứu hàng tồn & Định vị bưu gửi</p>
+            </div>
+            <div id="login-error" class="login-alert" style="display: none;"></div>
+            <form id="login-form">
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label" for="login-username"><i class="fa-solid fa-user"></i> Tên đăng nhập</label>
+                    <input type="text" id="login-username" class="input-field" placeholder="Nhập tên đăng nhập..." required autocomplete="username">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label" for="login-password"><i class="fa-solid fa-lock"></i> Mật khẩu</label>
+                    <input type="password" id="login-password" class="input-field" placeholder="Nhập mật khẩu..." required autocomplete="current-password">
+                </div>
+                <div class="form-group" style="margin-bottom: 24px;">
+                    <label class="form-label" for="login-captcha-input"><i class="fa-solid fa-key"></i> Mã xác thực (Captcha)</label>
+                    <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                        <div id="login-captcha-img-wrapper" style="height: 44px; min-width: 130px; border-radius: 8px; background: #fff; border: 1px solid var(--border-color); overflow: hidden; display: flex; align-items: center; justify-content: center; flex-grow: 1;">
+                            <span class="captcha-placeholder" style="font-size: 12px; color: var(--text-muted);">Đang tải...</span>
+                        </div>
+                        <button type="button" id="btn-refresh-login-captcha" class="btn btn-secondary" style="padding: 0; height: 44px; width: 44px; min-width: 44px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </button>
+                        <input type="text" id="login-captcha-input" class="input-field" placeholder="Mã..." required autocomplete="off" style="width: 100px; height: 44px; padding: 6px 12px; font-size: 15px; border-radius: 8px;">
+                    </div>
+                </div>
+                <button type="submit" id="btn-login-submit" class="btn btn-primary btn-block" style="width: 100%;">Đăng nhập</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div class="app-container" id="main-app-container" style="display: none;">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-area">
+                <i class="fa-solid fa-truck-fast logo-icon"></i>
+                <div class="logo-text">VNPOST <span>LÂM ĐỒNG</span></div>
+            </div>
+            
+            <!-- User Profile Card -->
+            <div class="sidebar-user-profile" id="sidebar-user-profile" style="display: none;">
+                <div class="user-avatar"><i class="fa-solid fa-user-circle"></i></div>
+                <div class="user-info">
+                    <div class="user-name" id="sidebar-username">Username</div>
+                    <div class="user-role" id="sidebar-user-role">Role</div>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" id="menu-dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
+                <a href="#" class="nav-item" id="menu-export"><i class="fa-solid fa-file-excel"></i> Xuất Excel (Định vị)</a>
+                <a href="#" class="nav-item" id="menu-history"><i class="fa-solid fa-history"></i> Lịch sử xuất</a>
+
+                <a href="#" class="nav-item" id="menu-users" style="display: none;"><i class="fa-solid fa-gear"></i> Cài đặt</a>
+                <a href="#" class="nav-item" id="btn-trigger-crawl"><i class="fa-solid fa-rotate"></i> Đồng bộ dữ liệu</a>
+                <a href="#" class="nav-item" id="menu-logout" style="margin-top: auto; border-top: 1px solid var(--border-color); padding-top: 16px;"><i class="fa-solid fa-right-from-bracket"></i> Đăng xuất</a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <span class="dot" id="status-dot"></span>
+                    <span id="status-text">Đang tải...</span>
+                </div>
+                <div class="last-update" id="last-update-time">Cập nhật: --:--:--</div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard View -->
+            <div id="view-dashboard" class="content-view active">
+                <!-- Header -->
+                <header class="header">
+                    <div class="header-title">
+                        <h1>Dashboard | Lưu lượng hàng tồn theo ngày đến tỉnh - Lâm Đồng</h1>
+                        <p>Hệ thống tự động đồng bộ thời gian thực với Power BI</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" id="btn-refresh"><i class="fa-solid fa-arrows-rotate"></i> Làm mới</button>
+                    </div>
+                </header>
+
+                <!-- KPI Cards -->
+                <section class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-icon color-blue"><i class="fa-solid fa-box"></i></div>
+                        <div class="kpi-info">
+                            <h3>Tổng sản lượng</h3>
+                            <p class="kpi-value" id="kpi-qty">0</p>
+                            <span class="kpi-sub">Bưu gửi đang tồn</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon color-yellow"><i class="fa-solid fa-coins"></i></div>
+                        <div class="kpi-info">
+                            <h3>Tổng COD</h3>
+                            <p class="kpi-value" id="kpi-cod">0đ</p>
+                            <span class="kpi-sub">Tổng tiền thu hộ</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon color-green"><i class="fa-solid fa-weight-hanging"></i></div>
+                        <div class="kpi-info">
+                            <h3>Tổng trọng lượng</h3>
+                            <p class="kpi-value" id="kpi-weight">0 kg</p>
+                            <span class="kpi-sub">Trọng lượng hàng hóa</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Dashboard Grid -->
+                <div class="dashboard-grid">
+                    <!-- Left Panel: Pivot Matrix -->
+                    <div class="grid-card matrix-card">
+                        <div class="card-header matrix-header">
+                            <h2>- Tổng số lượng tồn -</h2>
+                            <div class="threshold-inputs">
+                                <span class="threshold-label"><i class="fa-solid fa-highlighter"></i> Highlight tồn ≥</span>
+                                <div class="threshold-group">
+                                    <label>3 ngày</label>
+                                    <input type="number" id="threshold-3" placeholder="0" min="0">
+                                </div>
+                                <div class="threshold-group">
+                                    <label>7 ngày</label>
+                                    <input type="number" id="threshold-7" placeholder="0" min="0">
+                                </div>
+                                <div class="threshold-group">
+                                    <label>14 ngày</label>
+                                    <input type="number" id="threshold-14" placeholder="0" min="0">
+                                </div>
+                                <div class="threshold-group">
+                                    <label>Tổng</label>
+                                    <input type="number" id="threshold-total" placeholder="0" min="0">
+                                </div>
+                                <button class="btn btn-secondary" id="btn-reset-filters" style="padding: 6px 12px; font-size: 12.5px; border-radius: 8px; margin-left: 8px;"><i class="fa-solid fa-arrow-rotate-left"></i> Reset bộ lọc</button>
+                            </div>
+                        </div>
+                        <div class="table-container matrix-container">
+                            <table class="table matrix-table" id="matrix-table">
+                                <thead>
+                                    <tr>
+                                        <th rowspan="2" class="sortable-matrix" data-sort="pos_name">Bưu cục phát <i class="fa-solid fa-sort"></i></th>
+                                        <th colspan="2" class="col-group text-center">≥3 ngày</th>
+                                        <th colspan="2" class="col-group text-center">≥7 ngày</th>
+                                        <th colspan="2" class="col-group text-center">≥14 ngày</th>
+                                        <th colspan="2" class="col-group total-group text-center">Toàn tỉnh</th>
+                                    </tr>
+                                    <tr>
+                                        <th class="sortable-matrix" data-sort="qty-≥3 ngày">SL BG <i class="fa-solid fa-sort"></i></th>
+                                        <th class="sortable-matrix" data-sort="cod-≥3 ngày">COD (đ) <i class="fa-solid fa-sort"></i></th>
+                                        <th class="sortable-matrix" data-sort="qty-≥7 ngày">SL BG <i class="fa-solid fa-sort"></i></th>
+                                        <th class="sortable-matrix" data-sort="cod-≥7 ngày">COD (đ) <i class="fa-solid fa-sort"></i></th>
+                                        <th class="sortable-matrix" data-sort="qty-≥14 ngày">SL BG <i class="fa-solid fa-sort"></i></th>
+                                        <th class="sortable-matrix" data-sort="cod-≥14 ngày">COD (đ) <i class="fa-solid fa-sort"></i></th>
+                                        <th class="total-col sortable-matrix" data-sort="qty-Total">SL BG <i class="fa-solid fa-sort"></i></th>
+                                        <th class="total-col sortable-matrix" data-sort="cod-Total">COD (đ) <i class="fa-solid fa-sort"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="matrix-tbody">
+                                    <tr>
+                                        <td colspan="9" class="text-center text-muted">Đang tải dữ liệu tổng hợp...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Right Panel: Detailed Table -->
+                    <div class="grid-card detailed-card">
+                        <div class="card-header">
+                            <h2>2/ Chi tiết bưu gửi tồn tại BĐT/TP Lâm Đồng</h2>
+                            <div class="card-header-actions">
+                                <button class="btn btn-success" id="btn-export-excel"><i class="fa-solid fa-file-excel"></i> Xuất Excel</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Filters Section (inside card) -->
+                        <section class="filters-container">
+                            <div class="filter-group">
+                                <label for="filter-pos">Bưu cục phát</label>
+                                <select id="filter-pos">
+                                    <option value="">-- Tất cả bưu cục --</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="filter-category">Thời gian tồn</label>
+                                <select id="filter-category">
+                                    <option value="">-- Tổng số lượng tồn --</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="filter-status">Trạng thái</label>
+                                <select id="filter-status">
+                                    <option value="">-- Tất cả trạng thái --</option>
+                                </select>
+                            </div>
+                            <div class="filter-group search-group">
+                                <label for="search-input">Tìm kiếm</label>
+                                <div class="search-wrapper">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                    <input type="text" id="search-input" placeholder="Nhập mã bưu gửi hoặc tên bưu cục...">
+                                </div>
+                            </div>
+                        </section>
+                        
+                        <div class="table-container detailed-container">
+                            <table class="table detailed-table" id="detailed-table">
+                                <thead>
+                                    <tr>
+                                        <th data-col="item_code" class="sortable">Mã bưu gửi <i class="fa-solid fa-sort"></i></th>
+                                        <th data-col="pos_name" class="sortable">Bưu cục phát <i class="fa-solid fa-sort"></i></th>
+                                        <th data-col="status_name" class="sortable">Trạng thái <i class="fa-solid fa-sort"></i></th>
+                                        <th data-col="loai_ton" class="sortable">Thời gian tồn <i class="fa-solid fa-sort"></i></th>
+                                        <th data-col="cod_amount" class="sortable text-right">COD (đ) <i class="fa-solid fa-sort"></i></th>
+                                        <th data-col="weight" class="sortable text-right">TL (kg) <i class="fa-solid fa-sort"></i></th>
+                                        <th data-col="updated_at" class="sortable">Cập nhật <i class="fa-solid fa-sort"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detailed-tbody">
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted">Đang tải dữ liệu chi tiết...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- Pagination -->
+                        <div class="pagination-container">
+                            <div class="pagination-left">
+                                <div class="pagination-info" id="pagination-info">Hiển thị 0 - 0 trong tổng số 0 bản ghi</div>
+                                <div class="page-size-selector">
+                                    <label for="select-page-size">Hiển thị:</label>
+                                    <select id="select-page-size">
+                                        <option value="10">10 dòng</option>
+                                        <option value="20">20 dòng</option>
+                                        <option value="50" selected>50 dòng</option>
+                                        <option value="100">100 dòng</option>
+                                        <option value="200">200 dòng</option>
+                                        <option value="500">500 dòng</option>
+                                        <option value="1000">1000 dòng</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="pagination-buttons" id="pagination-buttons">
+                                <button class="btn btn-secondary" id="btn-prev-page" disabled><i class="fa-solid fa-chevron-left"></i> Trước</button>
+                                <button class="btn btn-secondary" id="btn-next-page" disabled>Sau <i class="fa-solid fa-chevron-right"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export View -->
+            <div id="view-export" class="content-view">
+                <header class="header">
+                    <div class="header-title">
+                        <h1>Xuất Excel Định vị</h1>
+                        <p>Nhập danh sách mã bưu gửi và xuất file Excel gộp định vị chi tiết</p>
+                    </div>
+                </header>
+
+                <!-- Compact Thread Status Bar (with inline captcha row) -->
+                <div class="compact-thread-bar" style="display: flex; flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 24px;">
+                    <!-- Row 1: Status -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; width: 100%;">
+                        <div class="compact-thread-title">
+                            <i class="fa-solid fa-circle-nodes" style="color: var(--accent-emerald);"></i>
+                            <h2>Trạng thái luồng kết nối VNPost (<span id="active-thread-count">0</span>)</h2>
+                        </div>
+                        <div class="compact-thread-grid" id="sessions-container">
+                            <span class="text-muted" style="font-size: 13px;">Đang tải trạng thái luồng...</span>
+                        </div>
+                        <div class="compact-thread-actions">
+                            <button class="btn btn-secondary btn-sm" id="btn-reset-sessions" style="padding: 6px 12px; font-size: 12.5px; border-radius: 8px;">
+                                <i class="fa-solid fa-arrow-rotate-left"></i> Đặt lại
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Row 2: Captcha Form (Hidden by default, shown inside same bar) -->
+                    <div id="session-captcha-form" style="display: none; border-top: 1px solid var(--border-color); padding-top: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; width: 100%;">
+                        <div class="compact-thread-title" style="flex-shrink: 0;">
+                            <i class="fa-solid fa-key" style="color: var(--accent-emerald);"></i>
+                            <h2 id="session-captcha-title" style="font-size: 14px; font-weight: 700; margin: 0;">Giải Captcha Luồng 1</h2>
+                        </div>
+                        <form id="frm-session-captcha" style="display: flex; align-items: center; gap: 8px; flex-grow: 1; justify-content: flex-end; flex-wrap: wrap; margin: 0;">
+                            <div class="captcha-image-wrapper" id="session-captcha-img-wrapper" style="height: 48px; min-width: 140px; border-radius: 8px; padding: 0; background: #fff; border: 1px solid var(--border-color); overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                                <span class="captcha-placeholder" style="font-size: 12px; color: var(--text-muted);">Đang tải...</span>
+                            </div>
+                            <button type="button" id="btn-refresh-session-captcha" class="btn btn-secondary btn-icon" title="Tải lại Captcha" style="padding: 6px 12px; font-size: 14px; border-radius: 8px; height: 48px; min-width: 48px; display: flex; align-items: center; justify-content: center;">
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </button>
+                            <input type="text" id="session-captcha-input" class="input-field" placeholder="Nhập mã..." required autocomplete="off" style="width: 130px; padding: 6px 12px; font-size: 15px; height: 48px; border-radius: 8px;">
+                            <button type="submit" class="btn btn-primary" id="btn-session-captcha-submit" style="padding: 6px 16px; font-size: 14px; border-radius: 8px; height: 48px; font-weight: 600;">Xác nhận</button>
+                            <button type="button" class="btn btn-secondary" id="btn-session-captcha-cancel" style="padding: 6px 16px; font-size: 14px; border-radius: 8px; height: 48px; font-weight: 600;">Hủy</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Main Export Panel -->
+                <div class="export-panel-grid">
+                    <!-- Left: Inputs -->
+                    <div class="grid-card export-input-card padded">
+                        <div class="card-header">
+                            <h2><i class="fa-solid fa-paste"></i> Nhập mã bưu gửi</h2>
+                            <div class="card-header-actions">
+                                <button class="btn btn-secondary btn-sm" id="btn-load-sample-codes"><i class="fa-solid fa-wand-magic-sparkles"></i> Mẫu</button>
+                                <button class="btn btn-secondary btn-sm" id="btn-clear-codes"><i class="fa-solid fa-trash"></i> Xóa</button>
+                            </div>
+                        </div>
+                        <div class="textarea-wrapper">
+                            <textarea id="export-codes-input" placeholder="Dán danh sách mã bưu gửi ở đây (phân tách bằng dấu phẩy, dấu cách hoặc xuống dòng)..." required></textarea>
+                            <span class="badge badge-counter" id="badge-codes-count">0 mã</span>
+                        </div>
+                        <button class="btn btn-success btn-block" id="btn-start-export" style="width: 100%; margin-top: 16px; padding: 14px;"><i class="fa-solid fa-file-export"></i> Định vị và xuất excel</button>
+                    </div>
+
+                    <!-- Right: Terminal & Progress -->
+                    <div class="grid-card export-progress-card padded">
+                        <div class="card-header">
+                            <h2><i class="fa-solid fa-terminal"></i> Tiến trình xử lý</h2>
+                        </div>
+                        
+                        <!-- Progress bar -->
+                        <div class="progress-container">
+                            <div class="progress-bar-wrapper">
+                                <div class="progress-bar" id="export-progress-bar" style="width: 0%;"></div>
+                            </div>
+                            <span class="progress-text" id="export-progress-text">0%</span>
+                        </div>
+
+                        <!-- Download button shown after complete -->
+                        <div id="export-download-wrapper" style="display: none; margin: 12px 0 16px 0;">
+                            <a id="btn-download-export-file" class="btn btn-success" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; font-weight: 700; font-size: 15px; border-radius: 8px; text-decoration: none;" href="#" target="_blank">
+                                <i class="fa-solid fa-file-arrow-down"></i> TẢI XUỐNG FILE EXCEL ĐỊNH VỊ
+                            </a>
+                        </div>
+
+                        <!-- Batch checklist -->
+                        <div class="batch-list-wrapper" style="margin-bottom: 20px;">
+                            <h3>Checklist các lô tải bưu gửi</h3>
+                            <div class="batch-grid" id="export-batches-checklist">
+                                <!-- Dynamic check list items -->
+                            </div>
+                        </div>
+
+                        <!-- Logs Console -->
+                        <div class="console-log-wrapper">
+                            <div class="console-log-header">
+                                <span>Console Logs</span>
+                            </div>
+                            <div class="console-log" id="export-console-logs">
+                                <div class="log-row info">Sẵn sàng. Vui lòng nhập mã bưu gửi và bấm xuất.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History View -->
+            <div id="view-history" class="content-view">
+                <header class="header">
+                    <div class="header-title">
+                        <h1>Lịch sử xuất Excel</h1>
+                        <p>Xem lại lịch sử xuất file, tra cứu chi tiết thông tin bưu gửi đã lưu</p>
+                    </div>
+                </header>
+
+                <!-- History Search Card -->
+                <div class="grid-card history-search-card padded" style="margin-bottom: 24px;">
+                    <div class="card-header" style="padding: 0 0 16px 0;">
+                        <h2><i class="fa-solid fa-magnifying-glass"></i> Tra cứu bưu gửi nhanh</h2>
+                    </div>
+                    <form id="history-search-form" class="search-form-row">
+                        <input type="text" id="history-search-input" class="input-field" placeholder="Nhập mã bưu gửi để tìm kiếm nhanh trong toàn bộ lịch sử (Ví dụ: CE991562158VN)..." required style="flex-grow: 1;">
+                        <button type="submit" class="btn btn-primary" id="btn-history-search-submit">Tìm kiếm</button>
+                    </form>
+                    <div id="search-results-container" class="search-results-list" style="display: none; margin-top: 16px;">
+                        <!-- Dynamic search results -->
+                    </div>
+                </div>
+
+                <!-- History List Table -->
+                <div class="grid-card history-table-card">
+                    <div class="card-header" style="margin-bottom: 16px;">
+                        <h2><i class="fa-solid fa-list-ul"></i> Danh sách các lần xuất</h2>
+                        <button class="btn btn-secondary" id="btn-refresh-history"><i class="fa-solid fa-arrows-rotate"></i> Làm mới</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Thời gian xuất</th>
+                                    <th class="th-history-user" style="display: none;">Người xuất</th>
+                                    <th>Số lượng bưu gửi</th>
+                                    <th>Tên file Excel</th>
+                                    <th>Trạng thái</th>
+                                    <th class="text-right">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-tbody">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">Đang tải lịch sử xuất...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users View (Admin only) -->
+            <div id="view-users" class="content-view">
+                <header class="header" style="margin-bottom: 24px;">
+                    <div class="header-title">
+                        <h1><i class="fa-solid fa-gear"></i> Cài đặt hệ thống</h1>
+                        <p>Cấu hình tài khoản người dùng và thông số hệ thống định vị</p>
+                    </div>
+                    <div class="header-actions" id="users-header-actions" style="display: flex; gap: 8px;">
+                        <button class="btn btn-secondary" id="btn-open-import-modal"><i class="fa-solid fa-file-import"></i> Nhập từ BCCP</button>
+                        <button class="btn btn-primary" id="btn-open-create-user-modal"><i class="fa-solid fa-plus"></i> Tạo tài khoản mới</button>
+                    </div>
+                </header>
+
+                <!-- Settings Tabs -->
+                <div class="settings-tabs" style="display: flex; gap: 12px; margin-bottom: 20px; border-bottom: 2px solid var(--border-color); padding-bottom: 8px;">
+                    <button class="tab-btn active" id="tab-btn-users" style="background: none; border: none; font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--accent-emerald); cursor: pointer; padding: 6px 12px; border-bottom: 3px solid var(--accent-emerald); margin-bottom: -11px; transition: all 0.3s ease;">
+                        <i class="fa-solid fa-users"></i> Quản lý tài khoản
+                    </button>
+                    <button class="tab-btn" id="tab-btn-dinhvi" style="background: none; border: none; font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 6px 12px; margin-bottom: -11px; transition: all 0.3s ease;">
+                        <i class="fa-solid fa-sliders"></i> Cấu hình hệ thống
+                    </button>
+                </div>
+
+                <!-- Tab 1: Account Management Panel -->
+                <div id="panel-settings-users">
+                    <div class="grid-card users-table-card" style="margin-bottom: 24px;">
+                        <div id="users-alert" class="alert" style="display: none; padding: 12px; margin-bottom: 12px; border-radius: 8px;"></div>
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Tên đăng nhập</th>
+                                        <th>Tài khoản VNPost</th>
+                                        <th>Vai trò</th>
+                                        <th>Giới hạn luồng</th>
+                                        <th>Ngày tạo</th>
+                                        <th class="text-right">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-tbody">
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted">Đang tải danh sách người dùng...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Exporter & Highlight Configuration Panel -->
+                <div id="panel-settings-dinhvi" style="display: none;">
+                    <div class="grid-card padded" style="max-width: 550px; margin-bottom: 24px;">
+                        <div class="card-header" style="margin-bottom: 20px;">
+                            <h2><i class="fa-solid fa-sliders"></i> Cấu hình thông số hệ thống</h2>
+                        </div>
+                        <form id="frm-dinhvi-config">
+                            <!-- Part 1: Exporter config -->
+                            <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 12px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; color: var(--accent-emerald);">1. Cấu hình xuất định vị</h3>
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label class="form-label" for="cfg-batch-size" style="font-weight: 600; margin-bottom: 6px; display: block;">Số lượng bưu gửi trên 1 lô (Batch Size)</label>
+                                <input type="number" id="cfg-batch-size" class="input-field" min="1" max="500" value="50" required style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
+                                <span class="form-help" style="font-size: 12px; color: var(--text-muted); display: block; margin-top: 6px;">Số lượng mã bưu gửi tải đi trong mỗi yêu cầu. Mặc định là 50.</span>
+                            </div>
+
+                            <!-- Part 2: Highlight threshold defaults -->
+                            <h3 style="font-size: 14px; font-weight: 700; margin-top: 24px; margin-bottom: 12px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; color: var(--accent-emerald);">2. Ngưỡng highlight tồn mặc định (Dashboard)</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+                                <div class="form-group">
+                                    <label class="form-label" for="cfg-thresh-3" style="font-weight: 600; margin-bottom: 6px; display: block;">Tồn ≥ 3 ngày</label>
+                                    <input type="number" id="cfg-thresh-3" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="cfg-thresh-7" style="font-weight: 600; margin-bottom: 6px; display: block;">Tồn ≥ 7 ngày</label>
+                                    <input type="number" id="cfg-thresh-7" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="cfg-thresh-14" style="font-weight: 600; margin-bottom: 6px; display: block;">Tồn ≥ 14 ngày</label>
+                                    <input type="number" id="cfg-thresh-14" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="cfg-thresh-total" style="font-weight: 600; margin-bottom: 6px; display: block;">Tổng tồn</label>
+                                    <input type="number" id="cfg-thresh-total" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary" style="padding: 12px 24px; font-weight: 600; border-radius: 8px; width: 100%;"><i class="fa-solid fa-floppy-disk"></i> Lưu tất cả cấu hình</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div> <!-- Closes #main-app-container -->
+
+    <!-- Import User Modal -->
+    <div id="import-user-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card modal-large" style="max-width: 800px; width: 90%; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-file-import"></i> Nhập danh sách tài khoản từ BCCP</h2>
+                <button type="button" class="modal-close-btn" id="btn-close-import-modal">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 16px 20px;">
+                <div class="alert alert-info" style="margin-bottom: 16px; padding: 12px 16px; border-radius: 8px; font-size: 13.5px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-emerald);">
+                    <strong>Hướng dẫn thực hiện:</strong><br>
+                    1. Đăng nhập tài khoản quản trị trên trang <a href="https://bccp.vnpost.vn/" target="_blank" style="color: var(--accent-emerald); font-weight: bold; text-decoration: underline;">bccp.vnpost.vn</a>.<br>
+                    2. Truy cập mục quản trị người dùng/nhân viên, dùng chuột bôi đen toàn bộ bảng danh sách hoặc ấn <strong>Ctrl+A</strong> rồi <strong>Ctrl+C</strong> để sao chép.<br>
+                    3. Quay lại đây, click vào ô dưới và nhấn <strong>Ctrl+V</strong> để dán dữ liệu. Hệ thống sẽ tự động bóc tách thông tin!
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label class="form-label" for="import-paste-area" style="font-weight: 700; margin-bottom: 8px; display: block;">Dán dữ liệu bảng từ BCCP vào đây</label>
+                    <textarea id="import-paste-area" class="input-field" placeholder="Dán nội dung đã copy từ trang BCCP tại đây..." style="width: 100%; height: 120px; font-family: monospace; font-size: 13px; padding: 10px 14px; border-radius: 8px; resize: vertical;"></textarea>
+                </div>
+
+                <!-- Preview Area -->
+                <div id="import-preview-wrapper" style="display: none; margin-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
+                        <h3 style="font-size: 15px; font-weight: 700; margin: 0;"><i class="fa-solid fa-list-check"></i> Xem trước tài khoản phát hiện được</h3>
+                        <span id="import-detected-count" style="font-size: 13px; font-weight: 700; color: var(--accent-emerald);">Tìm thấy 0 tài khoản</span>
+                    </div>
+
+                    <div class="table-container" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 20px;">
+                        <table class="table" style="font-size: 13.5px; width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px; text-align: center;"><input type="checkbox" id="import-select-all" checked></th>
+                                    <th>Tên đăng nhập (App & VNPost)</th>
+                                    <th>Tên nhân viên / Bưu cục</th>
+                                    <th style="width: 120px;">Giới hạn luồng</th>
+                                </tr>
+                            </thead>
+                            <tbody id="import-preview-tbody">
+                                <!-- Dynamically populated rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-import-modal">Đóng</button>
+                    <button type="button" class="btn btn-secondary" id="btn-process-pasted" style="font-weight: 600;">Phân tích dữ liệu</button>
+                    <button type="button" class="btn btn-primary" id="btn-submit-import" disabled style="font-weight: 600;"><i class="fa-solid fa-cloud-arrow-up"></i> Xác nhận nhập tài khoản</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Modal (Create / Edit) -->
+    <div id="user-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 id="user-modal-title">Tạo tài khoản mới</h2>
+                <button type="button" class="modal-close-btn" id="btn-close-user-modal">&times;</button>
+            </div>
+            <form id="user-modal-form">
+                <input type="hidden" id="user-modal-id">
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label" for="user-modal-username">Tên đăng nhập</label>
+                    <input type="text" id="user-modal-username" class="input-field" placeholder="Nhập tên đăng nhập..." required autocomplete="username">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label" for="user-modal-password" id="user-modal-password-label">Mật khẩu</label>
+                    <input type="password" id="user-modal-password" class="input-field" placeholder="Nhập mật khẩu..." required autocomplete="new-password">
+                    <span class="form-help" id="user-modal-password-help" style="display: none; font-size: 11.5px; color: var(--text-muted);">Để trống nếu không muốn thay đổi mật khẩu.</span>
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label" for="user-modal-role">Vai trò</label>
+                    <select id="user-modal-role" class="input-field" required>
+                        <option value="staff">Nhân viên</option>
+                        <option value="admin">Quản trị viên</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label" for="user-modal-concurrency">Giới hạn số luồng (concurrency_limit)</label>
+                    <input type="number" id="user-modal-concurrency" class="input-field" placeholder="Nhập giới hạn luồng..." min="1" max="10" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label" for="user-modal-vnpost-username">Tài khoản VNPost (Dùng bccp.vnpost.vn)</label>
+                    <input type="text" id="user-modal-vnpost-username" class="input-field" placeholder="Nhập tài khoản định vị VNPost...">
+                    <span class="form-help" style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">Để trống nếu không dùng chức năng định vị bưu gửi.</span>
+                </div>
+                <div class="form-group" style="margin-bottom: 24px;">
+                    <label class="form-label" for="user-modal-vnpost-password">Mật khẩu VNPost</label>
+                    <input type="password" id="user-modal-vnpost-password" class="input-field" placeholder="Nhập mật khẩu định vị VNPost...">
+                </div>
+                <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px;">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-user-modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary" id="btn-submit-user-modal">Xác nhận</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- History Details Modal -->
+    <div id="history-detail-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card modal-large">
+            <div class="modal-header">
+                <h2>Chi tiết lần xuất bưu gửi</h2>
+                <button type="button" class="modal-close-btn" id="btn-close-detail-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="history-detail-meta-row" style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; padding: 12px; background: var(--bg-primary); border-radius: 12px;">
+                    <div><strong>Thời gian:</strong> <span id="detail-export-time">-</span></div>
+                    <div><strong>Người xuất:</strong> <span id="detail-export-user">-</span></div>
+                    <div><strong>Số lượng bưu gửi:</strong> <span id="detail-export-qty">-</span></div>
+                    <div><strong>Tên File:</strong> <span id="detail-export-file">-</span></div>
+                </div>
+                <div class="table-container" style="margin-top: 16px; max-height: 400px; overflow-y: auto;">
+                    <table class="table" style="font-size: 13.5px;">
+                        <thead>
+                            <tr>
+                                <th>Mã bưu gửi</th>
+                                <th>Chi tiết thông tin định vị</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detail-modal-table-tbody">
+                            <!-- Dynamic items -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" id="btn-close-detail-modal-action">Đóng</button>
+                <button type="button" class="btn btn-success" id="btn-download-detail-file"><i class="fa-solid fa-file-arrow-down"></i> Tải xuống Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script JS -->
+    <script src="/static/app.js?v=1.3.6"></script>
+</body>
+</html>

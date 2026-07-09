@@ -49,10 +49,10 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/tools-bdld-vnp-dinhvi-backend:latest
 
-      # 3. Build and Push Dinhvi Frontend
-      - name: Build and push Dinhvi Frontend
+      # 3. Build and Push Unified Nginx Frontend
+      - name: Build and push Unified Frontend
         uses: docker/build-push-action@v5
         with:
-          context: ./dinhvi-frontend
+          context: ./frontend
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/tools-bdld-vnp-dinhvi-frontend:latest
+          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/tools-bdld-vnp-frontend:latest

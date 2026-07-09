@@ -26,6 +26,8 @@ from pbi_crawler import crawl_lamdong_data
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+DINHVI_BACKEND_URL = os.getenv("DINHVI_BACKEND_URL", "http://localhost:5000")
+
 # SQLite Sync is deprecated since both backends now share the same SQL Server database.
 # Keeping empty functions to avoid breaking other imports/invocations.
 def sync_user_to_sqlite(username, role, concurrency_limit, password_hash=None, vnpost_username=None, vnpost_password=None):
@@ -517,7 +519,7 @@ def get_current_user(authorization: str = Header(None)):
 @app.get("/api/auth/login-captcha")
 def get_login_captcha():
     try:
-        r = requests.get("http://localhost:5000/api/auth/login-captcha")
+        r = requests.get(f"{DINHVI_BACKEND_URL}/api/auth/login-captcha")
         if r.status_code == 200:
             return r.json()
         raise HTTPException(status_code=r.status_code, detail="Không thể lấy captcha từ Node.js")
@@ -564,7 +566,7 @@ def auth_login(req: LoginRequest):
                     "initialCookies": req.initialCookies
                 }
                 try:
-                    node_res = requests.post("http://localhost:5000/api/auth/login", json=payload)
+                    node_res = requests.post(f"{DINHVI_BACKEND_URL}/api/auth/login", json=payload)
                     if node_res.status_code != 200:
                         try:
                             err_msg = node_res.json().get("error", "Xác thực với VNPost thất bại.")
@@ -615,7 +617,7 @@ def auth_login(req: LoginRequest):
                             "initialCookies": req.initialCookies
                         }
                         node_res = requests.post(
-                            "http://localhost:5000/api/auth/login",
+                            f"{DINHVI_BACKEND_URL}/api/auth/login",
                             json=payload,
                             timeout=15
                         )
