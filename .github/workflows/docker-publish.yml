@@ -8,6 +8,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
+  ACTIONS_STEP_DEBUG: 'true'
+  ACTIONS_RUNNER_DEBUG: 'true'
 
 jobs:
   build-and-push:
