@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  crawler-backend:
+  vnp-crawler-backend:
     image: ghcr.io/dong071102/tools-bdld-vnp-crawler-backend:latest
     container_name: vnp-crawler-backend
     restart: always
@@ -14,13 +14,13 @@ services:
       - DB_NAME=caw_powerbi_db
       - PORT=8000
       - TZ=Asia/Ho_Chi_Minh
-      - DINHVI_BACKEND_URL=http://vnpost_backend:5000 # Địa chỉ của Node.js Backend trong mạng Docker
+      - DINHVI_BACKEND_URL=http://vnp-dinhvi-backend:5000 # URL trỏ sang Node.js backend mới trong mạng Docker
     networks:
       - bdld-vnp-network
 
-  dinhvi-backend:
+  vnp-dinhvi-backend:
     image: ghcr.io/dong071102/tools-bdld-vnp-dinhvi-backend:latest
-    container_name: vnpost_backend
+    container_name: vnp-dinhvi-backend
     restart: always
     # Không expose port ra ngoài, chỉ giao tiếp nội bộ qua bdld-vnp-network
     environment:
@@ -32,18 +32,18 @@ services:
       - DB_PASSWORD=Sadmin123
       - DB_NAME=caw_powerbi_db
     depends_on:
-      - crawler-backend
+      - vnp-crawler-backend
     networks:
       - bdld-vnp-network
 
   tools-bdld-vnp-frontend:
     image: ghcr.io/dong071102/tools-bdld-vnp-frontend:latest
-    container_name: tool-dinhvi-frontend
+    container_name: tools-bdld-vnp-frontend
     restart: always
     ports:
-      - "9999:80" # Mở duy nhất cổng 9999 cho giao diện Nginx Frontend gộp
+      - "9999:80" # Mở duy nhất cổng 9999 cho giao diện gộp chính
     depends_on:
-      - dinhvi-backend
+      - vnp-dinhvi-backend
     networks:
       - bdld-vnp-network
 
