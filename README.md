@@ -28,12 +28,6 @@ tools-bdld-vnp/
 │   ├── nginx.conf               # Cấu hình Web Server Nginx để serve static files
 │   └── Dockerfile               # Cấu hình đóng gói Docker (Multi-stage build)
 │
-├── chrome-extension/            # Tiện ích mở rộng Chrome (Tích hợp nút xuất nhanh trên VNPost)
-│   ├── manifest.json            # Cấu hình Extension
-│   ├── content.js               # Đọc và bóc tách danh sách mã bưu gửi từ trang VNPost
-│   ├── sidebar.js & css & html  # Giao diện điều khiển sidebar của Extension
-│   └── background.js            # Xử lý luồng chạy ngầm của Extension
-│
 ├── docker-compose.yml           # File deploy Stack Portainer cho toàn bộ hệ thống
 └── README.md                    # Tài liệu hướng dẫn sử dụng và triển khai
 ```
@@ -58,7 +52,7 @@ tools-bdld-vnp/
 3. **Mở rộng luồng (Tối đa 5 luồng):** Người dùng giải thêm captcha trong giao diện để mở thêm các luồng (Luồng 2 -> 5). Các luồng này lưu cookie VNPost riêng biệt giúp tải song song dữ liệu định vị nhanh gấp 5 lần.
 
 ### 📦 C. Tiến trình tra cứu định vị hàng loạt
-1. **Nhận danh sách:** Node.js nhận danh sách mã bưu gửi (từ Extension gửi lên hoặc copy-paste).
+1. **Nhận danh sách:** Node.js nhận danh sách mã bưu gửi (từ nhập tay, copy-paste hoặc file import trên giao diện web).
 2. **Chia lô (Batching):** Danh sách được chia thành các lô nhỏ (mỗi lô 500 mã).
 3. **Phân phối song song:** Các lô được phân phối song song cho các luồng đang hoạt động (`active`). Nếu một luồng bị lỗi hoặc hết hạn cookie, hệ thống sẽ tự chuyển lô sang luồng khác hoặc thông báo để người dùng giải captcha khôi phục luồng đó.
 4. **Gộp Excel:** Dữ liệu tải về từ VNPost được lưu trữ tạm thời, phân tích và tự động gộp lại thành 1 file báo cáo Excel duy nhất trả về cho người dùng.
