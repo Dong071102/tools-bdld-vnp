@@ -1,0 +1,331 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<head><title>
+	Hệ thống tra cứu, hỗ trợ giám sát chất lượng BCCP
+</title><link rel="shortcut icon" href="favicon.ico" type="image/x-icon" /><link rel="icon" href="favicon.ico" type="image/ico" />
+    <!-- Global CSS -->
+    <link rel="Stylesheet" type="text/css" media="all" href="/App_Themes/Default/Styles/master.css" /><link rel="Stylesheet" type="text/css" media="all" href="/App_Themes/Default/Styles/Menu.css" /><link rel="Stylesheet" type="text/css" media="all" href="/App_Themes/Default/Styles/topnav.css" /><link rel="Stylesheet" type="text/css" media="all" href="/App_Themes/Default/Styles/body.css" /><link rel="Stylesheet" type="text/css" media="all" href="/App_Themes/Default/Styles/tier2-page.css" /><link rel="Stylesheet" type="text/css" media="all" href="/App_Themes/Default/Styles/sticky-footer.css" /><link rel="Stylesheet" type="text/css" media="all" href="/App_Themes/Default/Styles/campaign.master.css" />
+    <!--work when deploy-->
+    <link href="App_Themes/Default/Styles/body.css" rel="stylesheet" type="text/css" /><link href="App_Themes/Default/Styles/campaign.master.css" rel="stylesheet" type="text/css" /><link href="App_Themes/Default/Styles/ie7.css" rel="stylesheet" type="text/css" /><link href="App_Themes/Default/Styles/master.css" rel="stylesheet" type="text/css" /><link href="App_Themes/Default/Styles/Menu.css" rel="stylesheet" type="text/css" /><link href="App_Themes/Default/Styles/sticky-footer.css" rel="stylesheet" type="text/css" /><link href="App_Themes/Default/Styles/tier2-page.css" rel="stylesheet" type="text/css" /><link href="App_Themes/Default/Styles/topnav.css" rel="stylesheet" type="text/css" /><link href="App_Themes/Default/Styles/mymenu.css" rel="stylesheet" type="text/css" />
+    <style type="text/css">
+		
+	</style>
+
+
+    <script type="text/javascript" src="/App_Themes/Default/Scripts/broker.js"></script>
+
+    <script type="text/javascript" src="/App_Themes/Default/Scripts/azure.js"></script>
+    <script src="./App_Themes/Default/Scripts/jquery-3.6.4.min.js"></script>
+
+
+    <script type="text/javascript">
+
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', 'UA-2101276-13']);
+        _gaq.push(['_trackPageview']);
+
+        (function () {
+            var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+            ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+
+    </script>
+
+    
+
+
+    
+</head>
+<body>
+    <form name="aspnetForm" method="post" action="./Login.aspx?resetSessionKey=84a88014-d33f-4d48-9d46-73f439526df3" onsubmit="javascript:return WebForm_OnSubmit();" id="aspnetForm">
+<div>
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="" />
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="/wEPDwUJMjYzOTczNDQyD2QWAmYPZBYCAgMPZBYGAgUPDxYCHgRUZXh0BYECPGZvbnQgY29sb3I9J3JlZCc+PGI+QWRtaW4gTMOibSDEkMO0zIBuZzwvYj48L2ZvbnQ+IHwgPGEgaHJlZj0nRGVmYXVsdC5hc3B4P2FjdD1MaXN0VXNlcic+VMOgaSBraG/huqNuPC9hPiB8IDxhIGhyZWY9J0RlZmF1bHQuYXNweD9hY3Q9UHJvZmlsZSc+VGjDtG5nIHRpbjwvYT4gfCA8YSBocmVmPSdEZWZhdWx0LmFzcHg/YWN0PUNoYW5nZVB3Jz7EkOG7lWkgTUs8L2E+IHwgPGEgaHJlZj0nRGVmYXVsdC5hc3B4P2FjdD1Mb2dvdXQnPlRob8OhdDwvYT5kZAIHDw8WAh8AZWRkAgkPZBYCAgkPDxYCHghJbWFnZVVybAW+HWRhdGE6aW1hZ2UvcG5nO2Jhc2U2NCxpVkJPUncwS0dnb0FBQUFOU1VoRVVnQUFBTWdBQUFBOENBWUFBQUFqVy9XUkFBQUFBWE5TUjBJQXJzNGM2UUFBQUFSblFVMUJBQUN4and2OFlRVUFBQUFKY0VoWmN3QUFEc01BQUE3REFjZHZxR1FBQUFxU1NVUkJWSGhlN1ozZGJ4VFhHY2J6Zi9RK3Qva1Aya3E5eWcyVmVwR0xWUFZGcFNwVkwyaEwxU2FvamhwVnVHMW9KVU5RUklPcTFsS0prVndpU0F4T1FnRmJHQk1hbXpYQlhxL1hMdjdFckQ5a3c0TDVrbzNmekxNN00zdSs1dnZNenF6My9LUkgyRFBIc3g3dmVjNzd2dWVjSFY0aG91OWJlcytvOVdWaC9hTSsxd3hsL2ZwcENBYkJGd2FEUVlFeGlLR0dQZm9iQkl4QkRBWWZqRUVNQmgrTVFRd0dINHhCREFZZjJzb2dwaEExUkFIOXhVUVFnOEVIWXhBR0UySDJIMG5mVTJPUWZjUzllL2RvYm02TzArTGlJcTJ0clVuYTN0Nld0THU3YTE4cEc1NDllNmI4dlRZM041WDNvTHBmQ01lQmpnSFBHQ1NIeEgxalg3eDRJWFd1YXJXcTdGeXFqalUxTlVVVEV4T2NjTnhCdkxZajFmV2hoWVVGNlRVZzFldEFzN1BUTlA3Zm0zVGxNMGRqTkQ0OVJ5c3JLOUsxaS8xWDZCL3ZmVTRmL09wVFZ3T0YrdStEdndQTHh2a0I2dnhocjZzUHoxZnRNOEVZZzhRa2Irbll6czZPMUhFaEw0TlVLaFZsNTcxNzk2Nnk4MEtxOXBEcSt0Q2pSNCtVdjVOZnBDcWRhSFJrNk95WWZZS2pTdGNPOGUwZ3I0N1BYZlBBQUYyN2I1OElRYTROZ2pkOWZYM2REWmxLeGpmcDRJK1hlWDMwMUQ3WldxRFRCcVU1NkpDcXpsc3FsYVNPQ3lIRjZ1dnJrenJ2eHNhR3N2TStlZkxFZnFWMENCcFl2RVo3N3VmdUYrbkRBMHluZDNTb3FMaStZS1lESTFTeXo0UWhsd2JCeUxPMHRGUjcwMWRYVjZXUVdXZUhMbmNLeHVDMFNwZFg3YVlwVVJqN0RiMXh2cUdPenc3VCsxZFAwZWtidzFTdzIwUUJvejA2ZEZzamR2NFR5L1lKaHJHUnhubFdxczRmNW5vKzVNWWdUclFvbDh1MTNQWGh3NGYyR1RVVEg2bE1JV3FUSnV6Mk9xbVV1emxqL09MaUh5MVRuS092Ym45TlBTTm42V2NYL2xBL2QzV1FLdmJQaEFWUkJLTjcydmhHNVV4WnByTnNoMVowZWpFTll5V2xaSUtad3RZZlRpVEszQ0Rob29XQW1GWjFWbW5kUGlVWlIzZTZkZitNYTR5dUt5ZnBpN0dyTkZpNFh2djZ6VTkvNTU1ekZkRWtlM3Q3dGRRb3pWVG4yTEZqVmtFOGEzK1hQL3hyQmlGbE9qVEFSUWpSQUdMS3BxNXB2TW5FSUZHamhRaHZBakdWRWxNdm5WR2tTUCswb3NQZmgzdHIwUUpSNDllZi8wVTJoYUNURVlwQ2dFRUNIVGl0YVZkRUtFU3F2T0owYW96aVVxY1dVcWF6WTZKaGlzVEdYOTVzMGVvUGtNd2dlOTMwMnU3cnNsNk8yZzE0NnRIaUJ0MHMzYUEvVlQ2Z0h6eDlrL21aYzFad0RVT3dBZFl2cmpMbmwrbjB1SDBpQWJYZmZXNk1ibzUvUmNlSGV1aW4vWjFXNSsrbUM0L3RCaTRiZE9HcVlKS3hvbjB1UEh3OXNrSy9ILzBQZmNmUlpJbVNWQ29ZbEhBL3VVV3NNWmk2Z1lzSWRuVGhqN0VtRU5JMXdUeGhTTWNndTkwMFlqY1JvOFhjZytPSzlwYmlHb1JKcnh4RWd4eTl1R09maVFkU25scWtXeGpnT3Y0N1phOC9kNUZPTXUzaTFDS2dVWS80R3dTUkpteEVRQXFIZFFqOG0xKzhPellYRVp6amdxSGNpQ05FbXlqckh3NHBHZVIxT2xWVjF4WWpMOVh0MDR3ZzJ1cVF4NFAwRHR2eGxSRkVINDE2Wk5IVElEQUgybUFWT2d5WXlrWDdmT00xTlNzWXg0MHMvSEhYQ0Y3R2lZQldnM3p2K1J2VXVYcVVCc3ZYcUgraHJLZ3RSdWtJMDU1VGFJTUUxU0JwRnVxSzlDbGxzMkJnbVpzcktRMFMxUnpBV1FmSk82cFVTcTQvNm0zbHdyMGVXWklzRURxOEVyUnc0NHR0a0o4OC9DV2RXdnczRGJPMWhhckQ3NTJqRHRzUUhTOFB4amFJM3l5V0ZEMGduVE5aVWhUeEVGTjNKUG9iMTVCVHJJVVk1Z0FvL3FQK1RDWW9wbWU5YXcxVkhlSmZ2SWZGalNDeDNrVExJSDEzejlQSDg1L1F6N2NPVzUyOG00NjRLZFJCNmhYUzNPVzloaW1PV0cxZGMwQlJEQks0U0NoSTkxUnZXSk5ZOHE1VG9zQWI1RlhMSUZNd3g5clhEZFBVZElsNmZHNFZFUWYxUjBzZ0xmQVYvVHU4RkYyODByRm82SzFCckU0K3dwcUFNOGdLOVhMbVNXSVE4SlJPcTh5Z2ttNkRPREJySW41S2JwS0dRVjRkL1lRK25waWt2dGwrd1J3Ti9XaEZQVU9GbEJkMVlXc1FiYjFEcWtOT2pIRHQ0OVFmUUx0Qmx0bGozSFF2VTMrSTdaeGpkc3NvaVBWR2JjWnF0VXBIbVdPcEdZUWpmSDN5L1BsemFRK1VuNnJWZVRvelBranZqZy9SNVRzRmV2LzJNTDF0ZmUrdEFvMWp4dENLTXF5bXA2ZHJzNG5pY1NpUEsrdVJWc3d0UE52SHJEOUFaSU53cVpqU0lJMDZnK3Ywb25IWWRtSmJEekNybytwQWttNVg2TStINTJzNjFUMUw1NjVYdUkxNmZzTFdhbFVIOHBOcTg2Q2ZabVptbE5meDB1SmltZm9rY3hSbzFQMjkvMTh6RUd1U0UvZmxuYlF3eUlNSEQ2VGpVS2dkREUyR3F5dTREcTllOFBOc3o2UmpVVXNKL1JGRVNxWHFUZG5wM1k2OWxacEJCcXo2UmRXQnZEUTVPYW5zUUtMS285TjA2V0twcGpQL21xWEwzL0FtOEJNK25LUHFRTnZiUmVyOThxLzBXMGZEMTJuSlBxZEVyRk5pTEJZNjdPN2VveXZmL0krK2U4dEpxeFMxeHRaTjN6UUxCa0QwYUNuRU9zU1JWejBSdFgwSU5CdWtubEpKWmxDWkprWUVjZkJmS1U5cnE0bWNRdmx1SVJIcms1Z0dxVS9sbHVodnJqa3NDUXVGTlFJTWtuUjd5ZHJNY1hxci8yMVp0OUlzK29WQzI1YjNncDlRdHdTMkR5WVZnN0N6VlhJNlphK3lKekNJVkdQNFRQTW1YVVZuRVhmeFFzb0NYRkc4eHluVUcrc2NTNTRMaFM0QkJzRzJGV3hmaWM0VTlhaU13ZWs0WGRLMEJpU21RRkpkRVZCUFJHMGZSQ29Ha1F3aDFoOVNHeHlQWUpEUTA3eTZ0N3NMVzBoQzYwemt6NGZ3aTRBaDltSUZHQVRUdTdobVZPN2NVaGxDb1pRaWlWUlhlTlFmTHVJK3JxRDJBYVJqRUc3Ri9DQjFTQ21YMk1aU0pJTllpRkZFVW5SemlLT1hxcURETWJVSnZCVTFldkRtQU1rTWdqb0oxNHZNNHlIcVlrelFOY1BjUjZXUE4waC9IOTJ4VCswblVqSUlXM1B3YXF5TkpEU0lqYlN0eEpLTzNidStoRnovZ0pLYkF5UXppRE1CRVJXdTdoZ2FJdjRLRzNScHlCakVIOEVnamVnZzFDR3VHcnQ4ZFJra1MxUTFpYU5rTlllNEZTU1pRWEJOejltMjJCaURCT05qRUNtNlFKd0pXdDhnT21ITklhZDI4UTJDNityZVhxS2UwZG9mQmhILzlpa2FSQ2pDSVRjRkE4WWdEbDFkWFI2Und5RytRWFE4Q0NKY29aNnRRVlQxb2c3U000aWlEdUgzWmhtREFPKzBpaVcrUVJJOUJFSW8wdXR5cG5STmloV01yMEhFRDBlSnUzc0ZBd2tHU1d0RXlCUGh6QUhpR3dTcjUvRzJrUWdHTUVXNm9abUVOMGM0VkFOS291MGxZdlNRMWpuRUJVUmpFSU1tb3BvamJqVGQydHFLdjB0WFNxL1kxWEl4ZWtCcWc3UjZKbUFNMG1SMFJ3NC84Tm1QcUk5VWFxQXlnWi8wYlRmSkU4WWdUYVNaNWdCeHQ1ZTRTS3ZsdkhwbStDalRrOTlIYmNXbXJReVNaYmh2dGpud09ucWVucWpZck9nVzdFS1VTWFZuYnpaa2FoQ3M3bUlLRXFsQWZwOFZtNXhtbXdQRTNWNWk0RW5kSU9nY21Jdkh4MHhSTk9KcjUvK2dRS2ZCOThpVDgvaUpOaDFrWVE2QTE5Uy92YVQ5U01VZzZCUjR0Q1U2UC9KZ0NCOHpSWlJBeEVqandjeDVuQzNKeWh5dDhmVEUxa0NMUWRoVUNmUHVoVUtCNXVmbmE1K0JSdFJBUjJrM3NqSUhCZ29NVG5oVWFqdWphOENNYkpBd3FWSlduU012WkgzL2VDOWlieTh4Y1BnYUJHODBSaU1VZTNqRHc2UktjVHRIcXk4b09YamRmelB2cjJXZW50Z0NlQnJFTVFSQ05ReUNOQXB2dmg5Wmo1eFprNGY3eDlQMDhjQndneDYwRmVuR0hQbTQvMFRiU3d3U1dneGl6SkdmKzRjNVlCS0RIclFZQkIvSU1lYnd2djltMWgrWU9FR2FsU2I3cFY0TWc3WVVxeDFwOThqWkR1VGFJSGtlcVVSenROT29tZ1o1L2Z1WkNCS1RkazRyZzloUGcwVlREV0pHV1VPcmtac0lZc3hqeUNNbXhUSm9aYjhOZE1ZZ0JvTW5STjhDQVJnVzg1b3NydjBBQUFBQVNVVk9SSzVDWUlJPWRkZClpwl9iuh845WmZZX3jOeYZLOyB8q2V5Uo48o8IEhPi" />
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['aspnetForm'];
+if (!theForm) {
+    theForm = document.aspnetForm;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<script src="/WebResource.axd?d=BD7GeK1dmEgVg8_YF5qrxA2q-XNIhQQKnIboKM-fdRLjeqP5MdRPBIp-noTm9f2v1YT0TqEwLDT5YCv_6sRjI7g5XNrCUinO2Seyb_LPEFc1&amp;t=637814912020000000" type="text/javascript"></script>
+
+
+<script src="/WebResource.axd?d=S_WxbuWSc1JNt_qo_nvripRhxZwNt8nNGsT-2m6VCqE4e7fREkbvZUBwFFG4HY47dOQAVWbVuibkUTtWeUw-Xq_dlLf3olG20p6ypAe4B8o1&amp;t=637814912020000000" type="text/javascript"></script>
+<script type="text/javascript">
+//<![CDATA[
+function WebForm_OnSubmit() {
+if (typeof(ValidatorOnSubmit) == "function" && ValidatorOnSubmit() == false) return false;
+return true;
+}
+//]]>
+</script>
+
+<div>
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="C2EE9ABB" />
+	<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="/wEdAAWbAiiQSi19HYwUMOUT7jMt5Zken35TfMCr1CBdFx6iImtQgWy8LYWWoXaMcnwFH0vt0RH9cS9N6CCSszY7q+MHqCGrSmpxzvroYhf0FKQttb/upBR+GRabfkLZgUtpbvBckeOpfP06I8uIHj74pj5A" />
+</div>
+
+        <a name="top"></a>
+        <div id="outerWrapper">
+            <div id="wrapper">
+
+                <div class="header">
+                    <div class="mainHomepageTitle">
+                        <a href="http://vnpost.vn" target="_blank">
+                            <img src="App_Themes/Default/Images/logo/logo.jpg" alt="Tổng Công ty Bưu điện Việt Nam" /></a>
+
+                    </div>
+                    <ul id="vnpNav">
+                        <li><a href="Default.aspx?act=Home">Trang chủ</a>
+                        </li>
+                        <li id="ctl00_subMnuBCCP"><a href="Default.aspx#">Hỗ trợ mạng lưới</a>
+                            <ul>
+                                <li><a href='#'>Định vị</a>
+                                    <ul>
+                                        <li id="ctl00_Li15"><a href="BCCP.aspx?act=Trace">Định vị bưu gửi đơn lẻ, lô, BĐ8, BĐ10</a></li>
+                                        <li id="ctl00_mnuMultiTrace"><a href="BCCP.aspx?act=TraceList">Định vị bưu gửi theo danh sách</a></li>
+                                        <li id="ctl00_Li16"><a href="BCCP.aspx?act=TraceListv2">Định vị bưu gửi theo danh sách v2</a></li>
+                                        <li id="ctl00_Li12"><a href="BCCP.aspx?act=AccTrace">Tra cứu lịch sử nhập liệu</a></li>
+                                        <li id="ctl00_Li11"><a href="BCCP.aspx?act=TraceOld">Định vị bưu gửi cũ</a></li>
+
+                                    </ul>
+
+                                </li>
+                                
+                        <li><a href='#'>Khai thác</a>
+                            <ul>
+                                <li id="ctl00_mnuTKCT_BCCP"><a href="BCCP.aspx?act=MailTrip">Theo dõi chuyến thư đi/đến</a></li>
+                                <li id="ctl00_mnuTKBD10_BCCP"><a href="BCCP.aspx?act=BD10">Theo dõi BĐ10 đi/đến</a></li>
+                                <li id="ctl00_mnuTKCT_EMS"><a href="BCCP.aspx?act=EMailTrip">Theo dõi chuyến thư đi/đến tại EMS</a></li>
+                                <li id="ctl00_mnuTKBD10_EMS"><a href="BCCP.aspx?act=EBD10">Theo dõi BĐ10 đi/đến tại EMS</a></li>
+
+                            </ul>
+                        </li>
+                        <li><a href='#'>Danh mục</a>
+                            <ul>
+                                <li id="ctl00_Li3"><a href="BCCP.aspx?act=ContractSrc">Tìm kiếm TT hợp đồng C/PPA</a></li>
+                                <li id="ctl00_mnuListPO"><a href="BCCP.aspx?act=ListPO">Danh mục bưu cục theo đơn vị quản lý</a></li>
+                                <li id="ctl00_mnuPostman"><a href="BCCP.aspx?act=Postman">Danh bạ tuyến phát</a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                    </li>
+                    
+                    <li id="ctl00_subMnuSupport"><a href="Default.aspx#">Liên kết</a>
+                        <ul>
+                            <li><a href="http://vnpost.vn" target="_blank">Portal Vietnam Post</a>
+                            </li>
+                            <li><a href='#'>Hệ thống MPITS</a>
+                                <ul>
+                                    <li id="ctl00_Li4"><a href="https://cms.vnpost.vn">Hỗ trợ khách hàng - CMS</a></li>
+                                    <li id="ctl00_Li5"><a href="https://portalkhl.vnpost.vn">Chấp nhận PortalKHL</a></li>
+                                    <li id="ctl00_Li6"><a href="https://billing.vnpost.vn">Hệ thống tính cước</a></li>
+                                    <li id="ctl00_Li7"><a href="https://casreport.vnpost.vn">Hệ thống CAS Report</a></li>
+                                    <li id="ctl00_Li8"><a href="https://casadmin.vnpost.vn">Hệ thống QTTT - CAS Admin</a></li>
+                                </ul>
+                            </li>
+                            <li><a href='#'>Hệ thống Tạo đơn - Thu gom - Phát</a>
+                                <ul>
+                                    <li id="ctl00_Li1"><a href="https://my.vnpost.vn">Hệ thống My Vietnam Post</a></li>
+                                    
+                                    <li id="ctl00_Li9"><a href="https://packnsend.vnpost.vn">Hệ thống PnS</a></li>
+                                    
+                                </ul>
+                            </li>
+                        </ul>
+                        
+                    </li>
+                    </ul>
+                
+                <div class="mainHomepageUserLogin">
+                    <div class="userInfo">
+                        <span id="ctl00_lblUser"><font color='red'><b>Admin Lâm Đồng</b></font> | <a href='Default.aspx?act=ListUser'>Tài khoản</a> | <a href='Default.aspx?act=Profile'>Thông tin</a> | <a href='Default.aspx?act=ChangePw'>Đổi MK</a> | <a href='Default.aspx?act=Logout'>Thoát</a></span>
+                    </div>
+                    <div class="headerAnnounment">
+                        <marquee behavior="scroll" direction="left">
+                            <span id="ctl00_lblAnnounceText"></span></marquee>
+
+                    </div>
+
+                </div>
+
+
+                    <br />
+                    <br />
+                    <br />
+                    <table cellpadding="0" cellspacing="0" width="100%" style="border-left-style: none; border-right-style: none; border-bottom-style: none">
+                        <tr>
+                            <td>
+                                
+    <center>
+    
+
+        <link media="all" href="./App_Themes/Default/Styles/StyleSheet.css" rel="Stylesheet" type="text/css" />
+        
+<table width="600px" border="0" cellpadding="0" cellspacing="0" >
+<tr>
+<td colspan="2" align="center"><h2>ĐĂNG NHẬP HỆ THỐNG</h2></td>
+
+</tr>
+<tr>
+<td style="padding:10px";>
+<table width="100%" border="0" cellpadding="1px" cellspacing="1px">
+<tr>
+<td align="right" style="padding:5px 0px 5px 0px">Tên đăng nhập&nbsp;&nbsp;&nbsp;</td>
+<td align="left" width="55%"  style="padding:5px 0px 5px 0px"><input name="ctl00$MainContent$txtUser" type="text" id="ctl00_MainContent_txtUser" style="font-size:Large;width:200px;padding:3px" />
+<span id="ctl00_MainContent_RequiredFieldValidator1" style="color:Red;visibility:hidden;">*</span>
+</td>
+
+</tr>
+<tr>
+<td align="right" width="45%" style="padding:5px 0px 5px 0px" >Mật khẩu&nbsp;&nbsp;&nbsp;</td>
+<td align="left" width="55%" style="padding:5px 0px 5px 0px"><input name="ctl00$MainContent$txtPassword" type="password" id="ctl00_MainContent_txtPassword" style="font-size:Large;width:200px;padding:3px" />
+<span id="ctl00_MainContent_RequiredFieldValidator2" style="color:Red;visibility:hidden;">*</span>
+</td>
+</tr>
+
+
+
+<tr>
+    <td align="right" width="40%" style="padding:5px 0px 5px 0px">Mã xác thực&nbsp;&nbsp;&nbsp;</td>
+    <td>
+        <img id="ctl00_MainContent_CaptchaImage" src="data:image/png;base64,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" style="border-width:0px;" />
+        
+    </td>
+</tr>
+<tr>
+<td align="right">Nhập mã xác thực&nbsp;&nbsp;&nbsp;</td>
+<td align="left" width="55%"><input name="ctl00$MainContent$txtcaptcha" type="text" id="ctl00_MainContent_txtcaptcha" style="font-size:Large;width:200px;padding:3px" /></td>
+</tr>
+    <tr>
+<td colspan="2" align="center"><a href="Default.aspx?act=ForgetPass">Quên mật khẩu?</a>
+
+</tr>
+<!--<tr>
+<td colspan="2" align="center"><span id="ctl00_MainContent_lblAlert" style="color:Red;font-weight:bold;"></span><br /></td>
+
+</tr>-->
+<tr>
+<td colspan="2" align="center"><input type="submit" name="ctl00$MainContent$btnLogin" value="Đăng nhập" onclick="javascript:WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions(&quot;ctl00$MainContent$btnLogin&quot;, &quot;&quot;, true, &quot;&quot;, &quot;&quot;, false, false))" id="ctl00_MainContent_btnLogin" class="groovybutton" />
+
+    
+    
+
+</td>
+</tr>
+
+        
+
+</table>
+</td>
+</tr>
+
+</table>
+
+
+</center>
+
+                                <br />
+                            </td>
+                        </tr>
+                    </table>
+
+                </div>
+                <!--contentWarpper -->
+
+            </div>
+        </div>
+        <div class="footer">
+            <div class="footer-left">
+                <label class="copyright">TRUNG TÂM CÔNG NGHỆ THÔNG TIN - VNPOST IT </label>
+                <span>Tổng công ty Bưu điện Việt Nam</span>
+                <span>Tòa nhà Bưu điện Việt Nam, Số 5 Phạm Hùng, Mỹ Đình 2, Nam Từ Liêm, Hà Nội</span>
+                <span>Email: bccp@vnpost.vn</span>
+            </div>
+            <div class="footer-right">
+            </div>
+        </div>
+    
+<script type="text/javascript">
+//<![CDATA[
+var Page_Validators =  new Array(document.getElementById("ctl00_MainContent_RequiredFieldValidator1"), document.getElementById("ctl00_MainContent_RequiredFieldValidator2"));
+//]]>
+</script>
+
+<script type="text/javascript">
+//<![CDATA[
+var ctl00_MainContent_RequiredFieldValidator1 = document.all ? document.all["ctl00_MainContent_RequiredFieldValidator1"] : document.getElementById("ctl00_MainContent_RequiredFieldValidator1");
+ctl00_MainContent_RequiredFieldValidator1.controltovalidate = "ctl00_MainContent_txtUser";
+ctl00_MainContent_RequiredFieldValidator1.errormessage = "*";
+ctl00_MainContent_RequiredFieldValidator1.evaluationfunction = "RequiredFieldValidatorEvaluateIsValid";
+ctl00_MainContent_RequiredFieldValidator1.initialvalue = "";
+var ctl00_MainContent_RequiredFieldValidator2 = document.all ? document.all["ctl00_MainContent_RequiredFieldValidator2"] : document.getElementById("ctl00_MainContent_RequiredFieldValidator2");
+ctl00_MainContent_RequiredFieldValidator2.controltovalidate = "ctl00_MainContent_txtPassword";
+ctl00_MainContent_RequiredFieldValidator2.errormessage = "*";
+ctl00_MainContent_RequiredFieldValidator2.evaluationfunction = "RequiredFieldValidatorEvaluateIsValid";
+ctl00_MainContent_RequiredFieldValidator2.initialvalue = "";
+//]]>
+</script>
+
+
+<script type="text/javascript">
+//<![CDATA[
+
+        (function() {
+            // Create a styled message box
+            var messageDiv = document.createElement('div');
+            messageDiv.style.position = 'fixed';
+            messageDiv.style.top = '50%';
+            messageDiv.style.left = '50%';
+            messageDiv.style.transform = 'translate(-50%, -50%)';
+            messageDiv.style.backgroundColor = '#f8d7da';
+            messageDiv.style.color = '#721c24';
+            messageDiv.style.padding = '20px';
+            messageDiv.style.border = '1px solid #f5c6cb';
+            messageDiv.style.borderRadius = '5px';
+            messageDiv.style.zIndex = '1000';
+            messageDiv.innerHTML = 'Đăng nhập thành công vào hệ thống';
+            document.body.appendChild(messageDiv);
+
+            // Auto-close the message after 3 seconds and redirect
+            setTimeout(function () {
+                messageDiv.remove();
+                window.location.href = 'BCCP.aspx?act=Trace';
+            }, 3000);
+        })();
+var Page_ValidationActive = false;
+if (typeof(ValidatorOnLoad) == "function") {
+    ValidatorOnLoad();
+}
+
+function ValidatorOnSubmit() {
+    if (Page_ValidationActive) {
+        return ValidatorCommonOnSubmit();
+    }
+    else {
+        return true;
+    }
+}
+        //]]>
+</script>
+</form>
+</body>
+</html>

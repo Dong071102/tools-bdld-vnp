@@ -1,0 +1,25 @@
+{
+  "name": "vnpost-excel-exporter-backend",
+  "version": "1.0.0",
+  "description": "Backend for VNPost Excel Exporter Web App",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mssql": "^12.6.0",
+    "mysql2": "^3.22.5",
+    "sqlite3": "^5.1.7",
+    "xmldom": "^0.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+requests
+pymssql
+pandas
+openpyxl
+pyjwt
+bcrypt
