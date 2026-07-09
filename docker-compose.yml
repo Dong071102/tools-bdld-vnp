@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   crawler-backend:
-    build:
-      context: ./crawler-backend
-      dockerfile: Dockerfile
+    image: ghcr.io/dong071102/tools-bdld-vnp-crawler-backend:latest
     container_name: tool-crawler-backend
     restart: always
     # Không expose port ra ngoài, chỉ giao tiếp nội bộ qua bdld-vnp-network
@@ -20,9 +18,7 @@ services:
       - bdld-vnp-network
 
   dinhvi-backend:
-    build:
-      context: ./dinhvi-backend
-      dockerfile: Dockerfile
+    image: ghcr.io/dong071102/tools-bdld-vnp-dinhvi-backend:latest
     container_name: vnpost_backend
     restart: always
     # Không expose port ra ngoài, chỉ giao tiếp nội bộ qua bdld-vnp-network
@@ -40,9 +36,7 @@ services:
       - bdld-vnp-network
 
   dinhvi-frontend:
-    build:
-      context: ./dinhvi-frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/dong071102/tools-bdld-vnp-dinhvi-frontend:latest
     container_name: tool-dinhvi-frontend
     restart: always
     ports:

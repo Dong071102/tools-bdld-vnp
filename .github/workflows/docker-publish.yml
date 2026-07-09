@@ -39,7 +39,7 @@ jobs:
         with:
           context: ./crawler-backend
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/tool-bdld-vnp-crawler-backend:latest
+          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/tools-bdld-vnp-crawler-backend:latest
 
       # 2. Build and Push Dinhvi Backend
       - name: Build and push Dinhvi Backend
@@ -47,7 +47,7 @@ jobs:
         with:
           context: ./dinhvi-backend
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/tool-bdld-vnp-dinhvi-backend:latest
+          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/tools-bdld-vnp-dinhvi-backend:latest
 
       # 3. Build and Push Dinhvi Frontend
       - name: Build and push Dinhvi Frontend
@@ -55,4 +55,4 @@ jobs:
         with:
           context: ./dinhvi-frontend
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/tool-bdld-vnp-dinhvi-frontend:latest
+          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/tools-bdld-vnp-dinhvi-frontend:latest
