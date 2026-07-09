@@ -8,8 +8,8 @@ Hệ thống tích hợp tự động crawl dữ liệu tồn đọng từ Power
 
 ```text
 tools-bdld-vnp/
-├── crawler-backend/             # Python Backend (Crawl dữ liệu từ Power BI)
-│   ├── frontend/                # Mã nguồn trang Dashboard UI (HTML, CSS, JS)
+├── crawler-backend/             # Python Backend (Crawl dữ liệu từ Power BI & Phục vụ giao diện UI gộp)
+│   ├── frontend/                # Mã nguồn trang Dashboard UI gộp (Dashboard + Định vị)
 │   ├── database.py              # Xử lý kết nối và các câu lệnh SQL Server (live/staging)
 │   ├── main.py                  # API Server (FastAPI), phân quyền & quản lý tài khoản
 │   ├── pbi_crawler.py           # Kịch bản giả lập crawl dữ liệu từ Power BI
@@ -22,11 +22,6 @@ tools-bdld-vnp/
 │   ├── vnpost-client.js         # API client kết nối VNPost (login, fetch chi tiết bưu gửi)
 │   ├── server.js                # API Server (Express) điều phối đa luồng định vị
 │   └── Dockerfile               # Cấu hình đóng gói Docker cho dinhvi-backend
-│
-├── dinhvi-frontend/             # React Frontend (Giao diện điều khiển tiến trình định vị)
-│   ├── src/                     # Source code React (Vite)
-│   ├── nginx.conf               # Cấu hình Web Server Nginx để serve static files
-│   └── Dockerfile               # Cấu hình đóng gói Docker (Multi-stage build)
 │
 ├── docker-compose.yml           # File deploy Stack Portainer cho toàn bộ hệ thống
 └── README.md                    # Tài liệu hướng dẫn sử dụng và triển khai
@@ -61,7 +56,7 @@ tools-bdld-vnp/
 
 ## 🌐 3. Danh sách các API Endpoints
 
-### 🐍 Python Backend (FastAPI - Cổng `8000`)
+### 🐍 Python Backend (FastAPI - Cổng `8000` / Giao diện gộp cổng `9999`)
 
 #### 📊 Dashboard & Crawl
 * `GET /api/status`: Lấy trạng thái hoạt động của crawler (đang chạy, thời gian chạy gần nhất, kết quả).
@@ -84,7 +79,7 @@ tools-bdld-vnp/
 
 ---
 
-### 🟢 Node.js Backend (Express - Cổng `5000`)
+### 🟢 Node.js Backend (Express - Cổng `5000` nội bộ)
 
 #### 🔑 Đăng nhập VNPost
 * `GET /api/auth/login-captcha`: Lấy Captcha và các cookie ban đầu từ trang Login VNPost BCCP.
@@ -105,4 +100,9 @@ tools-bdld-vnp/
 
 ## 🚀 Hướng dẫn deploy trên Portainer (Docker Compose Stack)
 
-Tham khảo nội dung file [docker-compose.yml](file:///c:/Users/admin/Desktop/tools-bdld-vnp/docker-compose.yml) và khai báo các biến môi trường kết nối cơ sở dữ liệu SQL Server (`DB_SERVER`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`) trên giao diện Portainer để bắt đầu triển khai dự án.
+Sử dụng file `docker-compose.yml` trong repository này để triển khai. Toàn bộ kết nối SQL Server đã được gán mặc định trong cấu hình:
+*   IP: `10.61.202.116`
+*   User: `sa`
+*   Password: `Sadmin123`
+*   Database: `caw_powerbi_db`
+*   Frontend gộp được mở duy nhất ở cổng **`9999`**.
