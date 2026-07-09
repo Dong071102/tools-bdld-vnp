@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query, BackgroundTasks, Depends, Header, HTTPException
+from fastapi import FastAPI, Query, BackgroundTasks, Depends, Header, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 import jwt
@@ -865,6 +865,62 @@ def admin_delete_user(user_id: int, current_user: dict = Depends(get_current_use
             return {"message": "Xóa tài khoản thành công."}
     finally:
         conn.close()
+
+# Proxy requests for /api/vnpost to the Node.js backend
+@app.api_route("/api/vnpost/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
+async def proxy_vnpost(path: str, request: Request):
+    body = await request.body()
+    headers = dict(request.headers)
+    headers.pop("host", None)
+    params = dict(request.query_params)
+    
+    url = f"{DINHVI_BACKEND_URL}/api/vnpost/{path}"
+    
+    try:
+        response = requests.request(
+            method=request.method,
+            url=url,
+            headers=headers,
+            data=body,
+            params=params,
+            timeout=120
+        )
+        return Response(
+            content=response.content,
+            status_code=response.status_code,
+            headers=dict(response.headers)
+        )
+    except Exception as e:
+        logger.error(f"Proxy to Node.js backend failed for path /api/vnpost/{path}: {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi kết nối Node.js backend: {e}")
+
+# Proxy requests for /api/export to the Node.js backend
+@app.api_route("/api/export", methods=["POST"])
+async def proxy_export(request: Request):
+    body = await request.body()
+    headers = dict(request.headers)
+    headers.pop("host", None)
+    params = dict(request.query_params)
+    
+    url = f"{DINHVI_BACKEND_URL}/api/export"
+    
+    try:
+        response = requests.request(
+            method=request.method,
+            url=url,
+            headers=headers,
+            data=body,
+            params=params,
+            timeout=300
+        )
+        return Response(
+            content=response.content,
+            status_code=response.status_code,
+            headers=dict(response.headers)
+        )
+    except Exception as e:
+        logger.error(f"Proxy to Node.js backend failed for path /api/export: {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi kết nối Node.js backend: {e}")
 
 # Serves static frontend files
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
