@@ -734,6 +734,9 @@ function showApp(user) {
         document.querySelectorAll(".th-history-user").forEach(el => el.style.display = "none");
     }
     
+    // Initialize system config settings tab elements and event listeners
+    initSettingsView();
+    
     // Set to default dashboard view
     switchView("dashboard");
 }
