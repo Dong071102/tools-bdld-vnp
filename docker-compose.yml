@@ -18,7 +18,7 @@ services:
       - PORT=8000
       - TZ=Asia/Ho_Chi_Minh
     networks:
-      - tool-network
+      - bdld-vnp-network
 
   dinhvi-backend:
     build:
@@ -39,7 +39,7 @@ services:
     depends_on:
       - crawler-backend
     networks:
-      - tool-network
+      - bdld-vnp-network
 
   dinhvi-frontend:
     build:
@@ -52,9 +52,8 @@ services:
     depends_on:
       - dinhvi-backend
     networks:
-      - tool-network
+      - bdld-vnp-network
 
 networks:
-  tool-network:
-    name: tool-bdld-vnp-network
-    driver: bridge
+  bdld-vnp-network:
+    external: true
