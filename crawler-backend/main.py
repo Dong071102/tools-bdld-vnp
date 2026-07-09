@@ -922,6 +922,88 @@ async def proxy_export(request: Request):
         logger.error(f"Proxy to Node.js backend failed for path /api/export: {e}")
         raise HTTPException(status_code=500, detail=f"Lỗi kết nối Node.js backend: {e}")
 
+# Proxy requests for /api/merge-and-save to the Node.js backend
+@app.api_route("/api/merge-and-save", methods=["POST"])
+async def proxy_merge_and_save(request: Request):
+    body = await request.body()
+    headers = dict(request.headers)
+    headers.pop("host", None)
+    params = dict(request.query_params)
+    
+    url = f"{DINHVI_BACKEND_URL}/api/merge-and-save"
+    
+    try:
+        response = requests.request(
+            method=request.method,
+            url=url,
+            headers=headers,
+            data=body,
+            params=params,
+            timeout=120
+        )
+        return Response(
+            content=response.content,
+            status_code=response.status_code,
+            headers=dict(response.headers)
+        )
+    except Exception as e:
+        logger.error(f"Proxy to Node.js backend failed for /api/merge-and-save: {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi kết nối Node.js backend: {e}")
+
+# Proxy requests for /api/history to the Node.js backend
+@app.api_route("/api/history/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
+async def proxy_history_detail(path: str, request: Request):
+    body = await request.body()
+    headers = dict(request.headers)
+    headers.pop("host", None)
+    params = dict(request.query_params)
+    
+    url = f"{DINHVI_BACKEND_URL}/api/history/{path}"
+    
+    try:
+        response = requests.request(
+            method=request.method,
+            url=url,
+            headers=headers,
+            data=body,
+            params=params,
+            timeout=120
+        )
+        return Response(
+            content=response.content,
+            status_code=response.status_code,
+            headers=dict(response.headers)
+        )
+    except Exception as e:
+        logger.error(f"Proxy to Node.js backend failed for /api/history/{path}: {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi kết nối Node.js backend: {e}")
+
+# Proxy requests for /api/history base path
+@app.api_route("/api/history", methods=["GET"])
+async def proxy_history_base(request: Request):
+    headers = dict(request.headers)
+    headers.pop("host", None)
+    params = dict(request.query_params)
+    
+    url = f"{DINHVI_BACKEND_URL}/api/history"
+    
+    try:
+        response = requests.request(
+            method=request.method,
+            url=url,
+            headers=headers,
+            params=params,
+            timeout=120
+        )
+        return Response(
+            content=response.content,
+            status_code=response.status_code,
+            headers=dict(response.headers)
+        )
+    except Exception as e:
+        logger.error(f"Proxy to Node.js backend failed for /api/history: {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi kết nối Node.js backend: {e}")
+
 # Serves static frontend files
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
