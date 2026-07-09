@@ -9,11 +9,11 @@ services:
     restart: always
     # Không expose port ra ngoài, chỉ giao tiếp nội bộ qua bdld-vnp-network
     environment:
-      - DB_SERVER=${DB_SERVER:-10.61.202.116}
-      - DB_PORT=${DB_PORT:-1433}
-      - DB_USER=${DB_USER:-sa}
-      - DB_PASSWORD=${DB_PASSWORD:-Sadmin123}
-      - DB_NAME=${DB_NAME:-caw_powerbi_db}
+      - DB_SERVER=10.61.202.116
+      - DB_PORT=1433
+      - DB_USER=sa
+      - DB_PASSWORD=Sadmin123
+      - DB_NAME=caw_powerbi_db
       - PORT=8000
       - TZ=Asia/Ho_Chi_Minh
     networks:
@@ -28,12 +28,12 @@ services:
     # Không expose port ra ngoài, chỉ giao tiếp nội bộ qua bdld-vnp-network
     environment:
       - PORT=5000
-      - JWT_SECRET=${JWT_SECRET:-vnpost-excel-exporter-jwt-secret-key-2026-dynamic-secure}
-      - DB_HOST=${DB_SERVER:-10.61.202.116}
-      - DB_PORT=${DB_PORT:-1433}
-      - DB_USER=${DB_USER:-sa}
-      - DB_PASSWORD=${DB_PASSWORD:-Sadmin123}
-      - DB_NAME=${DB_NAME:-caw_powerbi_db}
+      - JWT_SECRET=vnpost-excel-exporter-jwt-secret-key-2026-dynamic-secure
+      - DB_HOST=10.61.202.116
+      - DB_PORT=1433
+      - DB_USER=sa
+      - DB_PASSWORD=Sadmin123
+      - DB_NAME=caw_powerbi_db
     depends_on:
       - crawler-backend
     networks:
