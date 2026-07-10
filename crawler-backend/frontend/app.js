@@ -311,12 +311,12 @@ function renderSummary(data) {
     let totalRowHtml = `<td>TOÀN TỈNH</td>`;
     categories.forEach(cat => {
         totalRowHtml += `
-            <td class="text-right">${formatNumber(colTotals[cat].qty)}</td>
+            <td class="text-right qty-cell">${formatNumber(colTotals[cat].qty)}</td>
             <td class="text-right">${formatCurrency(colTotals[cat].cod)}</td>
         `;
     });
     totalRowHtml += `
-        <td class="text-right text-bold total-qty-cell">${formatNumber(colTotals["Total"].qty)}</td>
+        <td class="text-right text-bold qty-cell total-qty-cell">${formatNumber(colTotals["Total"].qty)}</td>
         <td class="text-right text-bold">${formatCurrency(colTotals["Total"].cod)}</td>
     `;
     totalTrTop.innerHTML = totalRowHtml;
