@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Style CSS -->
-     <link rel="stylesheet" href="/static/style.css?v=2.9.0">
+     <link rel="stylesheet" href="/static/style.css?v=3.0.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -159,6 +159,7 @@
                             <table class="table matrix-table" id="matrix-table">
                                 <thead>
                                     <tr>
+                                        <th rowspan="2" style="width: 50px;" class="text-center">STT</th>
                                         <th rowspan="2" class="sortable-matrix" data-sort="pos_name">Bưu cục phát <i class="fa-solid fa-sort"></i></th>
                                         <th colspan="2" class="col-group text-center">≥3 ngày</th>
                                         <th colspan="2" class="col-group text-center">≥7 ngày</th>
@@ -171,6 +172,7 @@
                                                 <span id="matrix-header-sublabel" style="font-size: 10px; font-weight: 500; opacity: 0.85; display: block; color: var(--accent-emerald);">...</span>
                                             </div>
                                         </th>
+                                        <th rowspan="2" class="text-center" style="width: 110px;">Danh sách</th>
                                     </tr>
                                     <tr>
                                         <th class="sortable-matrix" data-sort="qty-≥3 ngày">SL BG <i class="fa-solid fa-sort"></i></th>
@@ -185,7 +187,7 @@
                                 </thead>
                                 <tbody id="matrix-tbody">
                                     <tr>
-                                        <td colspan="9" class="text-center text-muted">Đang tải dữ liệu tổng hợp...</td>
+                                        <td colspan="11" class="text-center text-muted">Đang tải dữ liệu tổng hợp...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -193,7 +195,7 @@
                     </div>
 
                     <!-- Right Panel: Detailed Table -->
-                    <div class="grid-card detailed-card">
+                    <div class="grid-card detailed-card" id="detailed-report-section">
                         <div class="card-header">
                             <h2>2/ Chi tiết bưu gửi tồn tại BĐT/TP Lâm Đồng</h2>
                             <div class="card-header-actions">
@@ -747,6 +749,6 @@
     </div>
 
     <!-- Script JS -->
-    <script src="/static/app.js?v=2.9.0"></script>
+    <script src="/static/app.js?v=3.0.0"></script>
 </body>
 </html>

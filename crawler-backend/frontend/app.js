@@ -308,7 +308,7 @@ function renderSummary(data) {
     // 1. Render totals row AT THE TOP of the table body (categories first, Total last)
     const totalTrTop = document.createElement("tr");
     totalTrTop.className = "total-row top-total-row";
-    let totalRowHtml = `<td>TOÀN TỈNH</td>`;
+    let totalRowHtml = `<td></td><td>TOÀN TỈNH</td>`;
     categories.forEach(cat => {
         totalRowHtml += `
             <td class="text-right qty-cell">${formatNumber(colTotals[cat].qty)}</td>
@@ -318,14 +318,18 @@ function renderSummary(data) {
     totalRowHtml += `
         <td class="text-right text-bold qty-cell total-qty-cell">${formatNumber(colTotals["Total"].qty)}</td>
         <td class="text-right text-bold">${formatCurrency(colTotals["Total"].cod)}</td>
+        <td></td>
     `;
     totalTrTop.innerHTML = totalRowHtml;
     matrixTbody.appendChild(totalTrTop);
 
     // 2. Render each POS office row (with categories first, then Total column last)
-    posList.forEach(pos => {
+    posList.forEach((pos, index) => {
         const tr = document.createElement("tr");
-        let rowHtml = `<td class="pos-name-cell">${pos}</td>`;
+        let rowHtml = `
+            <td class="text-center" style="font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--text-secondary);">${index + 1}</td>
+            <td class="pos-name-cell">${pos}</td>
+        `;
         let rowTotalQty = 0;
         let rowTotalCod = 0;
         
@@ -344,10 +348,15 @@ function renderSummary(data) {
             }
         });
         
-        // Total column last
+        // Total column last + Action button
         rowHtml += `
             <td class="qty-cell text-right text-bold total-qty-cell" data-cat="Total" data-qty="${rowTotalQty}">${formatNumber(rowTotalQty)}</td>
             <td class="cod-cell text-right text-bold">${formatCurrency(rowTotalCod)}</td>
+            <td class="text-center">
+                <button type="button" class="btn-drilldown" data-pos="${pos}" style="background: var(--accent-emerald-light); color: var(--accent-emerald); border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: var(--transition-spring);">
+                    <i class="fa-solid fa-arrow-down-long"></i> Xem chi tiết
+                </button>
+            </td>
         `;
         
         tr.innerHTML = rowHtml;
@@ -681,6 +690,43 @@ document.querySelectorAll(".sortable-matrix").forEach(header => {
         }
     });
 });
+
+// Drilldown click action on Matrix table row
+if (matrixTbody) {
+    matrixTbody.addEventListener("click", (e) => {
+        const btn = e.target.closest(".btn-drilldown");
+        if (!btn) return;
+        
+        const posName = btn.getAttribute("data-pos");
+        if (!posName) return;
+        
+        // 1. Check checkbox for this POS and uncheck all others
+        const checkboxes = document.querySelectorAll(".pos-checkbox");
+        checkboxes.forEach(cb => {
+            if (cb.value === posName) {
+                cb.checked = true;
+            } else {
+                cb.checked = false;
+            }
+        });
+        
+        // 2. Update filters state and label UI
+        filters.pos_name = posName;
+        if (multiselectPosLabel) {
+            multiselectPosLabel.textContent = posName;
+        }
+        
+        // 3. Reload detailed paginated records
+        currentPage = 1;
+        loadDetailed();
+        
+        // 4. Smooth scroll to detailed section
+        const detailedSection = document.getElementById("detailed-report-section");
+        if (detailedSection) {
+            detailedSection.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+    });
+}
 
 // Highlight Logic
 function applyHighlights() {

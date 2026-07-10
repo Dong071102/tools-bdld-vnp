@@ -1722,3 +1722,17 @@ body {
     color: #0f766e !important;
     font-weight: 800 !important;
 }
+
+/* Drilldown Action Button */
+.btn-drilldown {
+    transition: var(--transition-spring);
+}
+.btn-drilldown:hover {
+    background-color: var(--accent-emerald) !important;
+    color: white !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(15, 118, 110, 0.2);
+}
+.btn-drilldown:active {
+    transform: translateY(1px);
+}
