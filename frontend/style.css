@@ -1711,12 +1711,14 @@ body {
 
 /* Styling for all Quantity columns in Matrix to distinguish from COD */
 .qty-cell {
-    background-color: rgba(15, 118, 110, 0.04) !important;
+    background-color: rgba(15, 118, 110, 0.12) !important;
+    color: #0f766e !important;
+    font-weight: 600 !important;
 }
 
 /* Highlighted Column for Total Quantity in Matrix (Toàn tỉnh) */
 .total-qty-cell {
-    background-color: rgba(15, 118, 110, 0.09) !important;
-    color: var(--accent-emerald) !important;
-    font-weight: 700 !important;
+    background-color: rgba(15, 118, 110, 0.22) !important;
+    color: #0f766e !important;
+    font-weight: 800 !important;
 }
