@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Style CSS -->
-     <link rel="stylesheet" href="/static/style.css?v=2.1.0">
+     <link rel="stylesheet" href="/static/style.css?v=2.3.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -510,6 +510,18 @@
                                     <label class="form-label" for="cfg-thresh-total" style="font-weight: 600; margin-bottom: 6px; display: block;">Tổng tồn</label>
                                     <input type="number" id="cfg-thresh-total" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
                                 </div>
+                            <!-- Part 3: Matrix Total Columns Config -->
+                            <h3 style="font-size: 14px; font-weight: 700; margin-top: 24px; margin-bottom: 12px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; color: var(--accent-emerald);">3. Chọn cột tính Tổng tồn (Matrix)</h3>
+                            <div style="display: flex; gap: 16px; margin-bottom: 24px; background: var(--bg-primary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--text-primary); user-select: none;">
+                                    <input type="checkbox" id="cfg-col-3" value="≥3 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥3 ngày
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--text-primary); user-select: none;">
+                                    <input type="checkbox" id="cfg-col-7" value="≥7 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥7 ngày
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--text-primary); user-select: none;">
+                                    <input type="checkbox" id="cfg-col-14" value="≥14 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥14 ngày
+                                </label>
                             </div>
                             
                             <button type="submit" class="btn btn-primary" style="padding: 12px 24px; font-weight: 600; border-radius: 8px; width: 100%;"><i class="fa-solid fa-floppy-disk"></i> Lưu tất cả cấu hình</button>
@@ -655,6 +667,6 @@
     </div>
 
     <!-- Script JS -->
-    <script src="/static/app.js?v=2.2.0"></script>
+    <script src="/static/app.js?v=2.3.0"></script>
 </body>
 </html>

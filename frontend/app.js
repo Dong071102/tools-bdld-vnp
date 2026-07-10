@@ -190,6 +190,15 @@ function renderSummary(data) {
     
     const categories = ["≥3 ngày", "≥7 ngày", "≥14 ngày"];
     
+    // Load config for Matrix Total Columns
+    const savedColsStr = localStorage.getItem("matrix_total_columns");
+    let targetCats = ["≥7 ngày", "≥14 ngày"]; // Default fallback
+    if (savedColsStr) {
+        try {
+            targetCats = JSON.parse(savedColsStr);
+        } catch(e) {}
+    }
+    
     let colTotals = {
         "≥3 ngày": { qty: 0, cod: 0.0 },
         "≥7 ngày": { qty: 0, cod: 0.0 },
@@ -217,7 +226,6 @@ function renderSummary(data) {
             
             if (cat === "Total") {
                 let totalQtyA = 0, totalCodA = 0;
-                const targetCats = ["≥7 ngày", "≥14 ngày"];
                 targetCats.forEach(c => {
                     const cell = data.matrix[a][c] || { qty: 0, cod: 0 };
                     totalQtyA += cell.qty;
@@ -254,8 +262,8 @@ function renderSummary(data) {
             colTotals[cat].qty += cell.qty;
             colTotals[cat].cod += cell.cod;
             
-            // Only sum "≥7 ngày" and "≥14 ngày" for the Total column
-            if (cat === "≥7 ngày" || cat === "≥14 ngày") {
+            // Dynamically sum configured columns for the Total column
+            if (targetCats.includes(cat)) {
                 rowTotalQty += cell.qty;
                 rowTotalCod += cell.cod;
             }
@@ -298,8 +306,8 @@ function renderSummary(data) {
                 <td class="cod-cell text-right">${formatCurrency(cell.cod)}</td>
             `;
             
-            // Only sum "≥7 ngày" and "≥14 ngày" for the Total column
-            if (cat === "≥7 ngày" || cat === "≥14 ngày") {
+            // Dynamically sum configured columns for the Total column
+            if (targetCats.includes(cat)) {
                 rowTotalQty += cell.qty;
                 rowTotalCod += cell.cod;
             }
@@ -1956,6 +1964,21 @@ function initSettingsView() {
     if (cfgThresh14) cfgThresh14.value = localStorage.getItem("default_thresh_14") || "";
     if (cfgThreshTotal) cfgThreshTotal.value = localStorage.getItem("default_thresh_total") || "";
 
+    // Load Matrix total columns config
+    const cfgCol3 = document.getElementById("cfg-col-3");
+    const cfgCol7 = document.getElementById("cfg-col-7");
+    const cfgCol14 = document.getElementById("cfg-col-14");
+    const savedColsStr = localStorage.getItem("matrix_total_columns");
+    let savedCols = ["≥7 ngày", "≥14 ngày"];
+    if (savedColsStr) {
+        try {
+            savedCols = JSON.parse(savedColsStr);
+        } catch(e) {}
+    }
+    if (cfgCol3) cfgCol3.checked = savedCols.includes("≥3 ngày");
+    if (cfgCol7) cfgCol7.checked = savedCols.includes("≥7 ngày");
+    if (cfgCol14) cfgCol14.checked = savedCols.includes("≥14 ngày");
+
     // Reset view to tab-users active by default
     tabBtnUsers.classList.add("active");
     tabBtnDinhvi.classList.remove("active");
@@ -2012,11 +2035,23 @@ function initSettingsView() {
             const thresh14Val = cfgThresh14.value.trim();
             const threshTotalVal = cfgThreshTotal.value.trim();
 
+            // Save Matrix total columns config
+            const selectedCols = [];
+            if (cfgCol3 && cfgCol3.checked) selectedCols.push("≥3 ngày");
+            if (cfgCol7 && cfgCol7.checked) selectedCols.push("≥7 ngày");
+            if (cfgCol14 && cfgCol14.checked) selectedCols.push("≥14 ngày");
+            
+            if (selectedCols.length === 0) {
+                showToast("Phải chọn ít nhất một cột để tính tổng tồn.", "warning");
+                return;
+            }
+
             localStorage.setItem("export_batch_size", batchSizeVal);
             localStorage.setItem("default_thresh_3", thresh3Val);
             localStorage.setItem("default_thresh_7", thresh7Val);
             localStorage.setItem("default_thresh_14", thresh14Val);
             localStorage.setItem("default_thresh_total", threshTotalVal);
+            localStorage.setItem("matrix_total_columns", JSON.stringify(selectedCols));
             
             // Instantly sync dashboard fields so the user doesn't need to refresh
             document.getElementById("threshold-3").value = thresh3Val;
@@ -2029,6 +2064,11 @@ function initSettingsView() {
             
             // Apply new highlight levels
             applyHighlights();
+
+            // Re-render Pivot Matrix instantly
+            if (cachedSummaryData) {
+                renderSummary(cachedSummaryData);
+            }
 
             showToast("Lưu thông số hệ thống thành công.", "success");
         });
