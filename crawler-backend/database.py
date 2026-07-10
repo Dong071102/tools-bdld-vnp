@@ -252,15 +252,18 @@ def save_detailed_data(rows):
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             
-            # Deduplicate by item_code (Power BI sometimes returns duplicate barcodes)
+            # Deduplicate by item_code (Power BI sometimes returns duplicate barcodes, case-insensitive in SQL Server)
             seen_codes = set()
             batch_data = []
             for r in rows:
-                code = r['item_code']
-                if code not in seen_codes:
-                    seen_codes.add(code)
+                code = r.get('item_code')
+                if not code:
+                    continue
+                code_clean = str(code).upper().strip()
+                if code_clean not in seen_codes:
+                    seen_codes.add(code_clean)
                     batch_data.append((
-                        code, r['province_ton'], r['pos_code'], r['pos_name'], r['dk1'],
+                        code_clean, r['province_ton'], r['pos_code'], r['pos_name'], r['dk1'],
                         r['status_name'], r['loai_ton'], r['cod_amount'], r['weight'], r['color_code']
                     ))
             
@@ -298,7 +301,7 @@ def create_daily_snapshot():
                 )
                 SELECT %s, item_code, province_ton, pos_code, pos_name, 
                        dk1, status_name, loai_ton, cod_amount, weight, color_code
-                FROM detailed_report d
+                FROM detailed_report_staging d
                 WHERE province_ton = %s
                   AND NOT EXISTS (
                       SELECT 1 FROM daily_snapshot s 
