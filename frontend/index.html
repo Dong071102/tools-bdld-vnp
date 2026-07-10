@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Style CSS -->
-     <link rel="stylesheet" href="/static/style.css?v=3.4.0">
+     <link rel="stylesheet" href="/static/style.css?v=3.5.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -198,8 +198,9 @@
                     <div class="grid-card detailed-card" id="detailed-report-section">
                         <div class="card-header">
                             <h2>2/ Chi tiết bưu gửi tồn tại BĐT/TP Lâm Đồng</h2>
-                            <div class="card-header-actions">
+                            <div class="card-header-actions" style="display: flex; gap: 8px;">
                                 <button class="btn btn-success" id="btn-export-excel"><i class="fa-solid fa-file-excel"></i> Xuất Excel</button>
+                                <button class="btn btn-primary" id="btn-locate-excel" style="background-color: #3b82f6; border-color: #3b82f6;"><i class="fa-solid fa-map-location-dot"></i> Định vị bưu gửi</button>
                             </div>
                         </div>
                         
@@ -749,6 +750,6 @@
     </div>
 
     <!-- Script JS -->
-    <script src="/static/app.js?v=3.4.0"></script>
+    <script src="/static/app.js?v=3.5.0"></script>
 </body>
 </html>

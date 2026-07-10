@@ -66,6 +66,7 @@ const btnNextPage = document.getElementById("btn-next-page");
 const btnRefresh = document.getElementById("btn-refresh");
 const btnTriggerCrawl = document.getElementById("btn-trigger-crawl");
 const btnExportExcel = document.getElementById("btn-export-excel");
+const btnLocateExcel = document.getElementById("btn-locate-excel");
 
 const statusDot = document.getElementById("status-dot");
 const statusText = document.getElementById("status-text");
@@ -642,6 +643,64 @@ btnTriggerCrawl.addEventListener("click", (e) => {
 });
 
 btnExportExcel.addEventListener("click", exportExcel);
+
+// Locate all filtered items
+if (btnLocateExcel) {
+    btnLocateExcel.addEventListener("click", async () => {
+        const originalHtml = btnLocateExcel.innerHTML;
+        btnLocateExcel.disabled = true;
+        btnLocateExcel.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang lấy mã...`;
+        
+        try {
+            // Fetch all records with current filters (without pagination limit)
+            const queryParams = new URLSearchParams({
+                page: 1,
+                page_size: 100000,
+                search: filters.search,
+                pos_name: filters.pos_name,
+                loai_ton: filters.loai_ton,
+                status_name: filters.status_name
+            });
+            
+            const res = await fetch(`/api/detailed?${queryParams.toString()}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            
+            const data = await res.json();
+            const codes = data.rows.map(r => r.item_code).filter(Boolean);
+            
+            if (codes.length === 0) {
+                showToast("Không tìm thấy bưu gửi nào khớp bộ lọc hiện tại để định vị.", "warning");
+                return;
+            }
+            
+            // Populate textarea of export view
+            if (codesInput) {
+                codesInput.value = codes.join("\n");
+                badgeCodesCount.textContent = `${codes.length} mã`;
+            }
+            
+            // Switch to export tab
+            switchView("export");
+            
+            // Highlight sidebar tab
+            document.querySelectorAll(".sidebar-nav li").forEach(li => li.classList.remove("active"));
+            const menuExport = document.getElementById("menu-export");
+            if (menuExport) menuExport.classList.add("active");
+            
+            // Trigger start export batch process
+            if (btnStartExport) {
+                btnStartExport.click();
+            }
+            
+        } catch (err) {
+            console.error("Error fetching codes for localization:", err);
+            showToast(`Lỗi lấy danh sách bưu gửi: ${err.message}`, "error");
+        } finally {
+            btnLocateExcel.disabled = false;
+            btnLocateExcel.innerHTML = originalHtml;
+        }
+    });
+}
 
 // Sorting headers
 document.querySelectorAll(".sortable").forEach(header => {
