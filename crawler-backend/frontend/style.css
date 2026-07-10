@@ -1726,9 +1726,6 @@ body {
 /* Drilldown Action Button */
 .btn-drilldown {
     transition: var(--transition-spring);
-    padding: 4px 8px !important;
-    font-size: 11px !important;
-    border-radius: 4px !important;
 }
 .btn-drilldown:hover {
     background-color: var(--accent-emerald) !important;

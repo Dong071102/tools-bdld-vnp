@@ -353,8 +353,8 @@ function renderSummary(data) {
             <td class="qty-cell text-right text-bold total-qty-cell" data-cat="Total" data-qty="${rowTotalQty}">${formatNumber(rowTotalQty)}</td>
             <td class="cod-cell text-right text-bold">${formatCurrency(rowTotalCod)}</td>
             <td class="text-center">
-                <button type="button" class="btn-drilldown" data-pos="${pos}" style="background: var(--accent-emerald-light); color: var(--accent-emerald); border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: var(--transition-spring);">
-                    <i class="fa-solid fa-arrow-down-long"></i> Xem chi tiết
+                <button type="button" class="btn-drilldown" data-pos="${pos}" title="Xem chi tiết tồn bưu gửi" style="background: var(--accent-emerald-light); color: var(--accent-emerald); border: none; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: var(--transition-spring);">
+                    <i class="fa-solid fa-chevron-down" style="font-size: 11px;"></i>
                 </button>
             </td>
         `;
