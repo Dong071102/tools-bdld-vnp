@@ -259,6 +259,7 @@ def get_detailed(
             
         if pos_name:
             pos_list = [p.strip() for p in pos_name.split(",") if p.strip()]
+            logger.info(f"Detailed API filtering by pos_names: {pos_list}")
             if pos_list:
                 placeholders = ",".join(["%s"] * len(pos_list))
                 where_clauses.append(f"pos_name IN ({placeholders})")
@@ -362,6 +363,7 @@ def get_export(
             
         if pos_name:
             pos_list = [p.strip() for p in pos_name.split(",") if p.strip()]
+            logger.info(f"Export API filtering by pos_names: {pos_list}")
             if pos_list:
                 placeholders = ",".join(["%s"] * len(pos_list))
                 where_clauses.append(f"pos_name IN ({placeholders})")
