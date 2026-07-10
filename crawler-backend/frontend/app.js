@@ -38,8 +38,21 @@ const multiselectPosList = document.getElementById("multiselect-pos-list");
 const multiselectPosLabel = document.getElementById("multiselect-pos-label");
 const multiselectPosSelectAll = document.getElementById("multiselect-pos-select-all");
 const multiselectPosClear = document.getElementById("multiselect-pos-clear");
-const filterCategory = document.getElementById("filter-category");
-const filterStatus = document.getElementById("filter-status");
+const multiselectCategoryContainer = document.getElementById("multiselect-category-container");
+const multiselectCategoryTrigger = document.getElementById("multiselect-category-trigger");
+const multiselectCategoryDropdown = document.getElementById("multiselect-category-dropdown");
+const multiselectCategoryList = document.getElementById("multiselect-category-list");
+const multiselectCategoryLabel = document.getElementById("multiselect-category-label");
+const multiselectCategorySelectAll = document.getElementById("multiselect-category-select-all");
+const multiselectCategoryClear = document.getElementById("multiselect-category-clear");
+
+const multiselectStatusContainer = document.getElementById("multiselect-status-container");
+const multiselectStatusTrigger = document.getElementById("multiselect-status-trigger");
+const multiselectStatusDropdown = document.getElementById("multiselect-status-dropdown");
+const multiselectStatusList = document.getElementById("multiselect-status-list");
+const multiselectStatusLabel = document.getElementById("multiselect-status-label");
+const multiselectStatusSelectAll = document.getElementById("multiselect-status-select-all");
+const multiselectStatusClear = document.getElementById("multiselect-status-clear");
 const searchInput = document.getElementById("search-input");
 
 const matrixTbody = document.getElementById("matrix-tbody");
@@ -125,23 +138,27 @@ async function loadFilters() {
             });
         }
 
-        // Populate Categories
-        filterCategory.innerHTML = '<option value="">-- Tổng số lượng tồn --</option>';
-        data.loai_tons.forEach(cat => {
-            const opt = document.createElement("option");
-            opt.value = cat;
-            opt.textContent = cat;
-            filterCategory.appendChild(opt);
-        });
+        // Populate Categories into Custom Multiselect
+        if (multiselectCategoryList) {
+            multiselectCategoryList.innerHTML = '';
+            data.loai_tons.forEach(cat => {
+                const lbl = document.createElement("label");
+                lbl.innerHTML = `<input type="checkbox" class="category-checkbox" value="${cat}"> ${cat}`;
+                lbl.querySelector("input").addEventListener("change", handleCategorySelectionChange);
+                multiselectCategoryList.appendChild(lbl);
+            });
+        }
 
-        // Populate Statuses
-        filterStatus.innerHTML = '<option value="">-- Tất cả trạng thái --</option>';
-        data.status_names.forEach(status => {
-            const opt = document.createElement("option");
-            opt.value = status;
-            opt.textContent = status;
-            filterStatus.appendChild(opt);
-        });
+        // Populate Statuses into Custom Multiselect
+        if (multiselectStatusList) {
+            multiselectStatusList.innerHTML = '';
+            data.status_names.forEach(status => {
+                const lbl = document.createElement("label");
+                lbl.innerHTML = `<input type="checkbox" class="status-checkbox" value="${status}"> ${status}`;
+                lbl.querySelector("input").addEventListener("change", handleStatusSelectionChange);
+                multiselectStatusList.appendChild(lbl);
+            });
+        }
     } catch (e) {
         console.error("Error loading filters:", e);
     }
@@ -492,17 +509,95 @@ if (multiselectPosClear) {
     });
 }
 
-filterCategory.addEventListener("change", (e) => {
-    filters.loai_ton = e.target.value;
-    currentPage = 1;
-    loadDetailed();
+// Event Listeners for Dashboard custom multiselect Category (Thời gian tồn) filter
+if (multiselectCategoryTrigger && multiselectCategoryContainer) {
+    multiselectCategoryTrigger.addEventListener("click", (e) => {
+        e.stopPropagation();
+        multiselectCategoryContainer.classList.toggle("open");
+    });
+}
+
+document.addEventListener("click", (e) => {
+    if (multiselectCategoryContainer && !multiselectCategoryContainer.contains(e.target)) {
+        multiselectCategoryContainer.classList.remove("open");
+    }
 });
 
-filterStatus.addEventListener("change", (e) => {
-    filters.status_name = e.target.value;
+function handleCategorySelectionChange() {
+    const checkedBoxes = Array.from(document.querySelectorAll(".category-checkbox:checked"));
+    const selectedValues = checkedBoxes.map(cb => cb.value);
+    filters.loai_ton = selectedValues.join(",");
+    
+    if (selectedValues.length === 0) {
+        multiselectCategoryLabel.textContent = "-- Tất cả thời gian --";
+    } else if (selectedValues.length === 1) {
+        multiselectCategoryLabel.textContent = selectedValues[0];
+    } else {
+        multiselectCategoryLabel.textContent = `Đã chọn ${selectedValues.length} loại`;
+    }
+    
     currentPage = 1;
     loadDetailed();
+}
+
+if (multiselectCategorySelectAll) {
+    multiselectCategorySelectAll.addEventListener("click", () => {
+        document.querySelectorAll(".category-checkbox").forEach(cb => cb.checked = true);
+        handleCategorySelectionChange();
+    });
+}
+
+if (multiselectCategoryClear) {
+    multiselectCategoryClear.addEventListener("click", () => {
+        document.querySelectorAll(".category-checkbox").forEach(cb => cb.checked = false);
+        handleCategorySelectionChange();
+    });
+}
+
+// Event Listeners for Dashboard custom multiselect Status (Trạng thái) filter
+if (multiselectStatusTrigger && multiselectStatusContainer) {
+    multiselectStatusTrigger.addEventListener("click", (e) => {
+        e.stopPropagation();
+        multiselectStatusContainer.classList.toggle("open");
+    });
+}
+
+document.addEventListener("click", (e) => {
+    if (multiselectStatusContainer && !multiselectStatusContainer.contains(e.target)) {
+        multiselectStatusContainer.classList.remove("open");
+    }
 });
+
+function handleStatusSelectionChange() {
+    const checkedBoxes = Array.from(document.querySelectorAll(".status-checkbox:checked"));
+    const selectedValues = checkedBoxes.map(cb => cb.value);
+    filters.status_name = selectedValues.join(",");
+    
+    if (selectedValues.length === 0) {
+        multiselectStatusLabel.textContent = "-- Tất cả trạng thái --";
+    } else if (selectedValues.length === 1) {
+        multiselectStatusLabel.textContent = selectedValues[0];
+    } else {
+        multiselectStatusLabel.textContent = `Đã chọn ${selectedValues.length} trạng thái`;
+    }
+    
+    currentPage = 1;
+    loadDetailed();
+}
+
+if (multiselectStatusSelectAll) {
+    multiselectStatusSelectAll.addEventListener("click", () => {
+        document.querySelectorAll(".status-checkbox").forEach(cb => cb.checked = true);
+        handleStatusSelectionChange();
+    });
+}
+
+if (multiselectStatusClear) {
+    multiselectStatusClear.addEventListener("click", () => {
+        document.querySelectorAll(".status-checkbox").forEach(cb => cb.checked = false);
+        handleStatusSelectionChange();
+    });
+}
 
 searchInput.addEventListener("input", handleSearch);
 
@@ -660,8 +755,10 @@ document.getElementById("btn-reset-filters").addEventListener("click", () => {
     
     document.querySelectorAll(".pos-checkbox").forEach(cb => cb.checked = false);
     if (multiselectPosLabel) multiselectPosLabel.textContent = "-- Tất cả bưu cục --";
-    filterCategory.value = "";
-    filterStatus.value = "";
+    document.querySelectorAll(".category-checkbox").forEach(cb => cb.checked = false);
+    if (multiselectCategoryLabel) multiselectCategoryLabel.textContent = "-- Tất cả thời gian --";
+    document.querySelectorAll(".status-checkbox").forEach(cb => cb.checked = false);
+    if (multiselectStatusLabel) multiselectStatusLabel.textContent = "-- Tất cả trạng thái --";
     searchInput.value = "";
     
     filters.pos_name = "";

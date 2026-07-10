@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Style CSS -->
-     <link rel="stylesheet" href="/static/style.css?v=2.5.0">
+     <link rel="stylesheet" href="/static/style.css?v=2.6.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -222,16 +222,40 @@
                                 </div>
                             </div>
                             <div class="filter-group">
-                                <label for="filter-category">Thời gian tồn</label>
-                                <select id="filter-category">
-                                    <option value="">-- Tổng số lượng tồn --</option>
-                                </select>
+                                <label for="multiselect-category-trigger">Thời gian tồn</label>
+                                <div class="custom-multiselect" id="multiselect-category-container">
+                                    <div class="multiselect-trigger" id="multiselect-category-trigger">
+                                        <span id="multiselect-category-label">-- Tất cả thời gian --</span>
+                                        <i class="fa-solid fa-chevron-down" style="font-size: 11px; opacity: 0.7;"></i>
+                                    </div>
+                                    <div class="multiselect-dropdown" id="multiselect-category-dropdown">
+                                        <div class="multiselect-dropdown-actions">
+                                            <button type="button" id="multiselect-category-select-all">Chọn tất cả</button>
+                                            <button type="button" id="multiselect-category-clear">Xóa chọn</button>
+                                        </div>
+                                        <div class="multiselect-dropdown-list" id="multiselect-category-list">
+                                            <!-- Dynamic checkboxes -->
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="filter-group">
-                                <label for="filter-status">Trạng thái</label>
-                                <select id="filter-status">
-                                    <option value="">-- Tất cả trạng thái --</option>
-                                </select>
+                                <label for="multiselect-status-trigger">Trạng thái</label>
+                                <div class="custom-multiselect" id="multiselect-status-container">
+                                    <div class="multiselect-trigger" id="multiselect-status-trigger">
+                                        <span id="multiselect-status-label">-- Tất cả trạng thái --</span>
+                                        <i class="fa-solid fa-chevron-down" style="font-size: 11px; opacity: 0.7;"></i>
+                                    </div>
+                                    <div class="multiselect-dropdown" id="multiselect-status-dropdown">
+                                        <div class="multiselect-dropdown-actions">
+                                            <button type="button" id="multiselect-status-select-all">Chọn tất cả</button>
+                                            <button type="button" id="multiselect-status-clear">Xóa chọn</button>
+                                        </div>
+                                        <div class="multiselect-dropdown-list" id="multiselect-status-list">
+                                            <!-- Dynamic checkboxes -->
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="filter-group search-group">
                                 <label for="search-input">Tìm kiếm</label>
@@ -723,6 +747,6 @@
     </div>
 
     <!-- Script JS -->
-    <script src="/static/app.js?v=2.5.0"></script>
+    <script src="/static/app.js?v=2.6.0"></script>
 </body>
 </html>

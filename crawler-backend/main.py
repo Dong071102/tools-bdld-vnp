@@ -266,12 +266,18 @@ def get_detailed(
                 params.extend(pos_list)
             
         if loai_ton:
-            where_clauses.append("loai_ton = %s")
-            params.append(loai_ton)
+            loai_list = [l.strip() for l in loai_ton.split(",") if l.strip()]
+            if loai_list:
+                placeholders = ",".join(["%s"] * len(loai_list))
+                where_clauses.append(f"loai_ton IN ({placeholders})")
+                params.extend(loai_list)
             
         if status_name:
-            where_clauses.append("status_name = %s")
-            params.append(status_name)
+            status_list = [s.strip() for s in status_name.split(",") if s.strip()]
+            if status_list:
+                placeholders = ",".join(["%s"] * len(status_list))
+                where_clauses.append(f"status_name IN ({placeholders})")
+                params.extend(status_list)
             
         where_str = " AND ".join(where_clauses)
         
@@ -370,12 +376,18 @@ def get_export(
                 params.extend(pos_list)
             
         if loai_ton:
-            where_clauses.append("loai_ton = %s")
-            params.append(loai_ton)
+            loai_list = [l.strip() for l in loai_ton.split(",") if l.strip()]
+            if loai_list:
+                placeholders = ",".join(["%s"] * len(loai_list))
+                where_clauses.append(f"loai_ton IN ({placeholders})")
+                params.extend(loai_list)
             
         if status_name:
-            where_clauses.append("status_name = %s")
-            params.append(status_name)
+            status_list = [s.strip() for s in status_name.split(",") if s.strip()]
+            if status_list:
+                placeholders = ",".join(["%s"] * len(status_list))
+                where_clauses.append(f"status_name IN ({placeholders})")
+                params.extend(status_list)
             
         where_str = " AND ".join(where_clauses)
         
