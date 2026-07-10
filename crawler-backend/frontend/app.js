@@ -6,8 +6,8 @@ let sortCol = "item_code";
 let sortDir = "asc";
 
 // Matrix Sort State
-let matrixSortCol = "pos_name";
-let matrixSortDir = "asc";
+let matrixSortCol = "qty-Total";
+let matrixSortDir = "desc";
 let cachedSummaryData = null;
 
 let filters = {
@@ -316,7 +316,7 @@ function renderSummary(data) {
         `;
     });
     totalRowHtml += `
-        <td class="text-right text-bold">${formatNumber(colTotals["Total"].qty)}</td>
+        <td class="text-right text-bold total-qty-cell">${formatNumber(colTotals["Total"].qty)}</td>
         <td class="text-right text-bold">${formatCurrency(colTotals["Total"].cod)}</td>
     `;
     totalTrTop.innerHTML = totalRowHtml;
@@ -346,7 +346,7 @@ function renderSummary(data) {
         
         // Total column last
         rowHtml += `
-            <td class="qty-cell text-right text-bold" data-cat="Total" data-qty="${rowTotalQty}">${formatNumber(rowTotalQty)}</td>
+            <td class="qty-cell text-right text-bold total-qty-cell" data-cat="Total" data-qty="${rowTotalQty}">${formatNumber(rowTotalQty)}</td>
             <td class="cod-cell text-right text-bold">${formatCurrency(rowTotalCod)}</td>
         `;
         

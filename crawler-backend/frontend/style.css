@@ -1708,3 +1708,10 @@ body {
     margin: 0;
     flex-shrink: 0;
 }
+
+/* Highlighted Column for Total Quantity in Matrix */
+.total-qty-cell {
+    background-color: rgba(15, 118, 110, 0.07) !important;
+    color: var(--accent-emerald) !important;
+    font-weight: 700 !important;
+}
