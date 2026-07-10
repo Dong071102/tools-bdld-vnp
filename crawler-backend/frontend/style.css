@@ -825,19 +825,19 @@ body {
 /* Highlight Row & Cell Styling */
 .highlighted-row td {
     background-color: rgba(239, 68, 68, 0.08) !important; /* Soft pastel red tint for the row */
-    border-top: 2.5px solid #000000 !important;
-    border-bottom: 2.5px solid #000000 !important;
+    border-top: 1px solid #000000 !important;
+    border-bottom: 1px solid #000000 !important;
     color: var(--text-secondary) !important;
 }
 
 .highlighted-row td:first-child {
-    border-left: 2.5px solid #000000 !important;
+    border-left: 1px solid #000000 !important;
     font-weight: 700 !important;
     color: #b91c1c !important; /* Red text for the POS name cell */
 }
 
 .highlighted-row td:last-child {
-    border-right: 2.5px solid #000000 !important;
+    border-right: 1px solid #000000 !important;
 }
 
 .highlighted-row td.highlighted-cell {
