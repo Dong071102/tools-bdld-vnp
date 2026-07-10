@@ -2,8 +2,8 @@
 let currentPage = 1;
 let pageSize = 50;
 let totalRecords = 0;
-let sortCol = "item_code";
-let sortDir = "asc";
+let sortCol = "loai_ton";
+let sortDir = "desc";
 
 // Matrix Sort State
 let matrixSortCol = "qty-Total";
@@ -409,8 +409,8 @@ async function loadDetailed() {
                 tr.innerHTML = `
                     <td class="text-bold" style="font-family: var(--font-mono); font-size: 13.5px; color: #ef4444;">${r.item_code}</td>
                     <td>${r.pos_name || '-'}</td>
-                    <td><span class="status-badge">${r.status_name || '-'}</span></td>
                     <td><span class="category-badge ${ageClass}">${r.loai_ton || '-'}</span></td>
+                    <td><span class="status-badge">${r.status_name || '-'}</span></td>
                     <td class="text-right" style="font-family: var(--font-mono); font-size: 13.5px;">${codText}</td>
                     <td class="text-right" style="font-family: var(--font-mono); font-size: 13.5px;">${formatNumber(r.weight)}</td>
                     <td style="font-family: var(--font-mono); font-size: 13.5px;">${r.updated_at || '-'}</td>
@@ -652,7 +652,7 @@ document.querySelectorAll(".sortable").forEach(header => {
             sortDir = sortDir === "asc" ? "desc" : "asc";
         } else {
             sortCol = col;
-            sortDir = "asc";
+            sortDir = (col === "loai_ton" || col === "cod_amount" || col === "weight") ? "desc" : "asc";
         }
         
         document.querySelectorAll(".sortable i").forEach(icon => {
@@ -821,6 +821,19 @@ document.getElementById("btn-reset-filters").addEventListener("click", () => {
     selectPageSize.value = "50";
     
     applyHighlights();
+    sortCol = "loai_ton";
+    sortDir = "desc";
+    
+    document.querySelectorAll(".sortable i").forEach(icon => {
+        const parentTh = icon.closest("th");
+        const colName = parentTh ? parentTh.getAttribute("data-col") : null;
+        if (colName === "loai_ton") {
+            icon.className = "fa-solid fa-sort-down";
+        } else {
+            icon.className = "fa-solid fa-sort";
+        }
+    });
+
     loadDetailed();
     
     matrixSortCol = "pos_name";
