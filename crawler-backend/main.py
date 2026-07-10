@@ -258,8 +258,11 @@ def get_detailed(
             params.extend([f"%{search}%", f"%{search}%"])
             
         if pos_name:
-            where_clauses.append("pos_name = %s")
-            params.append(pos_name)
+            pos_list = [p.strip() for p in pos_name.split(",") if p.strip()]
+            if pos_list:
+                placeholders = ",".join(["%s"] * len(pos_list))
+                where_clauses.append(f"pos_name IN ({placeholders})")
+                params.extend(pos_list)
             
         if loai_ton:
             where_clauses.append("loai_ton = %s")
@@ -358,8 +361,11 @@ def get_export(
             params.extend([f"%{search}%", f"%{search}%"])
             
         if pos_name:
-            where_clauses.append("pos_name = %s")
-            params.append(pos_name)
+            pos_list = [p.strip() for p in pos_name.split(",") if p.strip()]
+            if pos_list:
+                placeholders = ",".join(["%s"] * len(pos_list))
+                where_clauses.append(f"pos_name IN ({placeholders})")
+                params.extend(pos_list)
             
         if loai_ton:
             where_clauses.append("loai_ton = %s")

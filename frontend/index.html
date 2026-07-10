@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Style CSS -->
-     <link rel="stylesheet" href="/static/style.css?v=2.4.0">
+     <link rel="stylesheet" href="/static/style.css?v=2.5.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -204,10 +204,22 @@
                         <!-- Filters Section (inside card) -->
                         <section class="filters-container">
                             <div class="filter-group">
-                                <label for="filter-pos">Bưu cục phát</label>
-                                <select id="filter-pos">
-                                    <option value="">-- Tất cả bưu cục --</option>
-                                </select>
+                                <label for="multiselect-pos-trigger">Bưu cục phát</label>
+                                <div class="custom-multiselect" id="multiselect-pos-container">
+                                    <div class="multiselect-trigger" id="multiselect-pos-trigger">
+                                        <span id="multiselect-pos-label">-- Tất cả bưu cục --</span>
+                                        <i class="fa-solid fa-chevron-down" style="font-size: 11px; opacity: 0.7;"></i>
+                                    </div>
+                                    <div class="multiselect-dropdown" id="multiselect-pos-dropdown">
+                                        <div class="multiselect-dropdown-actions">
+                                            <button type="button" id="multiselect-pos-select-all">Chọn tất cả</button>
+                                            <button type="button" id="multiselect-pos-clear">Xóa chọn</button>
+                                        </div>
+                                        <div class="multiselect-dropdown-list" id="multiselect-pos-list">
+                                            <!-- Dynamic checkboxes -->
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="filter-group">
                                 <label for="filter-category">Thời gian tồn</label>
@@ -711,6 +723,6 @@
     </div>
 
     <!-- Script JS -->
-    <script src="/static/app.js?v=2.4.0"></script>
+    <script src="/static/app.js?v=2.5.0"></script>
 </body>
 </html>

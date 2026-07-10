@@ -31,7 +31,13 @@ const kpiQty = document.getElementById("kpi-qty");
 const kpiCod = document.getElementById("kpi-cod");
 const kpiWeight = document.getElementById("kpi-weight");
 
-const filterPos = document.getElementById("filter-pos");
+const multiselectPosContainer = document.getElementById("multiselect-pos-container");
+const multiselectPosTrigger = document.getElementById("multiselect-pos-trigger");
+const multiselectPosDropdown = document.getElementById("multiselect-pos-dropdown");
+const multiselectPosList = document.getElementById("multiselect-pos-list");
+const multiselectPosLabel = document.getElementById("multiselect-pos-label");
+const multiselectPosSelectAll = document.getElementById("multiselect-pos-select-all");
+const multiselectPosClear = document.getElementById("multiselect-pos-clear");
 const filterCategory = document.getElementById("filter-category");
 const filterStatus = document.getElementById("filter-status");
 const searchInput = document.getElementById("search-input");
@@ -108,14 +114,16 @@ async function loadFilters() {
         const response = await fetch("/api/filters");
         const data = await response.json();
         
-        // Populate POS Names
-        filterPos.innerHTML = '<option value="">-- Tất cả bưu cục --</option>';
-        data.pos_names.forEach(name => {
-            const opt = document.createElement("option");
-            opt.value = name;
-            opt.textContent = name;
-            filterPos.appendChild(opt);
-        });
+        // Populate POS Names into Custom Multiselect
+        if (multiselectPosList) {
+            multiselectPosList.innerHTML = '';
+            data.pos_names.forEach(name => {
+                const lbl = document.createElement("label");
+                lbl.innerHTML = `<input type="checkbox" class="pos-checkbox" value="${name}"> ${name}`;
+                lbl.querySelector("input").addEventListener("change", handlePosSelectionChange);
+                multiselectPosList.appendChild(lbl);
+            });
+        }
 
         // Populate Categories
         filterCategory.innerHTML = '<option value="">-- Tổng số lượng tồn --</option>';
@@ -439,12 +447,50 @@ function handleSearch(e) {
     }, 400);
 }
 
-// Event Listeners for Dashboard view filters
-filterPos.addEventListener("change", (e) => {
-    filters.pos_name = e.target.value;
+// Event Listeners for Dashboard custom multiselect POS filter
+if (multiselectPosTrigger && multiselectPosContainer) {
+    multiselectPosTrigger.addEventListener("click", (e) => {
+        e.stopPropagation();
+        multiselectPosContainer.classList.toggle("open");
+    });
+}
+
+document.addEventListener("click", (e) => {
+    if (multiselectPosContainer && !multiselectPosContainer.contains(e.target)) {
+        multiselectPosContainer.classList.remove("open");
+    }
+});
+
+function handlePosSelectionChange() {
+    const checkedBoxes = Array.from(document.querySelectorAll(".pos-checkbox:checked"));
+    const selectedValues = checkedBoxes.map(cb => cb.value);
+    filters.pos_name = selectedValues.join(",");
+    
+    if (selectedValues.length === 0) {
+        multiselectPosLabel.textContent = "-- Tất cả bưu cục --";
+    } else if (selectedValues.length === 1) {
+        multiselectPosLabel.textContent = selectedValues[0];
+    } else {
+        multiselectPosLabel.textContent = `Đã chọn ${selectedValues.length} bưu cục`;
+    }
+    
     currentPage = 1;
     loadDetailed();
-});
+}
+
+if (multiselectPosSelectAll) {
+    multiselectPosSelectAll.addEventListener("click", () => {
+        document.querySelectorAll(".pos-checkbox").forEach(cb => cb.checked = true);
+        handlePosSelectionChange();
+    });
+}
+
+if (multiselectPosClear) {
+    multiselectPosClear.addEventListener("click", () => {
+        document.querySelectorAll(".pos-checkbox").forEach(cb => cb.checked = false);
+        handlePosSelectionChange();
+    });
+}
 
 filterCategory.addEventListener("change", (e) => {
     filters.loai_ton = e.target.value;
@@ -612,7 +658,8 @@ document.getElementById("btn-reset-filters").addEventListener("click", () => {
     document.getElementById("threshold-14").value = "";
     document.getElementById("threshold-total").value = "";
     
-    filterPos.value = "";
+    document.querySelectorAll(".pos-checkbox").forEach(cb => cb.checked = false);
+    if (multiselectPosLabel) multiselectPosLabel.textContent = "-- Tất cả bưu cục --";
     filterCategory.value = "";
     filterStatus.value = "";
     searchInput.value = "";
