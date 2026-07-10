@@ -478,41 +478,49 @@
 
                 <!-- Tab 2: Exporter & Highlight Configuration Panel -->
                 <div id="panel-settings-dinhvi" style="display: none;">
-                    <div class="grid-card padded" style="max-width: 550px; margin-bottom: 24px;">
-                        <div class="card-header" style="margin-bottom: 20px;">
-                            <h2><i class="fa-solid fa-sliders"></i> Cấu hình thông số hệ thống</h2>
-                        </div>
-                        <form id="frm-dinhvi-config">
-                            <!-- Part 1: Exporter config -->
-                            <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 12px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; color: var(--accent-emerald);">1. Cấu hình xuất định vị</h3>
-                            <div class="form-group" style="margin-bottom: 20px;">
+                    <form id="frm-dinhvi-config" style="max-width: 550px;">
+                        <!-- Card 1: Cấu hình định vị bưu gửi -->
+                        <div class="grid-card padded" style="margin-bottom: 20px;">
+                            <div class="card-header" style="margin-bottom: 16px;">
+                                <h2><i class="fa-solid fa-file-excel"></i> 1. Cấu hình xuất định vị bưu gửi</h2>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
                                 <label class="form-label" for="cfg-batch-size" style="font-weight: 600; margin-bottom: 6px; display: block;">Số lượng bưu gửi trên 1 lô (Batch Size)</label>
                                 <input type="number" id="cfg-batch-size" class="input-field" min="1" max="500" value="50" required style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
                                 <span class="form-help" style="font-size: 12px; color: var(--text-muted); display: block; margin-top: 6px;">Số lượng mã bưu gửi tải đi trong mỗi yêu cầu. Mặc định là 50.</span>
                             </div>
+                        </div>
 
-                            <!-- Part 2: Highlight threshold defaults -->
-                            <h3 style="font-size: 14px; font-weight: 700; margin-top: 24px; margin-bottom: 12px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; color: var(--accent-emerald);">2. Ngưỡng highlight tồn mặc định (Dashboard)</h3>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
-                                <div class="form-group">
+                        <!-- Card 2: Cấu hình Dashboard -->
+                        <div class="grid-card padded" style="margin-bottom: 20px;">
+                            <div class="card-header" style="margin-bottom: 16px;">
+                                <h2><i class="fa-solid fa-chart-line"></i> 2. Cấu hình Dashboard hàng tồn</h2>
+                            </div>
+                            
+                            <!-- Part 2a: Highlight threshold defaults -->
+                            <h3 style="font-size: 13.5px; font-weight: 700; margin-bottom: 12px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; color: var(--accent-emerald);">Ngưỡng highlight tồn mặc định</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                                <div class="form-group" style="margin-bottom: 0;">
                                     <label class="form-label" for="cfg-thresh-3" style="font-weight: 600; margin-bottom: 6px; display: block;">Tồn ≥ 3 ngày</label>
                                     <input type="number" id="cfg-thresh-3" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="margin-bottom: 0;">
                                     <label class="form-label" for="cfg-thresh-7" style="font-weight: 600; margin-bottom: 6px; display: block;">Tồn ≥ 7 ngày</label>
                                     <input type="number" id="cfg-thresh-7" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="margin-bottom: 0;">
                                     <label class="form-label" for="cfg-thresh-14" style="font-weight: 600; margin-bottom: 6px; display: block;">Tồn ≥ 14 ngày</label>
                                     <input type="number" id="cfg-thresh-14" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="margin-bottom: 0;">
                                     <label class="form-label" for="cfg-thresh-total" style="font-weight: 600; margin-bottom: 6px; display: block;">Tổng tồn</label>
                                     <input type="number" id="cfg-thresh-total" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
                                 </div>
-                            <!-- Part 3: Matrix Total Columns Config -->
-                            <h3 style="font-size: 14px; font-weight: 700; margin-top: 24px; margin-bottom: 12px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; color: var(--accent-emerald);">3. Chọn cột tính Tổng tồn (Matrix)</h3>
-                            <div style="display: flex; gap: 16px; margin-bottom: 24px; background: var(--bg-primary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            </div>
+
+                            <!-- Part 2b: Matrix Total Columns Config -->
+                            <h3 style="font-size: 13.5px; font-weight: 700; margin-top: 20px; margin-bottom: 12px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; color: var(--accent-emerald);">Chọn cột tính Tổng tồn (Matrix)</h3>
+                            <div style="display: flex; gap: 16px; background: var(--bg-primary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
                                 <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--text-primary); user-select: none;">
                                     <input type="checkbox" id="cfg-col-3" value="≥3 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥3 ngày
                                 </label>
@@ -523,10 +531,11 @@
                                     <input type="checkbox" id="cfg-col-14" value="≥14 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥14 ngày
                                 </label>
                             </div>
-                            
-                            <button type="submit" class="btn btn-primary" style="padding: 12px 24px; font-weight: 600; border-radius: 8px; width: 100%;"><i class="fa-solid fa-floppy-disk"></i> Lưu tất cả cấu hình</button>
-                        </form>
-                    </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" class="btn btn-primary" style="padding: 14px 24px; font-weight: 600; border-radius: 8px; width: 100%; box-shadow: var(--shadow-sm);"><i class="fa-solid fa-floppy-disk"></i> Lưu tất cả cấu hình</button>
+                    </form>
                 </div>
             </div>
         </main>
