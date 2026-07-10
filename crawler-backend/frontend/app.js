@@ -199,6 +199,12 @@ function renderSummary(data) {
         } catch(e) {}
     }
     
+    // Update the "Toàn tỉnh" column header label dynamically to show selected columns
+    const headerTotal = document.getElementById("matrix-header-total");
+    if (headerTotal) {
+        headerTotal.innerHTML = `Toàn tỉnh <span style="font-size: 10.5px; font-weight: 500; opacity: 0.85; display: block; margin-top: 2px; color: var(--accent-emerald);">(${targetCats.join(', ')})</span>`;
+    }
+    
     let colTotals = {
         "≥3 ngày": { qty: 0, cod: 0.0 },
         "≥7 ngày": { qty: 0, cod: 0.0 },
