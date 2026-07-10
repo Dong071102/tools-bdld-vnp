@@ -200,9 +200,9 @@ function renderSummary(data) {
     }
     
     // Update the "Toàn tỉnh" column header label dynamically to show selected columns
-    const headerTotal = document.getElementById("matrix-header-total");
-    if (headerTotal) {
-        headerTotal.innerHTML = `Toàn tỉnh <span style="font-size: 10.5px; font-weight: 500; opacity: 0.85; display: block; margin-top: 2px; color: var(--accent-emerald);">(${targetCats.join(', ')})</span>`;
+    const headerSublabel = document.getElementById("matrix-header-sublabel");
+    if (headerSublabel) {
+        headerSublabel.textContent = `(${targetCats.join(', ')})`;
     }
     
     let colTotals = {
@@ -1928,6 +1928,80 @@ async function initDashboard() {
     await loadFilters();
     await loadSummary();
     await loadDetailed();
+    
+    // Initialize Matrix Quick Config Popover Modal
+    initMatrixTotalQuickConfig();
+}
+
+function initMatrixTotalQuickConfig() {
+    const headerTotal = document.getElementById("matrix-header-total");
+    const matrixTotalModal = document.getElementById("matrix-total-modal");
+    const btnCloseMatrixTotalModal = document.getElementById("btn-close-matrix-total-modal");
+    const btnCancelMatrixTotalModal = document.getElementById("btn-cancel-matrix-total-modal");
+    const btnSaveMatrixTotalModal = document.getElementById("btn-save-matrix-total-modal");
+    
+    const modalCfgCol3 = document.getElementById("modal-cfg-col-3");
+    const modalCfgCol7 = document.getElementById("modal-cfg-col-7");
+    const modalCfgCol14 = document.getElementById("modal-cfg-col-14");
+    
+    if (!headerTotal || !matrixTotalModal) return;
+    
+    // Open Modal
+    headerTotal.addEventListener("click", () => {
+        const savedColsStr = localStorage.getItem("matrix_total_columns");
+        let savedCols = ["≥7 ngày", "≥14 ngày"];
+        if (savedColsStr) {
+            try {
+                savedCols = JSON.parse(savedColsStr);
+            } catch(e) {}
+        }
+        if (modalCfgCol3) modalCfgCol3.checked = savedCols.includes("≥3 ngày");
+        if (modalCfgCol7) modalCfgCol7.checked = savedCols.includes("≥7 ngày");
+        if (modalCfgCol14) modalCfgCol14.checked = savedCols.includes("≥14 ngày");
+        
+        matrixTotalModal.style.display = "flex";
+    });
+    
+    const closeModal = () => {
+        matrixTotalModal.style.display = "none";
+    };
+    
+    if (btnCloseMatrixTotalModal) btnCloseMatrixTotalModal.addEventListener("click", closeModal);
+    if (btnCancelMatrixTotalModal) btnCancelMatrixTotalModal.addEventListener("click", closeModal);
+    
+    // Save Quick Config
+    if (btnSaveMatrixTotalModal) {
+        btnSaveMatrixTotalModal.addEventListener("click", () => {
+            const selectedCols = [];
+            if (modalCfgCol3 && modalCfgCol3.checked) selectedCols.push("≥3 ngày");
+            if (modalCfgCol7 && modalCfgCol7.checked) selectedCols.push("≥7 ngày");
+            if (modalCfgCol14 && modalCfgCol14.checked) selectedCols.push("≥14 ngày");
+            
+            if (selectedCols.length === 0) {
+                showToast("Phải chọn ít nhất một cột để tính tổng tồn.", "warning");
+                return;
+            }
+            
+            localStorage.setItem("matrix_total_columns", JSON.stringify(selectedCols));
+            
+            // Sync with system settings checkboxes if visible
+            const cfgCol3 = document.getElementById("cfg-col-3");
+            const cfgCol7 = document.getElementById("cfg-col-7");
+            const cfgCol14 = document.getElementById("cfg-col-14");
+            if (cfgCol3) cfgCol3.checked = selectedCols.includes("≥3 ngày");
+            if (cfgCol7) cfgCol7.checked = selectedCols.includes("≥7 ngày");
+            if (cfgCol14) cfgCol14.checked = selectedCols.includes("≥14 ngày");
+            
+            closeModal();
+            
+            // Re-render Pivot Matrix instantly
+            if (cachedSummaryData) {
+                renderSummary(cachedSummaryData);
+            }
+            
+            showToast("Cập nhật cột tính tổng tồn thành công.", "success");
+        });
+    }
 }
 
 // Background status sync
