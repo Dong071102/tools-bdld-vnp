@@ -335,7 +335,7 @@ def get_detailed(
     finally:
         conn.close()
 
-@app.get("/api/export")
+@app.get("/api/summary/export")
 def get_export(
     search: str = "",
     pos_name: str = "",

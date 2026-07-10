@@ -416,7 +416,7 @@ async function exportExcel() {
             sort_col: sortCol,
             sort_dir: sortDir
         });
-        window.open(`/api/export?${queryParams.toString()}`);
+        window.open(`/api/summary/export?${queryParams.toString()}`);
     } catch (e) {
         showToast("Lỗi tải xuống excel.", "error");
     }
