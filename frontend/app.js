@@ -5,6 +5,180 @@ let totalRecords = 0;
 let sortCol = "loai_ton";
 let sortDir = "desc";
 
+// Default Detailed Table Columns Configuration
+const defaultColumnConfig = [
+    { id: "item_code", label: "Mã bưu gửi", visible: true, class: "text-bold", style: "font-family: var(--font-mono); font-size: 13.5px; color: #ef4444;" },
+    { id: "pos_name", label: "Bưu cục phát", visible: true, class: "", style: "" },
+    { id: "loai_ton", label: "Thời gian tồn", visible: true, class: "", style: "" },
+    { id: "status_name", label: "Trạng thái", visible: true, class: "", style: "" },
+    { id: "nhom_kh", label: "Nhóm KH", visible: true, class: "", style: "" },
+    { id: "postman_name", label: "Bưu tá", visible: true, class: "", style: "" },
+    { id: "cod_amount", label: "COD (đ)", visible: true, class: "text-right", style: "font-family: var(--font-mono); font-size: 13.5px;" },
+    { id: "weight", label: "TL (kg)", visible: true, class: "text-right", style: "font-family: var(--font-mono); font-size: 13.5px;" },
+    { id: "updated_at", label: "Cập nhật", visible: true, class: "", style: "font-family: var(--font-mono); font-size: 13.5px;" }
+];
+
+let columnConfig = [...defaultColumnConfig];
+let cachedDetailedData = null;
+
+function loadColumnConfig() {
+    const saved = localStorage.getItem("detailed_table_columns");
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            const merged = [];
+            parsed.forEach(p => {
+                const def = defaultColumnConfig.find(d => d.id === p.id);
+                if (def) merged.push({ ...def, visible: p.visible });
+            });
+            defaultColumnConfig.forEach(def => {
+                if (!merged.find(m => m.id === def.id)) merged.push(def);
+            });
+            columnConfig = merged;
+        } catch(e) {
+            columnConfig = [...defaultColumnConfig];
+        }
+    }
+}
+
+function saveColumnConfig() {
+    localStorage.setItem("detailed_table_columns", JSON.stringify(columnConfig.map(c => ({ id: c.id, visible: c.visible }))));
+}
+
+function renderColumnConfigUI() {
+    const list = document.getElementById("column-config-list");
+    if (!list) return;
+    list.innerHTML = "";
+    
+    columnConfig.forEach((col, index) => {
+        const item = document.createElement("div");
+        item.style.display = "flex";
+        item.style.alignItems = "center";
+        item.style.justifyContent = "space-between";
+        item.style.padding = "8px 12px";
+        item.style.background = "var(--bg-primary)";
+        item.style.border = "1px solid var(--border-color)";
+        item.style.borderRadius = "6px";
+        item.style.gap = "12px";
+        
+        const leftDiv = document.createElement("div");
+        leftDiv.style.display = "flex";
+        leftDiv.style.alignItems = "center";
+        leftDiv.style.gap = "8px";
+        
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = col.visible;
+        checkbox.style.width = "16px";
+        checkbox.style.height = "16px";
+        checkbox.style.accentColor = "var(--accent-emerald)";
+        checkbox.style.cursor = "pointer";
+        checkbox.onchange = () => {
+            col.visible = checkbox.checked;
+            saveColumnConfig();
+            renderDetailedHeader();
+            if (cachedDetailedData) renderDetailed(cachedDetailedData);
+        };
+        
+        const label = document.createElement("span");
+        label.textContent = col.label;
+        label.style.fontSize = "14px";
+        label.style.fontWeight = "500";
+        label.style.color = "var(--text-primary)";
+        
+        leftDiv.appendChild(checkbox);
+        leftDiv.appendChild(label);
+        
+        const rightDiv = document.createElement("div");
+        rightDiv.style.display = "flex";
+        rightDiv.style.gap = "4px";
+        
+        const upBtn = document.createElement("button");
+        upBtn.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
+        upBtn.className = "btn";
+        upBtn.style.padding = "4px 8px";
+        upBtn.style.background = "var(--bg-secondary)";
+        upBtn.style.color = index === 0 ? "var(--text-muted)" : "var(--text-primary)";
+        upBtn.disabled = index === 0;
+        upBtn.onclick = (e) => {
+            e.preventDefault();
+            if (index > 0) {
+                const temp = columnConfig[index];
+                columnConfig[index] = columnConfig[index - 1];
+                columnConfig[index - 1] = temp;
+                saveColumnConfig();
+                renderColumnConfigUI();
+                renderDetailedHeader();
+                if (cachedDetailedData) renderDetailed(cachedDetailedData);
+            }
+        };
+        
+        const downBtn = document.createElement("button");
+        downBtn.innerHTML = '<i class="fa-solid fa-arrow-down"></i>';
+        downBtn.className = "btn";
+        downBtn.style.padding = "4px 8px";
+        downBtn.style.background = "var(--bg-secondary)";
+        downBtn.style.color = index === columnConfig.length - 1 ? "var(--text-muted)" : "var(--text-primary)";
+        downBtn.disabled = index === columnConfig.length - 1;
+        downBtn.onclick = (e) => {
+            e.preventDefault();
+            if (index < columnConfig.length - 1) {
+                const temp = columnConfig[index];
+                columnConfig[index] = columnConfig[index + 1];
+                columnConfig[index + 1] = temp;
+                saveColumnConfig();
+                renderColumnConfigUI();
+                renderDetailedHeader();
+                if (cachedDetailedData) renderDetailed(cachedDetailedData);
+            }
+        };
+        
+        rightDiv.appendChild(upBtn);
+        rightDiv.appendChild(downBtn);
+        
+        item.appendChild(leftDiv);
+        item.appendChild(rightDiv);
+        list.appendChild(item);
+    });
+}
+
+function renderDetailedHeader() {
+    const theadTr = document.querySelector("#detailed-table thead tr");
+    if (!theadTr) return;
+    theadTr.innerHTML = "";
+    
+    columnConfig.filter(c => c.visible).forEach(col => {
+        const th = document.createElement("th");
+        th.setAttribute("data-col", col.id);
+        th.className = "sortable " + (col.class.includes("text-right") ? "text-right" : "");
+        
+        let iconClass = "fa-solid fa-sort";
+        if (sortCol === col.id) {
+            iconClass = sortDir === "asc" ? "fa-solid fa-sort-up" : "fa-solid fa-sort-down";
+        }
+        
+        th.innerHTML = `${col.label} <i class="${iconClass}"></i>`;
+        
+        // Re-attach sort event listener
+        th.addEventListener("click", () => {
+            if (sortCol === col.id) {
+                sortDir = sortDir === "asc" ? "desc" : "asc";
+            } else {
+                sortCol = col.id;
+                sortDir = (col.id === "loai_ton" || col.id === "cod_amount" || col.id === "weight") ? "desc" : "asc";
+            }
+            // Update icons
+            document.querySelectorAll(".sortable i").forEach(i => i.className = "fa-solid fa-sort");
+            th.querySelector("i").className = sortDir === "asc" ? "fa-solid fa-sort-up" : "fa-solid fa-sort-down";
+            
+            currentPage = 1;
+            loadDetailed();
+        });
+        
+        theadTr.appendChild(th);
+    });
+}
+
 // Matrix Sort State
 let matrixSortCol = "qty-Total";
 let matrixSortDir = "desc";
@@ -419,39 +593,11 @@ async function loadDetailed() {
         
         const response = await fetch(`/api/detailed?${queryParams.toString()}`);
         const data = await response.json();
+        cachedDetailedData = data;
         
         totalRecords = data.total_records;
         
-        // 1. Render Table Rows
-        detailedTbody.innerHTML = "";
-        if (data.rows.length === 0) {
-            detailedTbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Không tìm thấy bản ghi nào khớp bộ lọc.</td></tr>';
-        } else {
-            data.rows.forEach(r => {
-                const tr = document.createElement("tr");
-                
-                // Category badge age class
-                let ageClass = "age-3";
-                if (r.loai_ton === "≥14 ngày") ageClass = "age-14";
-                else if (r.loai_ton === "≥7 ngày") ageClass = "age-7";
-                
-                // COD formatting (hyphen if 0)
-                const codText = r.cod_amount > 0 ? formatCurrency(r.cod_amount) : "-";
-                
-                tr.innerHTML = `
-                    <td class="text-bold" style="font-family: var(--font-mono); font-size: 13.5px; color: #ef4444;">${r.item_code}</td>
-                    <td>${r.pos_name || '-'}</td>
-                    <td><span class="category-badge ${ageClass}">${r.loai_ton || '-'}</span></td>
-                    <td><span class="status-badge">${r.status_name || '-'}</span></td>
-                    <td>${r.nhom_kh || '-'}</td>
-                    <td>${r.postman_name || '-'}</td>
-                    <td class="text-right" style="font-family: var(--font-mono); font-size: 13.5px;">${codText}</td>
-                    <td class="text-right" style="font-family: var(--font-mono); font-size: 13.5px;">${formatNumber(r.weight)}</td>
-                    <td style="font-family: var(--font-mono); font-size: 13.5px;">${r.updated_at || '-'}</td>
-                `;
-                detailedTbody.appendChild(tr);
-            });
-        }
+        renderDetailed(data);
         
         // 2. Update Pagination Controls
         const start = (currentPage - 1) * pageSize + 1;
@@ -463,7 +609,49 @@ async function loadDetailed() {
         
     } catch (e) {
         console.error("Error loading detailed:", e);
-        detailedTbody.innerHTML = '<tr><td colspan="9" class="text-center text-red">Lỗi tải dữ liệu chi tiết.</td></tr>';
+        detailedTbody.innerHTML = `<tr><td colspan="${columnConfig.filter(c => c.visible).length}" class="text-center text-red">Lỗi tải dữ liệu chi tiết.</td></tr>`;
+    }
+}
+
+function renderDetailed(data) {
+    detailedTbody.innerHTML = "";
+    const visibleCols = columnConfig.filter(c => c.visible);
+    
+    if (!data || !data.rows || data.rows.length === 0) {
+        detailedTbody.innerHTML = `<tr><td colspan="${visibleCols.length}" class="text-center text-muted">Không tìm thấy bản ghi nào khớp bộ lọc.</td></tr>`;
+    } else {
+        data.rows.forEach(r => {
+            const tr = document.createElement("tr");
+            
+            let ageClass = "age-3";
+            if (r.loai_ton === "≥14 ngày") ageClass = "age-14";
+            else if (r.loai_ton === "≥7 ngày") ageClass = "age-7";
+            
+            const codText = r.cod_amount > 0 ? formatCurrency(r.cod_amount) : "-";
+            
+            let trContent = '';
+            visibleCols.forEach(col => {
+                let cellValue = r[col.id];
+                if (cellValue === null || cellValue === undefined) cellValue = '-';
+                
+                let cellContent = cellValue;
+                
+                if (col.id === 'loai_ton') {
+                    cellContent = `<span class="category-badge ${ageClass}">${cellValue}</span>`;
+                } else if (col.id === 'status_name') {
+                    cellContent = `<span class="status-badge">${cellValue}</span>`;
+                } else if (col.id === 'cod_amount') {
+                    cellContent = codText;
+                } else if (col.id === 'weight') {
+                    cellContent = formatNumber(r.weight);
+                }
+                
+                trContent += `<td class="${col.class}" style="${col.style}">${cellContent}</td>`;
+            });
+            
+            tr.innerHTML = trContent;
+            detailedTbody.appendChild(tr);
+        });
     }
 }
 
@@ -2279,6 +2467,10 @@ async function initDashboard() {
     await updateStatus();
     await loadFilters();
     await loadSummary();
+    await loadMatrixConfig();
+    loadColumnConfig();
+    renderColumnConfigUI();
+    renderDetailedHeader();
     await loadDetailed();
     
     // Initialize Matrix Quick Config Popover Modal
