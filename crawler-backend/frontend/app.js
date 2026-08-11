@@ -243,7 +243,7 @@ async function loadSummary() {
 function renderSummary(data) {
     if (!data || !data.matrix) return;
     
-    const categories = ["≥3 ngày", "≥7 ngày", "≥14 ngày"];
+    const categories = ["≥3 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
     
     // Load config for Matrix Total Columns
     const savedColsStr = localStorage.getItem("matrix_total_columns");
@@ -262,6 +262,7 @@ function renderSummary(data) {
     
     let colTotals = {
         "≥3 ngày": { qty: 0, cod: 0.0 },
+        "≥5 ngày": { qty: 0, cod: 0.0 },
         "≥7 ngày": { qty: 0, cod: 0.0 },
         "≥14 ngày": { qty: 0, cod: 0.0 },
         "Total": { qty: 0, cod: 0.0 }
@@ -424,7 +425,7 @@ async function loadDetailed() {
         // 1. Render Table Rows
         detailedTbody.innerHTML = "";
         if (data.rows.length === 0) {
-            detailedTbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Không tìm thấy bản ghi nào khớp bộ lọc.</td></tr>';
+            detailedTbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Không tìm thấy bản ghi nào khớp bộ lọc.</td></tr>';
         } else {
             data.rows.forEach(r => {
                 const tr = document.createElement("tr");
@@ -443,6 +444,7 @@ async function loadDetailed() {
                     <td><span class="category-badge ${ageClass}">${r.loai_ton || '-'}</span></td>
                     <td><span class="status-badge">${r.status_name || '-'}</span></td>
                     <td>${r.nhom_kh || '-'}</td>
+                    <td>${r.postman_name || '-'}</td>
                     <td class="text-right" style="font-family: var(--font-mono); font-size: 13.5px;">${codText}</td>
                     <td class="text-right" style="font-family: var(--font-mono); font-size: 13.5px;">${formatNumber(r.weight)}</td>
                     <td style="font-family: var(--font-mono); font-size: 13.5px;">${r.updated_at || '-'}</td>
@@ -461,7 +463,7 @@ async function loadDetailed() {
         
     } catch (e) {
         console.error("Error loading detailed:", e);
-        detailedTbody.innerHTML = '<tr><td colspan="8" class="text-center text-red">Lỗi tải dữ liệu chi tiết.</td></tr>';
+        detailedTbody.innerHTML = '<tr><td colspan="9" class="text-center text-red">Lỗi tải dữ liệu chi tiết.</td></tr>';
     }
 }
 
@@ -876,6 +878,7 @@ if (matrixTbody) {
 // Highlight Logic
 function applyHighlights() {
     const thresh3 = parseInt(document.getElementById("threshold-3").value) || 0;
+    const thresh5 = parseInt(document.getElementById("threshold-5").value) || 0;
     const thresh7 = parseInt(document.getElementById("threshold-7").value) || 0;
     const thresh14 = parseInt(document.getElementById("threshold-14").value) || 0;
     const threshTotal = parseInt(document.getElementById("threshold-total").value) || 0;
@@ -895,6 +898,7 @@ function applyHighlights() {
             
             let isHighlighted = false;
             if (cat === "≥3 ngày" && thresh3 > 0 && qty >= thresh3) isHighlighted = true;
+            else if (cat === "≥5 ngày" && thresh5 > 0 && qty >= thresh5) isHighlighted = true;
             else if (cat === "≥7 ngày" && thresh7 > 0 && qty >= thresh7) isHighlighted = true;
             else if (cat === "≥14 ngày" && thresh14 > 0 && qty >= thresh14) isHighlighted = true;
             else if (cat === "Total" && threshTotal > 0 && qty >= threshTotal) isHighlighted = true;
@@ -2289,6 +2293,7 @@ function initMatrixTotalQuickConfig() {
     const btnSaveMatrixTotalModal = document.getElementById("btn-save-matrix-total-modal");
     
     const modalCfgCol3 = document.getElementById("modal-cfg-col-3");
+    const modalCfgCol5 = document.getElementById("modal-cfg-col-5");
     const modalCfgCol7 = document.getElementById("modal-cfg-col-7");
     const modalCfgCol14 = document.getElementById("modal-cfg-col-14");
     
@@ -2304,6 +2309,7 @@ function initMatrixTotalQuickConfig() {
             } catch(e) {}
         }
         if (modalCfgCol3) modalCfgCol3.checked = savedCols.includes("≥3 ngày");
+        if (modalCfgCol5) modalCfgCol5.checked = savedCols.includes("≥5 ngày");
         if (modalCfgCol7) modalCfgCol7.checked = savedCols.includes("≥7 ngày");
         if (modalCfgCol14) modalCfgCol14.checked = savedCols.includes("≥14 ngày");
         
@@ -2322,6 +2328,7 @@ function initMatrixTotalQuickConfig() {
         btnSaveMatrixTotalModal.addEventListener("click", () => {
             const selectedCols = [];
             if (modalCfgCol3 && modalCfgCol3.checked) selectedCols.push("≥3 ngày");
+            if (modalCfgCol5 && modalCfgCol5.checked) selectedCols.push("≥5 ngày");
             if (modalCfgCol7 && modalCfgCol7.checked) selectedCols.push("≥7 ngày");
             if (modalCfgCol14 && modalCfgCol14.checked) selectedCols.push("≥14 ngày");
             
@@ -2334,9 +2341,11 @@ function initMatrixTotalQuickConfig() {
             
             // Sync with system settings checkboxes if visible
             const cfgCol3 = document.getElementById("cfg-col-3");
+            const cfgCol5 = document.getElementById("cfg-col-5");
             const cfgCol7 = document.getElementById("cfg-col-7");
             const cfgCol14 = document.getElementById("cfg-col-14");
             if (cfgCol3) cfgCol3.checked = selectedCols.includes("≥3 ngày");
+            if (cfgCol5) cfgCol5.checked = selectedCols.includes("≥5 ngày");
             if (cfgCol7) cfgCol7.checked = selectedCols.includes("≥7 ngày");
             if (cfgCol14) cfgCol14.checked = selectedCols.includes("≥14 ngày");
             
@@ -2394,6 +2403,7 @@ function initSettingsView() {
 
     // Load Matrix total columns config
     const cfgCol3 = document.getElementById("cfg-col-3");
+    const cfgCol5 = document.getElementById("cfg-col-5");
     const cfgCol7 = document.getElementById("cfg-col-7");
     const cfgCol14 = document.getElementById("cfg-col-14");
     const savedColsStr = localStorage.getItem("matrix_total_columns");
@@ -2404,6 +2414,7 @@ function initSettingsView() {
         } catch(e) {}
     }
     if (cfgCol3) cfgCol3.checked = savedCols.includes("≥3 ngày");
+    if (cfgCol5) cfgCol5.checked = savedCols.includes("≥5 ngày");
     if (cfgCol7) cfgCol7.checked = savedCols.includes("≥7 ngày");
     if (cfgCol14) cfgCol14.checked = savedCols.includes("≥14 ngày");
 
@@ -2466,6 +2477,7 @@ function initSettingsView() {
             // Save Matrix total columns config
             const selectedCols = [];
             if (cfgCol3 && cfgCol3.checked) selectedCols.push("≥3 ngày");
+            if (cfgCol5 && cfgCol5.checked) selectedCols.push("≥5 ngày");
             if (cfgCol7 && cfgCol7.checked) selectedCols.push("≥7 ngày");
             if (cfgCol14 && cfgCol14.checked) selectedCols.push("≥14 ngày");
             

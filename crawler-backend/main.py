@@ -314,7 +314,7 @@ def get_detailed(
         where_str = " AND ".join(where_clauses)
         
         # Validation of sort column to prevent SQL injection
-        allowed_sort_cols = ["item_code", "pos_code", "pos_name", "dk1", "status_name", "loai_ton", "cod_amount", "weight", "updated_at"]
+        allowed_sort_cols = ["item_code", "pos_code", "pos_name", "dk1", "status_name", "loai_ton", "cod_amount", "weight", "updated_at", "postman_name", "nhom_kh"]
         if sort_col not in allowed_sort_cols:
             sort_col = "item_code"
             

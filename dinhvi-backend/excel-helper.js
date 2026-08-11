@@ -89,11 +89,16 @@ function readCell(cellEl, sharedStrings) {
 
 function findDataStart(rows, firstSignature) {
   let skipped = 0;
+  const trackingPattern = /[A-Z]{2}\d{9}[A-Z]{2}/i;
   for (const row of rows) {
     const sig = rowSignature(row);
-    if (!sig || sig === firstSignature || sig.includes("STT|") || sig.includes("Mã")) skipped += 1;
-    else break;
-    if (skipped >= 8) break;
+    // Data rows should contain at least one tracking code
+    if (trackingPattern.test(sig)) {
+      break;
+    }
+    skipped += 1;
+    // Don't skip forever, max 10 rows for headers
+    if (skipped >= 10) break;
   }
   return skipped;
 }

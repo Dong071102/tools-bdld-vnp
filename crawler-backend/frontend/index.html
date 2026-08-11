@@ -14,7 +14,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Style CSS -->
-     <link rel="stylesheet" href="/static/style.css?v=3.6.1">
+     <link rel="stylesheet" href="/static/style.css?v=3.10.1">
 </head>
 <body>
     <!-- Login Screen -->
@@ -144,6 +144,10 @@
                                     <input type="number" id="threshold-3" placeholder="0" min="0">
                                 </div>
                                 <div class="threshold-group">
+                                    <label>5 ngày</label>
+                                    <input type="number" id="threshold-5" placeholder="0" min="0">
+                                </div>
+                                <div class="threshold-group">
                                     <label>7 ngày</label>
                                     <input type="number" id="threshold-7" placeholder="0" min="0">
                                 </div>
@@ -175,6 +179,7 @@
                                         <th rowspan="2" style="width: 50px;" class="text-center">STT</th>
                                         <th rowspan="2" class="sortable-matrix" data-sort="pos_name">Bưu cục phát <i class="fa-solid fa-sort"></i></th>
                                         <th colspan="2" class="col-group text-center">≥3 ngày</th>
+                                        <th colspan="2" class="col-group text-center">≥5 ngày</th>
                                         <th colspan="2" class="col-group text-center">≥7 ngày</th>
                                         <th colspan="2" class="col-group text-center">≥14 ngày</th>
                                         <th colspan="2" class="col-group total-group text-center" id="matrix-header-total" style="cursor: pointer; user-select: none; transition: background 0.2s;" title="Nhấp để cấu hình nhanh cột tính Tổng tồn">
@@ -190,6 +195,8 @@
                                     <tr>
                                         <th class="sortable-matrix" data-sort="qty-≥3 ngày">SL BG <i class="fa-solid fa-sort"></i></th>
                                         <th class="sortable-matrix" data-sort="cod-≥3 ngày">COD (đ) <i class="fa-solid fa-sort"></i></th>
+                                        <th class="sortable-matrix" data-sort="qty-≥5 ngày">SL BG <i class="fa-solid fa-sort"></i></th>
+                                        <th class="sortable-matrix" data-sort="cod-≥5 ngày">COD (đ) <i class="fa-solid fa-sort"></i></th>
                                         <th class="sortable-matrix" data-sort="qty-≥7 ngày">SL BG <i class="fa-solid fa-sort"></i></th>
                                         <th class="sortable-matrix" data-sort="cod-≥7 ngày">COD (đ) <i class="fa-solid fa-sort"></i></th>
                                         <th class="sortable-matrix" data-sort="qty-≥14 ngày">SL BG <i class="fa-solid fa-sort"></i></th>
@@ -309,6 +316,7 @@
                                         <th data-col="loai_ton" class="sortable">Thời gian tồn <i class="fa-solid fa-sort-down"></i></th>
                                         <th data-col="status_name" class="sortable">Trạng thái <i class="fa-solid fa-sort"></i></th>
                                         <th data-col="nhom_kh" class="sortable">Nhóm KH <i class="fa-solid fa-sort"></i></th>
+                                        <th data-col="postman_name" class="sortable">Bưu tá <i class="fa-solid fa-sort"></i></th>
                                         <th data-col="cod_amount" class="sortable text-right">COD (đ) <i class="fa-solid fa-sort"></i></th>
                                         <th data-col="weight" class="sortable text-right">TL (kg) <i class="fa-solid fa-sort"></i></th>
                                         <th data-col="updated_at" class="sortable">Cập nhật <i class="fa-solid fa-sort"></i></th>
@@ -316,7 +324,7 @@
                                 </thead>
                                 <tbody id="detailed-tbody">
                                     <tr>
-                                        <td colspan="8" class="text-center text-muted">Đang tải dữ liệu chi tiết...</td>
+                                        <td colspan="9" class="text-center text-muted">Đang tải dữ liệu chi tiết...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -583,6 +591,10 @@
                                     <input type="number" id="cfg-thresh-3" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
                                 </div>
                                 <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" for="cfg-thresh-5" style="font-weight: 600; margin-bottom: 6px; display: block;">Tồn ≥ 5 ngày</label>
+                                    <input type="number" id="cfg-thresh-5" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
                                     <label class="form-label" for="cfg-thresh-7" style="font-weight: 600; margin-bottom: 6px; display: block;">Tồn ≥ 7 ngày</label>
                                     <input type="number" id="cfg-thresh-7" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
                                 </div>
@@ -601,6 +613,9 @@
                             <div style="display: flex; gap: 16px; background: var(--bg-primary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
                                 <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--text-primary); user-select: none;">
                                     <input type="checkbox" id="cfg-col-3" value="≥3 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥3 ngày
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--text-primary); user-select: none;">
+                                    <input type="checkbox" id="cfg-col-5" value="≥5 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥5 ngày
                                 </label>
                                 <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--text-primary); user-select: none;">
                                     <input type="checkbox" id="cfg-col-7" value="≥7 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥7 ngày
@@ -767,6 +782,9 @@
                         <input type="checkbox" id="modal-cfg-col-3" value="≥3 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥3 ngày
                     </label>
                     <label style="display: flex; align-items: center; gap: 10px; font-size: 14.5px; cursor: pointer; color: var(--text-primary); user-select: none;">
+                        <input type="checkbox" id="modal-cfg-col-5" value="≥5 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥5 ngày
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 10px; font-size: 14.5px; cursor: pointer; color: var(--text-primary); user-select: none;">
                         <input type="checkbox" id="modal-cfg-col-7" value="≥7 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥7 ngày
                     </label>
                     <label style="display: flex; align-items: center; gap: 10px; font-size: 14.5px; cursor: pointer; color: var(--text-primary); user-select: none;">
@@ -782,6 +800,6 @@
     </div>
 
     <!-- Script JS -->
-    <script src="/static/app.js?v=3.10.0"></script>
+    <script src="/static/app.js?v=3.10.1"></script>
 </body>
 </html>
