@@ -14,7 +14,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Style CSS -->
-     <link rel="stylesheet" href="/static/style.css?v=3.5.0">
+     <link rel="stylesheet" href="/static/style.css?v=3.6.1">
 </head>
 <body>
     <!-- Login Screen -->
@@ -155,6 +155,16 @@
                                     <label>Tổng</label>
                                     <input type="number" id="threshold-total" placeholder="0" min="0">
                                 </div>
+                                <div class="threshold-group" style="margin-left: 10px;">
+                                    <label>Nhóm KH</label>
+                                    <select id="matrix-nhom-kh" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 4px; font-size: 12.5px; height: 32px; min-width: 120px;">
+                                        <option value="">-- Tất cả --</option>
+                                        <option value="KH Mới">KH Mới</option>
+                                        <option value="KH Shoppe">KH Shoppe</option>
+                                        <option value="KH Thường">KH Thường</option>
+                                        <option value="KH Tiktok">KH Tiktok</option>
+                                    </select>
+                                </div>
                                 <button class="btn btn-secondary" id="btn-reset-filters" style="padding: 6px 12px; font-size: 12.5px; border-radius: 8px; margin-left: 8px;"><i class="fa-solid fa-arrow-rotate-left"></i> Reset bộ lọc</button>
                             </div>
                         </div>
@@ -263,6 +273,24 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="filter-group">
+                                <label for="multiselect-nhom-kh-trigger">Nhóm KH</label>
+                                <div class="custom-multiselect" id="multiselect-nhom-kh-container">
+                                    <div class="multiselect-trigger" id="multiselect-nhom-kh-trigger">
+                                        <span id="multiselect-nhom-kh-label">-- Tất cả Nhóm KH --</span>
+                                        <i class="fa-solid fa-chevron-down" style="font-size: 11px; opacity: 0.7;"></i>
+                                    </div>
+                                    <div class="multiselect-dropdown" id="multiselect-nhom-kh-dropdown">
+                                        <div class="multiselect-dropdown-actions">
+                                            <button type="button" id="multiselect-nhom-kh-select-all">Chọn tất cả</button>
+                                            <button type="button" id="multiselect-nhom-kh-clear">Xóa chọn</button>
+                                        </div>
+                                        <div class="multiselect-dropdown-list" id="multiselect-nhom-kh-list">
+                                            <!-- Dynamic checkboxes -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="filter-group search-group">
                                 <label for="search-input">Tìm kiếm</label>
                                 <div class="search-wrapper">
@@ -280,6 +308,7 @@
                                         <th data-col="pos_name" class="sortable">Bưu cục phát <i class="fa-solid fa-sort"></i></th>
                                         <th data-col="loai_ton" class="sortable">Thời gian tồn <i class="fa-solid fa-sort-down"></i></th>
                                         <th data-col="status_name" class="sortable">Trạng thái <i class="fa-solid fa-sort"></i></th>
+                                        <th data-col="nhom_kh" class="sortable">Nhóm KH <i class="fa-solid fa-sort"></i></th>
                                         <th data-col="cod_amount" class="sortable text-right">COD (đ) <i class="fa-solid fa-sort"></i></th>
                                         <th data-col="weight" class="sortable text-right">TL (kg) <i class="fa-solid fa-sort"></i></th>
                                         <th data-col="updated_at" class="sortable">Cập nhật <i class="fa-solid fa-sort"></i></th>
@@ -287,7 +316,7 @@
                                 </thead>
                                 <tbody id="detailed-tbody">
                                     <tr>
-                                        <td colspan="7" class="text-center text-muted">Đang tải dữ liệu chi tiết...</td>
+                                        <td colspan="8" class="text-center text-muted">Đang tải dữ liệu chi tiết...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -753,6 +782,6 @@
     </div>
 
     <!-- Script JS -->
-    <script src="/static/app.js?v=3.5.0"></script>
+    <script src="/static/app.js?v=3.10.0"></script>
 </body>
 </html>

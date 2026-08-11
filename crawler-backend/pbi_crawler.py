@@ -55,7 +55,9 @@ def crawl_lamdong_data():
                                         {"Column": {"Expression": {"SourceRef": {"Source": "i"}}, "Property": "PTC Category_Ngay"}, "Name": "ItemStock.PTC Category_2"},
                                         {"Column": {"Expression": {"SourceRef": {"Source": "i"}}, "Property": "CODAmount"}, "Name": "Sum(ItemStock.CODAmount)"},
                                         {"Aggregation": {"Expression": {"Column": {"Expression": {"SourceRef": {"Source": "i"}}, "Property": "TL_2"}}, "Function": 0}, "Name": "Sum(ItemStock.TL_2)"},
-                                        {"Measure": {"Expression": {"SourceRef": {"Source": "i"}}, "Property": "Màu Cột Matrix_2"}, "Name": "ItemStock.Màu Cột Matrix_2"}
+                                        {"Measure": {"Expression": {"SourceRef": {"Source": "i"}}, "Property": "Màu Cột Matrix_2"}, "Name": "ItemStock.Màu Cột Matrix_2"},
+                                        {"Column": {"Expression": {"SourceRef": {"Source": "i"}}, "Property": "Nhóm_KH"}, "Name": "ItemStock.Nhóm_KH"},
+                                        {"Column": {"Expression": {"SourceRef": {"Source": "i"}}, "Property": "PostManName"}, "Name": "ItemStock.PostManName"}
                                     ],
                                     "Where": [
                                         # Filter 0: StatusName In
@@ -226,7 +228,7 @@ def crawl_lamdong_data():
                                 },
                                 "Binding": {
                                     "Primary": {
-                                        "Groupings": [{"Projections": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}]
+                                        "Groupings": [{"Projections": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]}]
                                     },
                                     "DataReduction": {
                                         "DataVolume": 3,
@@ -283,7 +285,7 @@ def crawl_lamdong_data():
         
         # Decode the rows using the Power BI DSR decompression algorithm
         decoded_rows = []
-        current_row = [None] * 10
+        current_row = [None] * 12
         current_schema = [
             {"N": "G0", "T": 1, "DN": "D0"},
             {"N": "G1", "T": 1, "DN": "D1"},
@@ -293,8 +295,10 @@ def crawl_lamdong_data():
             {"N": "G5", "T": 1, "DN": "D5"},
             {"N": "G6", "T": 1, "DN": "D6"},
             {"N": "G7", "T": 3},
+            {"N": "G8", "T": 1, "DN": "D7"},
             {"N": "M0", "T": 3},
-            {"N": "M1", "T": 1, "DN": "D7"}
+            {"N": "M1", "T": 1, "DN": "D8"},
+            {"N": "G9", "T": 1, "DN": "D9"}
         ]
         
         for item in dm0:
@@ -305,10 +309,10 @@ def crawl_lamdong_data():
             o_mask = item.get("Ø", 0)
             c_vals = item.get("C", [])
             
-            new_row = [None] * 10
+            new_row = [None] * 12
             c_idx = 0
             
-            for col_idx in range(10):
+            for col_idx in range(12):
                 is_inherited = (r_mask & (1 << col_idx)) != 0
                 is_null = (o_mask & (1 << col_idx)) != 0
                 
@@ -345,8 +349,10 @@ def crawl_lamdong_data():
                 "status_name": new_row[5],
                 "loai_ton": new_row[6],
                 "cod_amount": float(new_row[7]) if new_row[7] is not None else 0.0,
-                "weight": float(new_row[8]) if new_row[8] is not None else 0.0,
-                "color_code": new_row[9]
+                "nhom_kh": new_row[8],
+                "postman_name": new_row[9],
+                "weight": float(new_row[10]) if new_row[10] is not None else 0.0,
+                "color_code": new_row[11]
             }
             
             if row_dict["province_ton"] == 'BĐT Lâm Đồng' and row_dict["item_code"]:

@@ -14,11 +14,12 @@ let filters = {
     pos_name: "",
     loai_ton: "",
     status_name: "",
+    nhom_kh: "",
     search: ""
 };
 
 // API Base configuration for Excel exporter
-const API_BASE_DINHVI = window.location.protocol + "//" + window.location.hostname + ":5000";
+const API_BASE_DINHVI = "http://localhost:5000";
 
 // Helper to get authorization headers
 function getHeaders() {
@@ -53,6 +54,15 @@ const multiselectStatusList = document.getElementById("multiselect-status-list")
 const multiselectStatusLabel = document.getElementById("multiselect-status-label");
 const multiselectStatusSelectAll = document.getElementById("multiselect-status-select-all");
 const multiselectStatusClear = document.getElementById("multiselect-status-clear");
+
+const multiselectNhomKhContainer = document.getElementById("multiselect-nhom-kh-container");
+const multiselectNhomKhTrigger = document.getElementById("multiselect-nhom-kh-trigger");
+const multiselectNhomKhDropdown = document.getElementById("multiselect-nhom-kh-dropdown");
+const multiselectNhomKhList = document.getElementById("multiselect-nhom-kh-list");
+const multiselectNhomKhLabel = document.getElementById("multiselect-nhom-kh-label");
+const multiselectNhomKhSelectAll = document.getElementById("multiselect-nhom-kh-select-all");
+const multiselectNhomKhClear = document.getElementById("multiselect-nhom-kh-clear");
+
 const searchInput = document.getElementById("search-input");
 
 const matrixTbody = document.getElementById("matrix-tbody");
@@ -139,10 +149,11 @@ async function loadFilters() {
             });
         }
 
-        // Populate Categories into Custom Multiselect
+        // Populate Categories into Custom Multiselect with fixed list
+        const fixedLoaiTons = ["≥3 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
         if (multiselectCategoryList) {
             multiselectCategoryList.innerHTML = '';
-            data.loai_tons.forEach(cat => {
+            fixedLoaiTons.forEach(cat => {
                 const lbl = document.createElement("label");
                 lbl.innerHTML = `<input type="checkbox" class="category-checkbox" value="${cat}"> ${cat}`;
                 lbl.querySelector("input").addEventListener("change", handleCategorySelectionChange);
@@ -158,6 +169,18 @@ async function loadFilters() {
                 lbl.innerHTML = `<input type="checkbox" class="status-checkbox" value="${status}"> ${status}`;
                 lbl.querySelector("input").addEventListener("change", handleStatusSelectionChange);
                 multiselectStatusList.appendChild(lbl);
+            });
+        }
+        
+        // Populate Nhom KH into Custom Multiselect with fixed list
+        const fixedNhomKhs = ["KH Mới", "KH Shoppe", "KH Thường", "KH Tiktok"];
+        if (multiselectNhomKhList) {
+            multiselectNhomKhList.innerHTML = '';
+            fixedNhomKhs.forEach(nhom => {
+                const lbl = document.createElement("label");
+                lbl.innerHTML = `<input type="checkbox" class="nhom-kh-checkbox" value="${nhom}"> ${nhom}`;
+                lbl.querySelector("input").addEventListener("change", handleNhomKhSelectionChange);
+                multiselectNhomKhList.appendChild(lbl);
             });
         }
     } catch (e) {
@@ -195,7 +218,13 @@ async function updateStatus() {
 // Fetch Summary (KPI Cards & Pivot Matrix)
 async function loadSummary() {
     try {
-        const response = await fetch("/api/summary");
+        let url = "/api/summary";
+        const matrixNhomKh = document.getElementById("matrix-nhom-kh");
+        if (matrixNhomKh && matrixNhomKh.value) {
+            url += `?nhom_kh=${encodeURIComponent(matrixNhomKh.value)}`;
+        }
+        
+        const response = await fetch(url);
         const data = await response.json();
         cachedSummaryData = data;
         
@@ -383,6 +412,7 @@ async function loadDetailed() {
             pos_name: filters.pos_name,
             loai_ton: filters.loai_ton,
             status_name: filters.status_name,
+            nhom_kh: filters.nhom_kh,
             search: filters.search
         });
         
@@ -394,7 +424,7 @@ async function loadDetailed() {
         // 1. Render Table Rows
         detailedTbody.innerHTML = "";
         if (data.rows.length === 0) {
-            detailedTbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Không tìm thấy bản ghi nào khớp bộ lọc.</td></tr>';
+            detailedTbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Không tìm thấy bản ghi nào khớp bộ lọc.</td></tr>';
         } else {
             data.rows.forEach(r => {
                 const tr = document.createElement("tr");
@@ -412,6 +442,7 @@ async function loadDetailed() {
                     <td>${r.pos_name || '-'}</td>
                     <td><span class="category-badge ${ageClass}">${r.loai_ton || '-'}</span></td>
                     <td><span class="status-badge">${r.status_name || '-'}</span></td>
+                    <td>${r.nhom_kh || '-'}</td>
                     <td class="text-right" style="font-family: var(--font-mono); font-size: 13.5px;">${codText}</td>
                     <td class="text-right" style="font-family: var(--font-mono); font-size: 13.5px;">${formatNumber(r.weight)}</td>
                     <td style="font-family: var(--font-mono); font-size: 13.5px;">${r.updated_at || '-'}</td>
@@ -430,7 +461,7 @@ async function loadDetailed() {
         
     } catch (e) {
         console.error("Error loading detailed:", e);
-        detailedTbody.innerHTML = '<tr><td colspan="7" class="text-center text-red">Lỗi tải dữ liệu chi tiết.</td></tr>';
+        detailedTbody.innerHTML = '<tr><td colspan="8" class="text-center text-red">Lỗi tải dữ liệu chi tiết.</td></tr>';
     }
 }
 
@@ -453,6 +484,7 @@ async function exportExcel() {
             pos_name: filters.pos_name,
             loai_ton: filters.loai_ton,
             status_name: filters.status_name,
+            nhom_kh: filters.nhom_kh,
             search: filters.search,
             sort_col: sortCol,
             sort_dir: sortDir
@@ -609,6 +641,51 @@ if (multiselectStatusClear) {
     });
 }
 
+// Event Listeners for Dashboard custom multiselect Nhóm KH filter
+if (multiselectNhomKhTrigger && multiselectNhomKhContainer) {
+    multiselectNhomKhTrigger.addEventListener("click", (e) => {
+        e.stopPropagation();
+        multiselectNhomKhContainer.classList.toggle("open");
+    });
+}
+
+document.addEventListener("click", (e) => {
+    if (multiselectNhomKhContainer && !multiselectNhomKhContainer.contains(e.target)) {
+        multiselectNhomKhContainer.classList.remove("open");
+    }
+});
+
+function handleNhomKhSelectionChange() {
+    const checkedBoxes = Array.from(document.querySelectorAll(".nhom-kh-checkbox:checked"));
+    const selectedValues = checkedBoxes.map(cb => cb.value);
+    filters.nhom_kh = selectedValues.join(",");
+    
+    if (selectedValues.length === 0) {
+        multiselectNhomKhLabel.textContent = "-- Tất cả Nhóm KH --";
+    } else if (selectedValues.length === 1) {
+        multiselectNhomKhLabel.textContent = selectedValues[0];
+    } else {
+        multiselectNhomKhLabel.textContent = `Đã chọn ${selectedValues.length} Nhóm KH`;
+    }
+    
+    currentPage = 1;
+    loadDetailed();
+}
+
+if (multiselectNhomKhSelectAll) {
+    multiselectNhomKhSelectAll.addEventListener("click", () => {
+        document.querySelectorAll(".nhom-kh-checkbox").forEach(cb => cb.checked = true);
+        handleNhomKhSelectionChange();
+    });
+}
+
+if (multiselectNhomKhClear) {
+    multiselectNhomKhClear.addEventListener("click", () => {
+        document.querySelectorAll(".nhom-kh-checkbox").forEach(cb => cb.checked = false);
+        handleNhomKhSelectionChange();
+    });
+}
+
 searchInput.addEventListener("input", handleSearch);
 
 btnPrevPage.addEventListener("click", () => {
@@ -630,6 +707,14 @@ btnRefresh.addEventListener("click", () => {
     loadDetailed();
     updateStatus();
 });
+
+// 4. Matrix Header Filtering
+const matrixNhomKh = document.getElementById("matrix-nhom-kh");
+if (matrixNhomKh) {
+    matrixNhomKh.addEventListener("change", () => {
+        loadSummary(); // Reload matrix data when group changes
+    });
+}
 
 selectPageSize.addEventListener("change", (e) => {
     pageSize = parseInt(e.target.value);
@@ -659,7 +744,8 @@ if (btnLocateExcel) {
                 search: filters.search,
                 pos_name: filters.pos_name,
                 loai_ton: filters.loai_ton,
-                status_name: filters.status_name
+                status_name: filters.status_name,
+                nhom_kh: filters.nhom_kh
             });
             
             const res = await fetch(`/api/detailed?${queryParams.toString()}`);

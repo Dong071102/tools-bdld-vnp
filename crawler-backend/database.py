@@ -93,9 +93,11 @@ def init_db():
                         dk1 VARCHAR(50),
                         status_name NVARCHAR(100),
                         loai_ton NVARCHAR(50),
+                        nhom_kh NVARCHAR(100),
                         cod_amount DECIMAL(15, 2),
                         weight DECIMAL(10, 3),
                         color_code VARCHAR(20),
+                        postman_name NVARCHAR(200),
                         updated_at DATETIME DEFAULT GETDATE()
                     )
                 END
@@ -113,9 +115,11 @@ def init_db():
                         dk1 VARCHAR(50),
                         status_name NVARCHAR(100),
                         loai_ton NVARCHAR(50),
+                        nhom_kh NVARCHAR(100),
                         cod_amount DECIMAL(15, 2),
                         weight DECIMAL(10, 3),
                         color_code VARCHAR(20),
+                        postman_name NVARCHAR(200),
                         updated_at DATETIME DEFAULT GETDATE()
                     )
                 END
@@ -135,9 +139,11 @@ def init_db():
                         dk1 VARCHAR(50),
                         status_name NVARCHAR(100),
                         loai_ton NVARCHAR(50),
+                        nhom_kh NVARCHAR(100),
                         cod_amount DECIMAL(15, 2),
                         weight DECIMAL(10, 3),
                         color_code VARCHAR(20),
+                        postman_name NVARCHAR(200),
                         created_at DATETIME DEFAULT GETDATE(),
                         CONSTRAINT uq_date_item UNIQUE (snapshot_date, item_code)
                     )
@@ -248,8 +254,8 @@ def save_detailed_data(rows):
             sql = """
                 INSERT INTO detailed_report_staging (
                     item_code, province_ton, pos_code, pos_name, dk1, 
-                    status_name, loai_ton, cod_amount, weight, color_code
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    status_name, loai_ton, nhom_kh, cod_amount, weight, color_code, postman_name
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             
             # Deduplicate by item_code (Power BI sometimes returns duplicate barcodes, case-insensitive in SQL Server)
@@ -264,7 +270,7 @@ def save_detailed_data(rows):
                     seen_codes.add(code_clean)
                     batch_data.append((
                         code_clean, r['province_ton'], r['pos_code'], r['pos_name'], r['dk1'],
-                        r['status_name'], r['loai_ton'], r['cod_amount'], r['weight'], r['color_code']
+                        r['status_name'], r['loai_ton'], r.get('nhom_kh'), r['cod_amount'], r['weight'], r['color_code'], r.get('postman_name')
                     ))
             
             cursor.executemany(sql, batch_data)
@@ -297,10 +303,10 @@ def create_daily_snapshot():
             sql = """
                 INSERT INTO daily_snapshot (
                     snapshot_date, item_code, province_ton, pos_code, pos_name, 
-                    dk1, status_name, loai_ton, cod_amount, weight, color_code
+                    dk1, status_name, loai_ton, nhom_kh, cod_amount, weight, color_code, postman_name
                 )
                 SELECT %s, item_code, province_ton, pos_code, pos_name, 
-                       dk1, status_name, loai_ton, cod_amount, weight, color_code
+                       dk1, status_name, loai_ton, nhom_kh, cod_amount, weight, color_code, postman_name
                 FROM detailed_report_staging d
                 WHERE province_ton = %s
                   AND NOT EXISTS (

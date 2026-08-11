@@ -155,6 +155,7 @@ def get_filters():
                 SELECT DISTINCT loai_ton,
                     CASE 
                         WHEN loai_ton = N'≥3 ngày' THEN 3
+                        WHEN loai_ton = N'≥5 ngày' THEN 5
                         WHEN loai_ton = N'≥7 ngày' THEN 7
                         WHEN loai_ton = N'≥14 ngày' THEN 14
                         ELSE 99
@@ -165,39 +166,61 @@ def get_filters():
             """)
             loai_tons = [r[0] for r in cursor.fetchall() if r[0]]
             
+            # Nhom_KH list
+            cursor.execute("""
+                SELECT DISTINCT nhom_kh 
+                FROM detailed_report_staging 
+                WHERE province_ton = N'BĐT Lâm Đồng' AND nhom_kh IS NOT NULL
+                ORDER BY nhom_kh
+            """)
+            nhom_khs = [r[0] for r in cursor.fetchall() if r[0]]
+            
             return {
                 "pos_names": pos_names,
                 "status_names": status_names,
-                "loai_tons": loai_tons
+                "loai_tons": loai_tons,
+                "nhom_khs": nhom_khs
             }
     except Exception as e:
         logger.error(f"Error fetching filters: {e}")
-        return {"pos_names": [], "status_names": [], "loai_tons": []}
+        return {"pos_names": [], "status_names": [], "loai_tons": [], "nhom_khs": []}
     finally:
         conn.close()
 
 @app.get("/api/summary")
-def get_summary():
+def get_summary(nhom_kh: str = ""):
     """Get KPI summary cards and the pivot matrix data by POS office."""
     conn = get_connection(with_db=True)
     try:
         with conn.cursor() as cursor:
+            nhom_filter_sql = ""
+            params1 = []
+            params2 = []
+            if nhom_kh:
+                nhoms = [n.strip() for n in nhom_kh.split(",") if n.strip()]
+                if nhoms:
+                    placeholders = ", ".join(["%s"] * len(nhoms))
+                    nhom_filter_sql = f" AND nhom_kh IN ({placeholders})"
+                    params1 = list(nhoms)
+                    params2 = list(nhoms)
+
             # 1. Total Metrics
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT 
                     COUNT(*) as total_qty,
                     SUM(cod_amount) as total_cod,
                     SUM(weight) as total_weight
                 FROM detailed_report_staging
                 WHERE province_ton = N'BĐT Lâm Đồng'
-            """)
+                {nhom_filter_sql}
+            """, tuple(params1))
             kpis = cursor.fetchone()
             total_qty = kpis[0] if kpis and kpis[0] is not None else 0
             total_cod = float(kpis[1]) if kpis and kpis[1] is not None else 0.0
             total_weight = float(kpis[2]) if kpis and kpis[2] is not None else 0.0
             
             # 2. Pivot Matrix Data (Rows: POSName, Columns: loai_ton, Metrics: Count & COD)
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT 
                     pos_name,
                     loai_ton,
@@ -205,9 +228,10 @@ def get_summary():
                     SUM(cod_amount) as cod
                 FROM detailed_report_staging
                 WHERE province_ton = N'BĐT Lâm Đồng' AND pos_name IS NOT NULL AND loai_ton IS NOT NULL
+                {nhom_filter_sql}
                 GROUP BY pos_name, loai_ton
                 ORDER BY pos_name
-            """)
+            """, tuple(params2))
             raw_matrix = cursor.fetchall()
             
             # Format matrix data for easy rendering in frontend
@@ -243,6 +267,7 @@ def get_detailed(
     pos_name: str = "",
     loai_ton: str = "",
     status_name: str = "",
+    nhom_kh: str = "",
     sort_col: str = "item_code",
     sort_dir: str = "asc"
 ):
@@ -278,6 +303,13 @@ def get_detailed(
                 placeholders = ",".join(["%s"] * len(status_list))
                 where_clauses.append(f"status_name IN ({placeholders})")
                 params.extend(status_list)
+                
+        if nhom_kh:
+            nhom_list = [n.strip() for n in nhom_kh.split(",") if n.strip()]
+            if nhom_list:
+                placeholders = ",".join(["%s"] * len(nhom_list))
+                where_clauses.append(f"nhom_kh IN ({placeholders})")
+                params.extend(nhom_list)
             
         where_str = " AND ".join(where_clauses)
         
@@ -289,7 +321,7 @@ def get_detailed(
         sort_dir_str = "DESC" if sort_dir.lower() == "desc" else "ASC"
         
         if sort_col == "loai_ton":
-            order_by_clause = f"CASE WHEN loai_ton = N'≥3 ngày' THEN 3 WHEN loai_ton = N'≥7 ngày' THEN 7 WHEN loai_ton = N'≥14 ngày' THEN 14 ELSE 99 END {sort_dir_str}"
+            order_by_clause = f"CASE WHEN loai_ton = N'≥3 ngày' THEN 3 WHEN loai_ton = N'≥5 ngày' THEN 5 WHEN loai_ton = N'≥7 ngày' THEN 7 WHEN loai_ton = N'≥14 ngày' THEN 14 ELSE 99 END {sort_dir_str}"
         else:
             order_by_clause = f"{sort_col} {sort_dir_str}"
         
@@ -300,7 +332,7 @@ def get_detailed(
         # MS SQL Server uses OFFSET / FETCH NEXT for pagination (supported in SQL Server 2012+)
         offset = (page - 1) * page_size
         rows_sql = f"""
-            SELECT item_code, pos_code, pos_name, dk1, status_name, loai_ton, cod_amount, weight, color_code, updated_at
+            SELECT item_code, pos_code, pos_name, dk1, status_name, loai_ton, nhom_kh, cod_amount, weight, color_code, updated_at, postman_name
             FROM detailed_report_staging
             WHERE {where_str}
             ORDER BY {order_by_clause}
@@ -327,10 +359,12 @@ def get_detailed(
                     "dk1": r[3],
                     "status_name": r[4],
                     "loai_ton": r[5],
-                    "cod_amount": float(r[6]) if r[6] is not None else 0.0,
-                    "weight": float(r[7]) if r[7] is not None else 0.0,
-                    "color_code": r[8],
-                    "updated_at": r[9].strftime("%Y-%m-%d %H:%M:%S") if r[9] else None
+                    "nhom_kh": r[6],
+                    "cod_amount": float(r[7]) if r[7] is not None else 0.0,
+                    "weight": float(r[8]) if r[8] is not None else 0.0,
+                    "color_code": r[9],
+                    "updated_at": r[10].strftime("%Y-%m-%d %H:%M:%S") if r[10] else None,
+                    "postman_name": r[11]
                 })
                 
         return {
@@ -351,6 +385,7 @@ def get_export(
     pos_name: str = "",
     loai_ton: str = "",
     status_name: str = "",
+    nhom_kh: str = "",
     sort_col: str = "item_code",
     sort_dir: str = "asc"
 ):
@@ -388,6 +423,13 @@ def get_export(
                 placeholders = ",".join(["%s"] * len(status_list))
                 where_clauses.append(f"status_name IN ({placeholders})")
                 params.extend(status_list)
+                
+        if nhom_kh:
+            nhom_list = [n.strip() for n in nhom_kh.split(",") if n.strip()]
+            if nhom_list:
+                placeholders = ",".join(["%s"] * len(nhom_list))
+                where_clauses.append(f"nhom_kh IN ({placeholders})")
+                params.extend(nhom_list)
             
         where_str = " AND ".join(where_clauses)
         
@@ -399,12 +441,12 @@ def get_export(
         sort_dir_str = "DESC" if sort_dir.lower() == "desc" else "ASC"
         
         if sort_col == "loai_ton":
-            order_by_clause = f"CASE WHEN loai_ton = N'≥3 ngày' THEN 3 WHEN loai_ton = N'≥7 ngày' THEN 7 WHEN loai_ton = N'≥14 ngày' THEN 14 ELSE 99 END {sort_dir_str}"
+            order_by_clause = f"CASE WHEN loai_ton = N'≥3 ngày' THEN 3 WHEN loai_ton = N'≥5 ngày' THEN 5 WHEN loai_ton = N'≥7 ngày' THEN 7 WHEN loai_ton = N'≥14 ngày' THEN 14 ELSE 99 END {sort_dir_str}"
         else:
             order_by_clause = f"{sort_col} {sort_dir_str}"
         
         rows_sql = f"""
-            SELECT item_code, pos_code, pos_name, dk1, status_name, loai_ton, cod_amount, weight, updated_at
+            SELECT item_code, pos_code, pos_name, dk1, status_name, loai_ton, nhom_kh, cod_amount, weight, updated_at, postman_name
             FROM detailed_report_staging
             WHERE {where_str}
             ORDER BY {order_by_clause}
@@ -442,9 +484,9 @@ def generate_excel_file(rows):
     output = io.BytesIO()
     wb = Workbook()
     ws = wb.active
-    ws.append(["Mã bưu gửi", "Mã bưu cục", "Bưu cục Phát", "DK1", "Thời gian tồn", "Trạng thái", "COD", "Trọng lượng", "Thời gian quét"])
+    ws.append(["Mã bưu gửi", "Mã bưu cục", "Bưu cục Phát", "DK1", "Thời gian tồn", "Trạng thái", "Nhóm KH", "Bưu tá", "COD", "Trọng lượng", "Thời gian quét"])
     for r in rows:
-        ws.append([r[0], r[1], r[2], r[3], r[5], r[4], float(r[6]) if r[6] else 0.0, float(r[7]) if r[7] else 0.0, r[8].strftime("%Y-%m-%d %H:%M:%S") if r[8] else ""])
+        ws.append([r[0], r[1], r[2], r[3], r[5], r[4], r[6], r[10], float(r[7]) if r[7] else 0.0, float(r[8]) if r[8] else 0.0, r[9].strftime("%Y-%m-%d %H:%M:%S") if r[9] else ""])
     wb.save(output)
     output.seek(0)
     return output
@@ -545,6 +587,10 @@ def get_login_captcha():
         raise HTTPException(status_code=r.status_code, detail="Không thể lấy captcha từ Node.js")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi lấy Captcha từ máy chủ: {e}")
+
+@app.get("/api/app-version")
+def get_app_version():
+    return {"version": "3.10.0"}
 
 @app.post("/api/auth/login")
 def auth_login(req: LoginRequest):
