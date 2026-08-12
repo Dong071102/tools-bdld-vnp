@@ -19,7 +19,7 @@ let filters = {
 };
 
 // API Base configuration for Excel exporter
-const API_BASE_DINHVI = "http://localhost:5000";
+const API_BASE_DINHVI = "";
 
 // Helper to get authorization headers
 function getHeaders() {
