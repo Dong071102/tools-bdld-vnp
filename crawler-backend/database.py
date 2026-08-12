@@ -30,7 +30,7 @@ def test_tcp_connection(host, port):
     except Exception as e:
         return False, f"TCP Connection to {host}:{port_num} failed: {e}"
 
-def get_connection(with_db=True):
+def get_connection(with_db=True, autocommit=True):
     """Establish a connection to the SQL Server database."""
     # Run a diagnostic TCP check first
     reachable, msg = test_tcp_connection(DB_HOST, DB_PORT)
@@ -44,7 +44,7 @@ def get_connection(with_db=True):
         "user": DB_USER,
         "password": DB_PASS,
         "charset": 'utf8',
-        "autocommit": True
+        "autocommit": autocommit
     }
     
     if DB_PORT:
@@ -244,10 +244,10 @@ def save_detailed_data(rows):
     if not rows:
         return
         
-    conn = get_connection(with_db=True)
+    conn = get_connection(with_db=True, autocommit=False)
     try:
         with conn.cursor() as cursor:
-            # Step 1: Clear all previous crawl data
+            # Step 1: Clear all previous crawl data in a transaction
             cursor.execute("TRUNCATE TABLE detailed_report_staging")
             
             # Step 2: Insert new crawl data (deduplicated by item_code)
@@ -274,9 +274,11 @@ def save_detailed_data(rows):
                     ))
             
             cursor.executemany(sql, batch_data)
+        conn.commit()
                 
         logger.info(f"Live crawl: replaced staging table with {len(batch_data)} unique rows (from {len(rows)} raw rows).")
     except Exception as e:
+        conn.rollback()
         logger.error(f"Error saving detailed data to staging: {e}")
         raise e
     finally:

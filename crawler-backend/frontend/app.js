@@ -5,6 +5,180 @@ let totalRecords = 0;
 let sortCol = "loai_ton";
 let sortDir = "desc";
 
+// Default Detailed Table Columns Configuration
+const defaultColumnConfig = [
+    { id: "item_code", label: "Mã bưu gửi", visible: true, class: "text-bold", style: "font-family: var(--font-mono); font-size: 13.5px; color: #ef4444;" },
+    { id: "pos_name", label: "Bưu cục phát", visible: true, class: "", style: "" },
+    { id: "loai_ton", label: "Thời gian tồn", visible: true, class: "", style: "" },
+    { id: "status_name", label: "Trạng thái", visible: true, class: "", style: "" },
+    { id: "nhom_kh", label: "Nhóm KH", visible: true, class: "", style: "" },
+    { id: "postman_name", label: "Bưu tá", visible: true, class: "", style: "" },
+    { id: "cod_amount", label: "COD (đ)", visible: true, class: "text-right", style: "font-family: var(--font-mono); font-size: 13.5px;" },
+    { id: "weight", label: "TL (kg)", visible: true, class: "text-right", style: "font-family: var(--font-mono); font-size: 13.5px;" },
+    { id: "updated_at", label: "Cập nhật", visible: true, class: "", style: "font-family: var(--font-mono); font-size: 13.5px;" }
+];
+
+let columnConfig = [...defaultColumnConfig];
+let cachedDetailedData = null;
+
+function loadColumnConfig() {
+    const saved = localStorage.getItem("detailed_table_columns");
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            const merged = [];
+            parsed.forEach(p => {
+                const def = defaultColumnConfig.find(d => d.id === p.id);
+                if (def) merged.push({ ...def, visible: p.visible });
+            });
+            defaultColumnConfig.forEach(def => {
+                if (!merged.find(m => m.id === def.id)) merged.push(def);
+            });
+            columnConfig = merged;
+        } catch (e) {
+            columnConfig = [...defaultColumnConfig];
+        }
+    }
+}
+
+function saveColumnConfig() {
+    localStorage.setItem("detailed_table_columns", JSON.stringify(columnConfig.map(c => ({ id: c.id, visible: c.visible }))));
+}
+
+function renderColumnConfigUI() {
+    const list = document.getElementById("column-config-list");
+    if (!list) return;
+    list.innerHTML = "";
+
+    columnConfig.forEach((col, index) => {
+        const item = document.createElement("div");
+        item.style.display = "flex";
+        item.style.alignItems = "center";
+        item.style.justifyContent = "space-between";
+        item.style.padding = "8px 12px";
+        item.style.background = "var(--bg-primary)";
+        item.style.border = "1px solid var(--border-color)";
+        item.style.borderRadius = "6px";
+        item.style.gap = "12px";
+
+        const leftDiv = document.createElement("div");
+        leftDiv.style.display = "flex";
+        leftDiv.style.alignItems = "center";
+        leftDiv.style.gap = "8px";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = col.visible;
+        checkbox.style.width = "16px";
+        checkbox.style.height = "16px";
+        checkbox.style.accentColor = "var(--accent-emerald)";
+        checkbox.style.cursor = "pointer";
+        checkbox.onchange = () => {
+            col.visible = checkbox.checked;
+            saveColumnConfig();
+            renderDetailedHeader();
+            if (cachedDetailedData) renderDetailed(cachedDetailedData);
+        };
+
+        const label = document.createElement("span");
+        label.textContent = col.label;
+        label.style.fontSize = "14px";
+        label.style.fontWeight = "500";
+        label.style.color = "var(--text-primary)";
+
+        leftDiv.appendChild(checkbox);
+        leftDiv.appendChild(label);
+
+        const rightDiv = document.createElement("div");
+        rightDiv.style.display = "flex";
+        rightDiv.style.gap = "4px";
+
+        const upBtn = document.createElement("button");
+        upBtn.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
+        upBtn.className = "btn";
+        upBtn.style.padding = "4px 8px";
+        upBtn.style.background = "var(--bg-secondary)";
+        upBtn.style.color = index === 0 ? "var(--text-muted)" : "var(--text-primary)";
+        upBtn.disabled = index === 0;
+        upBtn.onclick = (e) => {
+            e.preventDefault();
+            if (index > 0) {
+                const temp = columnConfig[index];
+                columnConfig[index] = columnConfig[index - 1];
+                columnConfig[index - 1] = temp;
+                saveColumnConfig();
+                renderColumnConfigUI();
+                renderDetailedHeader();
+                if (cachedDetailedData) renderDetailed(cachedDetailedData);
+            }
+        };
+
+        const downBtn = document.createElement("button");
+        downBtn.innerHTML = '<i class="fa-solid fa-arrow-down"></i>';
+        downBtn.className = "btn";
+        downBtn.style.padding = "4px 8px";
+        downBtn.style.background = "var(--bg-secondary)";
+        downBtn.style.color = index === columnConfig.length - 1 ? "var(--text-muted)" : "var(--text-primary)";
+        downBtn.disabled = index === columnConfig.length - 1;
+        downBtn.onclick = (e) => {
+            e.preventDefault();
+            if (index < columnConfig.length - 1) {
+                const temp = columnConfig[index];
+                columnConfig[index] = columnConfig[index + 1];
+                columnConfig[index + 1] = temp;
+                saveColumnConfig();
+                renderColumnConfigUI();
+                renderDetailedHeader();
+                if (cachedDetailedData) renderDetailed(cachedDetailedData);
+            }
+        };
+
+        rightDiv.appendChild(upBtn);
+        rightDiv.appendChild(downBtn);
+
+        item.appendChild(leftDiv);
+        item.appendChild(rightDiv);
+        list.appendChild(item);
+    });
+}
+
+function renderDetailedHeader() {
+    const theadTr = document.querySelector("#detailed-table thead tr");
+    if (!theadTr) return;
+    theadTr.innerHTML = "";
+
+    columnConfig.filter(c => c.visible).forEach(col => {
+        const th = document.createElement("th");
+        th.setAttribute("data-col", col.id);
+        th.className = "sortable " + (col.class.includes("text-right") ? "text-right" : "");
+
+        let iconClass = "fa-solid fa-sort";
+        if (sortCol === col.id) {
+            iconClass = sortDir === "asc" ? "fa-solid fa-sort-up" : "fa-solid fa-sort-down";
+        }
+
+        th.innerHTML = `${col.label} <i class="${iconClass}"></i>`;
+
+        // Re-attach sort event listener
+        th.addEventListener("click", () => {
+            if (sortCol === col.id) {
+                sortDir = sortDir === "asc" ? "desc" : "asc";
+            } else {
+                sortCol = col.id;
+                sortDir = (col.id === "loai_ton" || col.id === "cod_amount" || col.id === "weight") ? "desc" : "asc";
+            }
+            // Update icons
+            document.querySelectorAll(".sortable i").forEach(i => i.className = "fa-solid fa-sort");
+            th.querySelector("i").className = sortDir === "asc" ? "fa-solid fa-sort-up" : "fa-solid fa-sort-down";
+
+            currentPage = 1;
+            loadDetailed();
+        });
+
+        theadTr.appendChild(th);
+    });
+}
+
 // Matrix Sort State
 let matrixSortCol = "qty-Total";
 let matrixSortDir = "desc";
@@ -77,6 +251,10 @@ const btnRefresh = document.getElementById("btn-refresh");
 const btnTriggerCrawl = document.getElementById("btn-trigger-crawl");
 const btnExportExcel = document.getElementById("btn-export-excel");
 const btnLocateExcel = document.getElementById("btn-locate-excel");
+const btnOpenColumnConfig = document.getElementById("btn-open-column-config");
+const btnCloseColumnConfig = document.getElementById("btn-close-column-config");
+const btnSaveColumnConfig = document.getElementById("btn-save-column-config");
+const columnConfigModal = document.getElementById("column-config-modal");
 
 const statusDot = document.getElementById("status-dot");
 const statusText = document.getElementById("status-text");
@@ -100,10 +278,10 @@ function showToast(message, type = "error") {
         container.className = "toast-container";
         document.body.appendChild(container);
     }
-    
+
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
-    
+
     let iconHTML = `<i class="fa-solid fa-circle-info toast-icon"></i>`;
     if (type === "success") {
         iconHTML = `<i class="fa-solid fa-circle-check toast-icon"></i>`;
@@ -112,14 +290,14 @@ function showToast(message, type = "error") {
     } else if (type === "warning") {
         iconHTML = `<i class="fa-solid fa-triangle-exclamation toast-icon"></i>`;
     }
-    
+
     toast.innerHTML = `
         ${iconHTML}
         <div class="toast-content">${message}</div>
     `;
-    
+
     container.appendChild(toast);
-    
+
     // Auto remove after 4 seconds
     setTimeout(() => {
         toast.classList.add("fade-out");
@@ -137,7 +315,7 @@ async function loadFilters() {
     try {
         const response = await fetch("/api/filters");
         const data = await response.json();
-        
+
         // Populate POS Names into Custom Multiselect
         if (multiselectPosList) {
             multiselectPosList.innerHTML = '';
@@ -171,7 +349,7 @@ async function loadFilters() {
                 multiselectStatusList.appendChild(lbl);
             });
         }
-        
+
         // Populate Nhom KH into Custom Multiselect with fixed list
         const fixedNhomKhs = ["KH Mới", "KH Shoppe", "KH Thường", "KH Tiktok"];
         if (multiselectNhomKhList) {
@@ -193,7 +371,7 @@ async function updateStatus() {
     try {
         const response = await fetch("/api/status");
         const data = await response.json();
-        
+
         // Update Indicator
         statusDot.className = "dot";
         if (data.is_crawling) {
@@ -203,7 +381,7 @@ async function updateStatus() {
             statusDot.classList.add("active");
             statusText.textContent = `Online (Crawl: ${data.last_crawl_status})`;
         }
-        
+
         if (data.last_crawl_time) {
             const t = data.last_crawl_time.split(" ")[1];
             lastUpdateTime.textContent = `Cập nhật: ${t}`;
@@ -223,17 +401,17 @@ async function loadSummary() {
         if (matrixNhomKh && matrixNhomKh.value) {
             url += `?nhom_kh=${encodeURIComponent(matrixNhomKh.value)}`;
         }
-        
+
         const response = await fetch(url);
         const data = await response.json();
         cachedSummaryData = data;
-        
+
         kpiQty.textContent = formatNumber(data.total_qty);
         kpiCod.textContent = formatCurrency(data.total_cod);
         kpiWeight.textContent = `${formatNumber(data.total_weight)} kg`;
-        
+
         renderSummary(data);
-        
+
     } catch (e) {
         console.error("Error loading summary:", e);
         matrixTbody.innerHTML = '<tr><td colspan="9" class="text-center text-red">Lỗi tải dữ liệu.</td></tr>';
@@ -242,24 +420,24 @@ async function loadSummary() {
 
 function renderSummary(data) {
     if (!data || !data.matrix) return;
-    
+
     const categories = ["≥3 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
-    
+
     // Load config for Matrix Total Columns
     const savedColsStr = localStorage.getItem("matrix_total_columns");
     let targetCats = ["≥7 ngày", "≥14 ngày"]; // Default fallback
     if (savedColsStr) {
         try {
             targetCats = JSON.parse(savedColsStr);
-        } catch(e) {}
+        } catch (e) { }
     }
-    
+
     // Update the "Toàn tỉnh" column header label dynamically to show selected columns
     const headerSublabel = document.getElementById("matrix-header-sublabel");
     if (headerSublabel) {
         headerSublabel.textContent = `(${targetCats.join(', ')})`;
     }
-    
+
     let colTotals = {
         "≥3 ngày": { qty: 0, cod: 0.0 },
         "≥5 ngày": { qty: 0, cod: 0.0 },
@@ -267,17 +445,17 @@ function renderSummary(data) {
         "≥14 ngày": { qty: 0, cod: 0.0 },
         "Total": { qty: 0, cod: 0.0 }
     };
-    
+
     let posList = Object.keys(data.matrix);
-    
+
     if (posList.length === 0) {
         matrixTbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Không có dữ liệu tổng hợp.</td></tr>';
         return;
     }
-    
+
     posList.sort((a, b) => {
         let valA, valB;
-        
+
         if (matrixSortCol === "pos_name") {
             valA = a;
             valB = b;
@@ -285,7 +463,7 @@ function renderSummary(data) {
             const parts = matrixSortCol.split("-");
             const type = parts[0];
             const cat = parts[1];
-            
+
             if (cat === "Total") {
                 let totalQtyA = 0, totalCodA = 0;
                 targetCats.forEach(c => {
@@ -294,7 +472,7 @@ function renderSummary(data) {
                     totalCodA += cell.cod;
                 });
                 valA = type === "qty" ? totalQtyA : totalCodA;
-                
+
                 let totalQtyB = 0, totalCodB = 0;
                 targetCats.forEach(c => {
                     const cell = data.matrix[b][c] || { qty: 0, cod: 0 };
@@ -309,12 +487,12 @@ function renderSummary(data) {
                 valB = type === "qty" ? cellB.qty : cellB.cod;
             }
         }
-        
+
         if (valA < valB) return matrixSortDir === "asc" ? -1 : 1;
         if (valA > valB) return matrixSortDir === "asc" ? 1 : -1;
         return 0;
     });
-    
+
     // First, compute all totals across all POS offices to build the totals row
     posList.forEach(pos => {
         let rowTotalQty = 0;
@@ -323,7 +501,7 @@ function renderSummary(data) {
             const cell = data.matrix[pos][cat] || { qty: 0, cod: 0 };
             colTotals[cat].qty += cell.qty;
             colTotals[cat].cod += cell.cod;
-            
+
             // Dynamically sum configured columns for the Total column
             if (targetCats.includes(cat)) {
                 rowTotalQty += cell.qty;
@@ -363,7 +541,7 @@ function renderSummary(data) {
         `;
         let rowTotalQty = 0;
         let rowTotalCod = 0;
-        
+
         // Breakdown columns first
         categories.forEach(cat => {
             const cell = data.matrix[pos][cat] || { qty: 0, cod: 0 };
@@ -371,14 +549,14 @@ function renderSummary(data) {
                 <td class="qty-cell text-right" data-cat="${cat}" data-qty="${cell.qty}">${formatNumber(cell.qty)}</td>
                 <td class="cod-cell text-right">${formatCurrency(cell.cod)}</td>
             `;
-            
+
             // Dynamically sum configured columns for the Total column
             if (targetCats.includes(cat)) {
                 rowTotalQty += cell.qty;
                 rowTotalCod += cell.cod;
             }
         });
-        
+
         // Total column last + Action button
         rowHtml += `
             <td class="qty-cell text-right text-bold total-qty-cell" data-cat="Total" data-qty="${rowTotalQty}">${formatNumber(rowTotalQty)}</td>
@@ -389,7 +567,7 @@ function renderSummary(data) {
                 </button>
             </td>
         `;
-        
+
         tr.innerHTML = rowHtml;
         matrixTbody.appendChild(tr);
     });
@@ -398,7 +576,7 @@ function renderSummary(data) {
     const totalTrBottom = totalTrTop.cloneNode(true);
     totalTrBottom.className = "total-row bottom-total-row";
     matrixTbody.appendChild(totalTrBottom);
-    
+
     applyHighlights();
 }
 
@@ -416,54 +594,68 @@ async function loadDetailed() {
             nhom_kh: filters.nhom_kh,
             search: filters.search
         });
-        
+
         const response = await fetch(`/api/detailed?${queryParams.toString()}`);
         const data = await response.json();
-        
+        cachedDetailedData = data;
+
         totalRecords = data.total_records;
-        
-        // 1. Render Table Rows
-        detailedTbody.innerHTML = "";
-        if (data.rows.length === 0) {
-            detailedTbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Không tìm thấy bản ghi nào khớp bộ lọc.</td></tr>';
-        } else {
-            data.rows.forEach(r => {
-                const tr = document.createElement("tr");
-                
-                // Category badge age class
-                let ageClass = "age-3";
-                if (r.loai_ton === "≥14 ngày") ageClass = "age-14";
-                else if (r.loai_ton === "≥7 ngày") ageClass = "age-7";
-                
-                // COD formatting (hyphen if 0)
-                const codText = r.cod_amount > 0 ? formatCurrency(r.cod_amount) : "-";
-                
-                tr.innerHTML = `
-                    <td class="text-bold" style="font-family: var(--font-mono); font-size: 13.5px; color: #ef4444;">${r.item_code}</td>
-                    <td>${r.pos_name || '-'}</td>
-                    <td><span class="category-badge ${ageClass}">${r.loai_ton || '-'}</span></td>
-                    <td><span class="status-badge">${r.status_name || '-'}</span></td>
-                    <td>${r.nhom_kh || '-'}</td>
-                    <td>${r.postman_name || '-'}</td>
-                    <td class="text-right" style="font-family: var(--font-mono); font-size: 13.5px;">${codText}</td>
-                    <td class="text-right" style="font-family: var(--font-mono); font-size: 13.5px;">${formatNumber(r.weight)}</td>
-                    <td style="font-family: var(--font-mono); font-size: 13.5px;">${r.updated_at || '-'}</td>
-                `;
-                detailedTbody.appendChild(tr);
-            });
-        }
-        
+
+        renderDetailed(data);
+
         // 2. Update Pagination Controls
         const start = (currentPage - 1) * pageSize + 1;
         const end = Math.min(currentPage * pageSize, totalRecords);
         paginationInfo.textContent = totalRecords > 0 ? `Hiển thị từ ${formatNumber(start)} đến ${formatNumber(end)} trong tổng số ${formatNumber(totalRecords)} dòng` : "Hiển thị 0 dòng";
-        
+
         btnPrevPage.disabled = currentPage === 1;
         btnNextPage.disabled = currentPage * pageSize >= totalRecords;
-        
+
     } catch (e) {
         console.error("Error loading detailed:", e);
-        detailedTbody.innerHTML = '<tr><td colspan="9" class="text-center text-red">Lỗi tải dữ liệu chi tiết.</td></tr>';
+        detailedTbody.innerHTML = `<tr><td colspan="${columnConfig.filter(c => c.visible).length}" class="text-center text-red">Lỗi tải dữ liệu chi tiết.</td></tr>`;
+    }
+}
+
+function renderDetailed(data) {
+    detailedTbody.innerHTML = "";
+    const visibleCols = columnConfig.filter(c => c.visible);
+
+    if (!data || !data.rows || data.rows.length === 0) {
+        detailedTbody.innerHTML = `<tr><td colspan="${visibleCols.length}" class="text-center text-muted">Không tìm thấy bản ghi nào khớp bộ lọc.</td></tr>`;
+    } else {
+        data.rows.forEach(r => {
+            const tr = document.createElement("tr");
+
+            let ageClass = "age-3";
+            if (r.loai_ton === "≥14 ngày") ageClass = "age-14";
+            else if (r.loai_ton === "≥7 ngày") ageClass = "age-7";
+
+            const codText = r.cod_amount > 0 ? formatCurrency(r.cod_amount) : "-";
+
+            let trContent = '';
+            visibleCols.forEach(col => {
+                let cellValue = r[col.id];
+                if (cellValue === null || cellValue === undefined) cellValue = '-';
+
+                let cellContent = cellValue;
+
+                if (col.id === 'loai_ton') {
+                    cellContent = `<span class="category-badge ${ageClass}">${cellValue}</span>`;
+                } else if (col.id === 'status_name') {
+                    cellContent = `<span class="status-badge">${cellValue}</span>`;
+                } else if (col.id === 'cod_amount') {
+                    cellContent = codText;
+                } else if (col.id === 'weight') {
+                    cellContent = formatNumber(r.weight);
+                }
+
+                trContent += `<td class="${col.class}" style="${col.style}">${cellContent}</td>`;
+            });
+
+            tr.innerHTML = trContent;
+            detailedTbody.appendChild(tr);
+        });
     }
 }
 
@@ -526,7 +718,7 @@ function handlePosSelectionChange() {
     const checkedBoxes = Array.from(document.querySelectorAll(".pos-checkbox:checked"));
     const selectedValues = checkedBoxes.map(cb => cb.value);
     filters.pos_name = selectedValues.join(",");
-    
+
     if (selectedValues.length === 0) {
         multiselectPosLabel.textContent = "-- Tất cả bưu cục --";
     } else if (selectedValues.length === 1) {
@@ -534,7 +726,7 @@ function handlePosSelectionChange() {
     } else {
         multiselectPosLabel.textContent = `Đã chọn ${selectedValues.length} bưu cục`;
     }
-    
+
     currentPage = 1;
     loadDetailed();
 }
@@ -571,7 +763,7 @@ function handleCategorySelectionChange() {
     const checkedBoxes = Array.from(document.querySelectorAll(".category-checkbox:checked"));
     const selectedValues = checkedBoxes.map(cb => cb.value);
     filters.loai_ton = selectedValues.join(",");
-    
+
     if (selectedValues.length === 0) {
         multiselectCategoryLabel.textContent = "-- Tất cả thời gian --";
     } else if (selectedValues.length === 1) {
@@ -579,7 +771,7 @@ function handleCategorySelectionChange() {
     } else {
         multiselectCategoryLabel.textContent = `Đã chọn ${selectedValues.length} loại`;
     }
-    
+
     currentPage = 1;
     loadDetailed();
 }
@@ -616,7 +808,7 @@ function handleStatusSelectionChange() {
     const checkedBoxes = Array.from(document.querySelectorAll(".status-checkbox:checked"));
     const selectedValues = checkedBoxes.map(cb => cb.value);
     filters.status_name = selectedValues.join(",");
-    
+
     if (selectedValues.length === 0) {
         multiselectStatusLabel.textContent = "-- Tất cả trạng thái --";
     } else if (selectedValues.length === 1) {
@@ -624,7 +816,7 @@ function handleStatusSelectionChange() {
     } else {
         multiselectStatusLabel.textContent = `Đã chọn ${selectedValues.length} trạng thái`;
     }
-    
+
     currentPage = 1;
     loadDetailed();
 }
@@ -661,7 +853,7 @@ function handleNhomKhSelectionChange() {
     const checkedBoxes = Array.from(document.querySelectorAll(".nhom-kh-checkbox:checked"));
     const selectedValues = checkedBoxes.map(cb => cb.value);
     filters.nhom_kh = selectedValues.join(",");
-    
+
     if (selectedValues.length === 0) {
         multiselectNhomKhLabel.textContent = "-- Tất cả Nhóm KH --";
     } else if (selectedValues.length === 1) {
@@ -669,7 +861,7 @@ function handleNhomKhSelectionChange() {
     } else {
         multiselectNhomKhLabel.textContent = `Đã chọn ${selectedValues.length} Nhóm KH`;
     }
-    
+
     currentPage = 1;
     loadDetailed();
 }
@@ -731,13 +923,30 @@ btnTriggerCrawl.addEventListener("click", (e) => {
 
 btnExportExcel.addEventListener("click", exportExcel);
 
+if (btnOpenColumnConfig) {
+    btnOpenColumnConfig.addEventListener("click", () => {
+        renderColumnConfigUI();
+        columnConfigModal.style.display = "flex";
+    });
+}
+if (btnCloseColumnConfig) {
+    btnCloseColumnConfig.addEventListener("click", () => {
+        columnConfigModal.style.display = "none";
+    });
+}
+if (btnSaveColumnConfig) {
+    btnSaveColumnConfig.addEventListener("click", () => {
+        columnConfigModal.style.display = "none";
+    });
+}
+
 // Locate all filtered items
 if (btnLocateExcel) {
     btnLocateExcel.addEventListener("click", async () => {
         const originalHtml = btnLocateExcel.innerHTML;
         btnLocateExcel.disabled = true;
         btnLocateExcel.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang lấy mã...`;
-        
+
         try {
             // Fetch all records with current filters (without pagination limit)
             const queryParams = new URLSearchParams({
@@ -749,37 +958,37 @@ if (btnLocateExcel) {
                 status_name: filters.status_name,
                 nhom_kh: filters.nhom_kh
             });
-            
+
             const res = await fetch(`/api/detailed?${queryParams.toString()}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            
+
             const data = await res.json();
             const codes = data.rows.map(r => r.item_code).filter(Boolean);
-            
+
             if (codes.length === 0) {
                 showToast("Không tìm thấy bưu gửi nào khớp bộ lọc hiện tại để định vị.", "warning");
                 return;
             }
-            
+
             // Populate textarea of export view
             if (codesInput) {
                 codesInput.value = codes.join("\n");
                 badgeCodesCount.textContent = `${codes.length} mã`;
             }
-            
+
             // Switch to export tab
             switchView("export");
-            
+
             // Highlight sidebar tab
             document.querySelectorAll(".sidebar-nav li").forEach(li => li.classList.remove("active"));
             const menuExport = document.getElementById("menu-export");
             if (menuExport) menuExport.classList.add("active");
-            
+
             // Trigger start export batch process
             if (btnStartExport) {
                 btnStartExport.click();
             }
-            
+
         } catch (err) {
             console.error("Error fetching codes for localization:", err);
             showToast(`Lỗi lấy danh sách bưu gửi: ${err.message}`, "error");
@@ -794,21 +1003,21 @@ if (btnLocateExcel) {
 document.querySelectorAll(".sortable").forEach(header => {
     header.addEventListener("click", () => {
         const col = header.getAttribute("data-col");
-        
+
         if (sortCol === col) {
             sortDir = sortDir === "asc" ? "desc" : "asc";
         } else {
             sortCol = col;
             sortDir = (col === "loai_ton" || col === "cod_amount" || col === "weight") ? "desc" : "asc";
         }
-        
+
         document.querySelectorAll(".sortable i").forEach(icon => {
             icon.className = "fa-solid fa-sort";
         });
-        
+
         const icon = header.querySelector("i");
         icon.className = sortDir === "asc" ? "fa-solid fa-sort-up" : "fa-solid fa-sort-down";
-        
+
         loadDetailed();
     });
 });
@@ -817,21 +1026,21 @@ document.querySelectorAll(".sortable").forEach(header => {
 document.querySelectorAll(".sortable-matrix").forEach(header => {
     header.addEventListener("click", () => {
         const col = header.getAttribute("data-sort");
-        
+
         if (matrixSortCol === col) {
             matrixSortDir = matrixSortDir === "asc" ? "desc" : "asc";
         } else {
             matrixSortCol = col;
             matrixSortDir = col === "pos_name" ? "asc" : "desc";
         }
-        
+
         document.querySelectorAll(".sortable-matrix i").forEach(icon => {
             icon.className = "fa-solid fa-sort";
         });
-        
+
         const icon = header.querySelector("i");
         icon.className = matrixSortDir === "asc" ? "fa-solid fa-sort-up" : "fa-solid fa-sort-down";
-        
+
         if (cachedSummaryData) {
             renderSummary(cachedSummaryData);
         }
@@ -843,10 +1052,10 @@ if (matrixTbody) {
     matrixTbody.addEventListener("click", (e) => {
         const btn = e.target.closest(".btn-drilldown");
         if (!btn) return;
-        
+
         const posName = btn.getAttribute("data-pos");
         if (!posName) return;
-        
+
         // 1. Check checkbox for this POS and uncheck all others
         const checkboxes = document.querySelectorAll(".pos-checkbox");
         checkboxes.forEach(cb => {
@@ -856,17 +1065,17 @@ if (matrixTbody) {
                 cb.checked = false;
             }
         });
-        
+
         // 2. Update filters state and label UI
         filters.pos_name = posName;
         if (multiselectPosLabel) {
             multiselectPosLabel.textContent = posName;
         }
-        
+
         // 3. Reload detailed paginated records
         currentPage = 1;
         loadDetailed();
-        
+
         // 4. Smooth scroll to detailed section
         const detailedSection = document.getElementById("detailed-report-section");
         if (detailedSection) {
@@ -882,27 +1091,27 @@ function applyHighlights() {
     const thresh7 = parseInt(document.getElementById("threshold-7").value) || 0;
     const thresh14 = parseInt(document.getElementById("threshold-14").value) || 0;
     const threshTotal = parseInt(document.getElementById("threshold-total").value) || 0;
-    
+
     const rows = document.querySelectorAll("#matrix-tbody tr:not(.total-row)");
-    
+
     rows.forEach(row => {
         const posCell = row.querySelector(".pos-name-cell");
         if (!posCell) return;
-        
+
         let shouldHighlightRow = false;
-        
+
         const qtyCells = row.querySelectorAll(".qty-cell");
         qtyCells.forEach(cell => {
             const cat = cell.getAttribute("data-cat");
             const qty = parseInt(cell.getAttribute("data-qty")) || 0;
-            
+
             let isHighlighted = false;
             if (cat === "≥3 ngày" && thresh3 > 0 && qty >= thresh3) isHighlighted = true;
             else if (cat === "≥5 ngày" && thresh5 > 0 && qty >= thresh5) isHighlighted = true;
             else if (cat === "≥7 ngày" && thresh7 > 0 && qty >= thresh7) isHighlighted = true;
             else if (cat === "≥14 ngày" && thresh14 > 0 && qty >= thresh14) isHighlighted = true;
             else if (cat === "Total" && threshTotal > 0 && qty >= threshTotal) isHighlighted = true;
-            
+
             if (isHighlighted) {
                 cell.classList.add("highlighted-cell");
                 shouldHighlightRow = true;
@@ -910,7 +1119,7 @@ function applyHighlights() {
                 cell.classList.remove("highlighted-cell");
             }
         });
-        
+
         if (shouldHighlightRow) {
             row.classList.add("highlighted-row");
         } else {
@@ -947,7 +1156,7 @@ document.getElementById("btn-reset-filters").addEventListener("click", () => {
     document.getElementById("threshold-7").value = "";
     document.getElementById("threshold-14").value = "";
     document.getElementById("threshold-total").value = "";
-    
+
     document.querySelectorAll(".pos-checkbox").forEach(cb => cb.checked = false);
     if (multiselectPosLabel) multiselectPosLabel.textContent = "-- Tất cả bưu cục --";
     document.querySelectorAll(".category-checkbox").forEach(cb => cb.checked = false);
@@ -955,24 +1164,24 @@ document.getElementById("btn-reset-filters").addEventListener("click", () => {
     document.querySelectorAll(".status-checkbox").forEach(cb => cb.checked = false);
     if (multiselectStatusLabel) multiselectStatusLabel.textContent = "-- Tất cả trạng thái --";
     searchInput.value = "";
-    
+
     filters.pos_name = "";
     filters.loai_ton = "";
     filters.status_name = "";
     filters.search = "";
-    
+
     document.querySelectorAll(".threshold-inputs input, .filters-container select, .filters-container input").forEach(el => {
         checkFilterActive(el);
     });
-    
+
     currentPage = 1;
     pageSize = 50;
     selectPageSize.value = "50";
-    
+
     applyHighlights();
     sortCol = "loai_ton";
     sortDir = "desc";
-    
+
     document.querySelectorAll(".sortable i").forEach(icon => {
         const parentTh = icon.closest("th");
         const colName = parentTh ? parentTh.getAttribute("data-col") : null;
@@ -984,14 +1193,14 @@ document.getElementById("btn-reset-filters").addEventListener("click", () => {
     });
 
     loadDetailed();
-    
+
     matrixSortCol = "pos_name";
     matrixSortDir = "asc";
-    
+
     document.querySelectorAll(".sortable-matrix i").forEach(icon => {
         icon.className = "fa-solid fa-sort";
     });
-    
+
     if (cachedSummaryData) {
         renderSummary(cachedSummaryData);
     }
@@ -1015,18 +1224,18 @@ let loginCaptchaCookies = null;
 async function loadLoginCaptcha() {
     const imgWrapper = document.getElementById("login-captcha-img-wrapper");
     if (!imgWrapper) return;
-    
+
     imgWrapper.innerHTML = `<span class="captcha-placeholder" style="font-size: 12.5px; color: var(--text-muted);">Đang tải...</span>`;
     document.getElementById("login-captcha-input").value = "";
-    
+
     try {
         const res = await fetch("/api/auth/login-captcha");
         if (!res.ok) throw new Error("Không thể tải captcha");
         const data = await res.json();
-        
+
         loginCaptchaFields = data.fields;
         loginCaptchaCookies = data.cookies;
-        
+
         imgWrapper.innerHTML = `<img src="${data.captchaImage}" alt="Captcha VNPost" style="max-height: 100%; max-width: 100%; object-fit: contain;" />`;
     } catch (err) {
         imgWrapper.innerHTML = `<span class="text-red" style="font-size: 11.5px; font-weight: bold;">Lỗi tải Captcha.</span>`;
@@ -1042,7 +1251,7 @@ loginForm.addEventListener("submit", async (e) => {
     const username = document.getElementById("login-username").value;
     const password = document.getElementById("login-password").value;
     const captchaSolution = document.getElementById("login-captcha-input").value.trim();
-    
+
     loginError.style.display = "none";
     try {
         const res = await fetch("/api/auth/login", {
@@ -1050,28 +1259,28 @@ loginForm.addEventListener("submit", async (e) => {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ 
-                username, 
+            body: JSON.stringify({
+                username,
                 password,
                 captchaSolution,
                 initialFields: loginCaptchaFields,
                 initialCookies: loginCaptchaCookies
             })
         });
-        
+
         const data = await res.json();
         if (!res.ok) {
             // Reload captcha on error
             loadLoginCaptcha();
             throw new Error(data.detail || "Đăng nhập thất bại.");
         }
-        
+
         localStorage.setItem("vnpost_token", data.token);
         localStorage.setItem("vnpost_user", JSON.stringify(data.user));
-        
+
         showApp(data.user);
         initDashboard();
-        
+
     } catch (err) {
         loginError.textContent = err.message;
         loginError.style.display = "block";
@@ -1082,14 +1291,14 @@ loginForm.addEventListener("submit", async (e) => {
 function showApp(user) {
     loginContainer.style.display = "none";
     mainAppContainer.style.display = "flex";
-    
+
     // User profile sidebar details
     document.getElementById("sidebar-user-profile").style.display = "flex";
     document.getElementById("sidebar-username").textContent = user.username;
-    
+
     const roleText = user.role === "admin" ? "Quản trị viên" : "Nhân viên";
     document.getElementById("sidebar-user-role").textContent = roleText;
-    
+
     // Access role permission check for user management view
     const menuUsers = document.getElementById("menu-users");
     if (user.role === "admin") {
@@ -1099,10 +1308,10 @@ function showApp(user) {
         menuUsers.style.display = "none";
         document.querySelectorAll(".th-history-user").forEach(el => el.style.display = "none");
     }
-    
+
     // Initialize system config settings tab elements and event listeners
     initSettingsView();
-    
+
     // Set to default dashboard view
     switchView("dashboard");
 }
@@ -1137,7 +1346,7 @@ function switchView(viewName) {
             if (viewEl) viewEl.classList.remove("active");
         }
     });
-    
+
     // Start active view specific operations
     if (viewName === "export") {
         loadSessionsStatus();
@@ -1145,11 +1354,11 @@ function switchView(viewName) {
     } else {
         stopSessionPolling();
     }
-    
+
     if (viewName === "history") {
         loadHistoryList();
     }
-    
+
     if (viewName === "users") {
         loadUsersList();
     }
@@ -1201,23 +1410,23 @@ async function loadSessionsStatus() {
         if (!res.ok) return;
         const resultData = await res.json();
         const sessions = resultData.sessions || [];
-        
+
         const user = JSON.parse(localStorage.getItem("vnpost_user") || "{}");
         userConcurrencyLimit = user.concurrencyLimit || user.concurrency_limit || 3;
-        
+
         const activeCount = sessions.filter(s => s.active).length;
         document.getElementById("active-thread-count").textContent = `${activeCount}/${userConcurrencyLimit}`;
-        
+
         const container = document.getElementById("sessions-container");
         container.innerHTML = "";
-        
+
         activeSessionIndexes = [];
-        
+
         for (let i = 0; i < userConcurrencyLimit; i++) {
             const session = sessions.find(s => s.index === i);
             const btn = document.createElement("button");
             btn.className = "compact-thread-btn";
-            
+
             if (session && session.active) {
                 btn.classList.add("active");
                 btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Luồng ${i + 1}`;
@@ -1233,7 +1442,7 @@ async function loadSessionsStatus() {
             }
             container.appendChild(btn);
         }
-        
+
     } catch (err) {
         console.error("Error loading sessions:", err);
     }
@@ -1243,35 +1452,35 @@ async function loadSessionsStatus() {
 async function showSessionCaptchaForm(index, isRefresh) {
     captchaSessionIndex = index;
     isCaptchaRefresh = isRefresh;
-    
+
     // Auto switch to export view so the captcha form is immediately visible!
     switchView("export");
-    
+
     const formBox = document.getElementById("session-captcha-form");
-    document.getElementById("session-captcha-title").textContent = isRefresh 
-        ? `Giải Captcha Khôi phục Luồng ${index + 1}` 
+    document.getElementById("session-captcha-title").textContent = isRefresh
+        ? `Giải Captcha Khôi phục Luồng ${index + 1}`
         : `Giải Captcha Tạo Luồng ${index + 1}`;
-        
+
     formBox.style.display = "flex";
     loadSessionCaptchaImage();
-    
+
     showToast(`Luồng ${index + 1} yêu cầu giải captcha để tiếp tục.`, "warning");
 }
 
 async function loadSessionCaptchaImage() {
     const wrapper = document.getElementById("session-captcha-img-wrapper");
     wrapper.innerHTML = `<span class="captcha-placeholder">Đang tải...</span>`;
-    
+
     try {
         const res = await fetch(`${API_BASE_DINHVI}/api/vnpost/session-captcha?sessionIndex=${captchaSessionIndex}&t=${Date.now()}`, {
             headers: getHeaders()
         });
         if (!res.ok) throw new Error("Không thể tải captcha");
-        
+
         const data = await res.json();
         currentCaptchaFields = data.fields;
         currentCaptchaCookies = data.cookies;
-        
+
         wrapper.innerHTML = `<img src="${data.captchaImage}" alt="Captcha VNPost" />`;
     } catch (err) {
         wrapper.innerHTML = `<span class="text-red">Lỗi tải Captcha.</span>`;
@@ -1287,10 +1496,10 @@ document.getElementById("btn-session-captcha-cancel").addEventListener("click", 
 document.getElementById("frm-session-captcha").addEventListener("submit", async (e) => {
     e.preventDefault();
     const solution = document.getElementById("session-captcha-input").value;
-    const url = isCaptchaRefresh 
-        ? `${API_BASE_DINHVI}/api/vnpost/refresh-session` 
+    const url = isCaptchaRefresh
+        ? `${API_BASE_DINHVI}/api/vnpost/refresh-session`
         : `${API_BASE_DINHVI}/api/vnpost/add-session`;
-        
+
     try {
         const res = await fetch(url, {
             method: "POST",
@@ -1305,16 +1514,16 @@ document.getElementById("frm-session-captcha").addEventListener("submit", async 
                 initialCookies: currentCaptchaCookies
             })
         });
-        
+
         const data = await res.json();
         if (!res.ok) {
             throw new Error(data.error || "Gửi captcha thất bại.");
         }
-        
+
         document.getElementById("session-captcha-input").value = "";
         document.getElementById("session-captcha-form").style.display = "none";
         loadSessionsStatus();
-        
+
     } catch (err) {
         showToast("Lỗi giải captcha: " + err.message, "error");
         loadSessionCaptchaImage();
@@ -1399,53 +1608,53 @@ function addExportLog(message, type = "info") {
 
 btnStartExport.addEventListener("click", async () => {
     if (exportLoading) return;
-    
+
     const text = codesInput.value.trim();
     if (!text) {
         showToast("Vui lòng nhập mã bưu gửi.", "warning");
         return;
     }
-    
+
     if (activeSessionIndexes.length === 0) {
         showToast("Không có luồng kết nối VNPost nào đang hoạt động. Vui lòng kết nối ít nhất 1 luồng.", "error");
         return;
     }
-    
+
     const codes = text.split(/[\s,\n]+/).map(c => c.trim().toUpperCase()).filter(c => c.length > 0);
     if (codes.length === 0) {
         showToast("Mã bưu gửi không hợp lệ.", "warning");
         return;
     }
-    
+
     exportLoading = true;
     btnStartExport.disabled = true;
     document.getElementById("export-download-wrapper").style.display = "none";
-    
+
     // Update sidebar nav label at start
     const menuExport = document.getElementById("menu-export");
     if (menuExport) {
         menuExport.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--accent-emerald);"></i> Đang định vị (0%)`;
     }
-    
+
     const batchSize = parseInt(localStorage.getItem("export_batch_size")) || 50;
     const chunks = [];
     for (let i = 0; i < codes.length; i += batchSize) {
         chunks.push(codes.slice(i, i + batchSize));
     }
     const totalBatches = chunks.length;
-    
+
     const checklist = document.getElementById("export-batches-checklist");
     checklist.innerHTML = "";
     document.getElementById("export-console-logs").innerHTML = "";
-    
+
     const progressBar = document.getElementById("export-progress-bar");
     const progressText = document.getElementById("export-progress-text");
     progressBar.style.width = "0%";
     progressText.textContent = "0%";
-    
+
     addExportLog(`Bắt đầu xuất định vị cho ${codes.length} bưu gửi...`, "info");
     addExportLog(`Phân chia thành ${totalBatches} lô xử lý. Số luồng đồng thời: ${activeSessionIndexes.length}.`, "info");
-    
+
     chunks.map((chunk, idx) => {
         const label = document.createElement("div");
         label.className = "batch-label pending";
@@ -1454,19 +1663,19 @@ btnStartExport.addEventListener("click", async () => {
         label.title = `Lô ${idx + 1}: ${idx * batchSize + 1} - ${Math.min((idx + 1) * batchSize, codes.length)}`;
         checklist.appendChild(label);
     });
-    
+
     const excelBuffers = new Array(totalBatches).fill(null);
     let successCount = 0;
     let hasError = false;
     let nextIndex = 0;
-    
+
     const downloadBatch = async (index, workerId) => {
         const batchCodes = chunks[index];
         const label = document.getElementById(`batch-label-${index}`);
         label.className = "batch-label processing";
-        
+
         addExportLog(`Luồng ${workerId + 1} đang tải Lô ${index + 1}/${totalBatches}...`, "info");
-        
+
         try {
             const res = await fetch(`${API_BASE_DINHVI}/api/export-batch`, {
                 method: "POST",
@@ -1479,31 +1688,31 @@ btnStartExport.addEventListener("click", async () => {
                     sessionIndex: activeSessionIndexes[workerId]
                 })
             });
-            
+
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
                 throw new Error(errData.error || `HTTP ${res.status}`);
             }
-            
+
             const arrayBuffer = await res.arrayBuffer();
             excelBuffers[index] = arrayBuffer;
             successCount += batchCodes.length;
-            
+
             label.className = "batch-label success";
             addExportLog(`Lô ${index + 1}/${totalBatches} thành công.`, "success");
-            
+
             const completedCount = excelBuffers.filter(Boolean).length;
             const pct = Math.round(5 + (completedCount / totalBatches) * 80);
             const pctText = `${pct}%`;
             progressBar.style.width = pctText;
             progressText.textContent = pctText;
-            
+
             // Update sidebar nav label
             const menuExport = document.getElementById("menu-export");
             if (menuExport) {
                 menuExport.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--accent-emerald);"></i> Đang định vị (${pctText})`;
             }
-            
+
         } catch (err) {
             label.className = "batch-label error";
             addExportLog(`Lỗi tải Lô ${index + 1}: ${err.message}`, "error");
@@ -1512,22 +1721,22 @@ btnStartExport.addEventListener("click", async () => {
             }
         }
     }
-    
+
     const worker = async (workerId) => {
         while (nextIndex < totalBatches && !hasError) {
             const currentIndex = nextIndex++;
             await downloadBatch(currentIndex, workerId);
         }
     };
-    
+
     const workers = [];
     const concurrency = Math.min(activeSessionIndexes.length, totalBatches);
     for (let i = 0; i < concurrency; i++) {
         workers.push(worker(i));
     }
-    
+
     await Promise.all(workers);
-    
+
     const validBuffers = excelBuffers.filter(Boolean);
     if (hasError || validBuffers.length === 0) {
         progressBar.style.width = "0%";
@@ -1537,11 +1746,11 @@ btnStartExport.addEventListener("click", async () => {
         btnStartExport.disabled = false;
         return;
     }
-    
+
     addExportLog(`Đã tải xong các lô. Đang kết hợp và gộp file...`, "info");
     progressBar.style.width = "90%";
     progressText.textContent = "90%";
-    
+
     try {
         const arrayBufferToBase64 = (buffer) => {
             let binary = "";
@@ -1552,9 +1761,9 @@ btnStartExport.addEventListener("click", async () => {
             }
             return window.btoa(binary);
         };
-        
+
         const base64Buffers = validBuffers.map(buf => arrayBufferToBase64(buf));
-        
+
         const mergeRes = await fetch(`${API_BASE_DINHVI}/api/merge-and-save`, {
             method: "POST",
             headers: {
@@ -1566,20 +1775,20 @@ btnStartExport.addEventListener("click", async () => {
                 totalCodes: codes.length
             })
         });
-        
+
         const mergeData = await mergeRes.json();
         if (mergeRes.ok) {
             progressBar.style.width = "100%";
             progressText.textContent = "100%";
             addExportLog(`Hoàn tất! Xuất thành công ${successCount}/${codes.length} bưu gửi.`, "success");
-            
+
             const token = localStorage.getItem("vnpost_token");
             const downloadUrl = `${API_BASE_DINHVI}/api/history/${mergeData.historyId}/download?authorization=Bearer ${token}`;
-            
+
             const downloadBtn = document.getElementById("btn-download-export-file");
             downloadBtn.href = downloadUrl;
             document.getElementById("export-download-wrapper").style.display = "block";
-            
+
             window.open(downloadUrl);
         } else {
             progressBar.style.width = "0%";
@@ -1593,7 +1802,7 @@ btnStartExport.addEventListener("click", async () => {
     } finally {
         exportLoading = false;
         btnStartExport.disabled = false;
-        
+
         // Restore sidebar nav label
         const menuExport = document.getElementById("menu-export");
         if (menuExport) {
@@ -1610,29 +1819,29 @@ btnStartExport.addEventListener("click", async () => {
 async function loadHistoryList() {
     const tbody = document.getElementById("history-table-tbody");
     tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Đang tải lịch sử xuất...</td></tr>`;
-    
+
     try {
         const res = await fetch(`${API_BASE_DINHVI}/api/history`, {
             headers: getHeaders()
         });
         if (!res.ok) throw new Error("Không thể tải lịch sử.");
         const data = await res.json();
-        
+
         if (data.length === 0) {
             tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Không có lịch sử xuất file.</td></tr>`;
             return;
         }
-        
+
         tbody.innerHTML = "";
         const user = JSON.parse(localStorage.getItem("vnpost_user") || "{}");
         const showUser = user.role === "admin";
-        
+
         data.forEach(item => {
             const tr = document.createElement("tr");
             const time = new Date(item.export_time).toLocaleString("vi-VN");
             const statusClass = item.status === "success" ? "badge badge-success" : "badge badge-counter";
             const statusText = item.status === "success" ? "Thành công" : item.status;
-            
+
             tr.innerHTML = `
                 <td>${time}</td>
                 <td class="td-history-user" style="display: ${showUser ? 'table-cell' : 'none'};">${item.username || 'N/A'}</td>
@@ -1651,43 +1860,43 @@ async function loadHistoryList() {
     }
 }
 
-window.downloadHistoryFile = function(historyId) {
+window.downloadHistoryFile = function (historyId) {
     const token = localStorage.getItem("vnpost_token");
     window.open(`${API_BASE_DINHVI}/api/history/${historyId}/download?authorization=Bearer ${token}`);
 };
 
 let detailHistoryId = null;
-window.viewHistoryDetail = async function(historyId) {
+window.viewHistoryDetail = async function (historyId) {
     detailHistoryId = historyId;
     const modal = document.getElementById("history-detail-modal");
     const tbody = document.getElementById("detail-modal-table-tbody");
     tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted">Đang tải chi tiết bưu gửi...</td></tr>`;
-    
+
     document.getElementById("detail-export-time").textContent = "-";
     document.getElementById("detail-export-user").textContent = "-";
     document.getElementById("detail-export-qty").textContent = "-";
     document.getElementById("detail-export-file").textContent = "-";
-    
+
     modal.style.display = "flex";
-    
+
     try {
         const res = await fetch(`${API_BASE_DINHVI}/api/history/${historyId}/items`, {
             headers: getHeaders()
         });
         if (!res.ok) throw new Error("Không thể tải chi tiết.");
         const data = await res.json();
-        
+
         const timeStr = data.length > 0 && data[0].export_time ? new Date(data[0].export_time).toLocaleString("vi-VN") : "-";
         document.getElementById("detail-export-time").textContent = timeStr;
         document.getElementById("detail-export-user").textContent = data.length > 0 ? (data[0].username || "N/A") : "-";
         document.getElementById("detail-export-qty").textContent = `${data.length} bưu gửi`;
         document.getElementById("detail-export-file").textContent = data.length > 0 ? (data[0].file_name || "Excel Export") : "-";
-        
+
         if (data.length === 0) {
             tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted">Không tìm thấy bưu gửi nào.</td></tr>`;
             return;
         }
-        
+
         tbody.innerHTML = "";
         data.forEach(item => {
             const tr = document.createElement("tr");
@@ -1704,7 +1913,7 @@ window.viewHistoryDetail = async function(historyId) {
             } catch (_) {
                 detailsHtml = item.data_json;
             }
-            
+
             tr.innerHTML = `
                 <td style="font-family: var(--font-mono); font-weight: 700; width: 150px;">${item.tracking_code}</td>
                 <td>${detailsHtml || '<span class="text-muted">Không có dữ liệu chi tiết</span>'}</td>
@@ -1720,29 +1929,29 @@ document.getElementById("history-search-form").addEventListener("submit", async 
     e.preventDefault();
     const q = document.getElementById("history-search-input").value.trim();
     if (!q) return;
-    
+
     const resultsContainer = document.getElementById("search-results-container");
     resultsContainer.style.display = "block";
     resultsContainer.innerHTML = `<div class="text-muted">Đang tìm kiếm bưu gửi ${q}...</div>`;
-    
+
     try {
         const res = await fetch(`${API_BASE_DINHVI}/api/history/search?code=${q}`, {
             headers: getHeaders()
         });
         if (!res.ok) throw new Error("Lỗi tìm kiếm.");
         const data = await res.json();
-        
+
         if (data.length === 0) {
             resultsContainer.innerHTML = `<div class="text-muted" style="padding: 12px; background: var(--bg-secondary); border-radius: 8px;">Không tìm thấy bưu gửi "${q}" trong lịch sử.</div>`;
             return;
         }
-        
+
         resultsContainer.innerHTML = "";
         data.forEach(item => {
             const div = document.createElement("div");
             div.className = "search-item-card";
             const time = new Date(item.export_time).toLocaleString("vi-VN");
-            
+
             let detailsGrid = "";
             try {
                 const info = JSON.parse(item.data_json);
@@ -1757,7 +1966,7 @@ document.getElementById("history-search-form").addEventListener("submit", async 
             } catch (_) {
                 detailsGrid = `<div class="text-muted">${item.data_json}</div>`;
             }
-            
+
             div.innerHTML = `
                 <div class="search-item-header">
                     <span class="search-item-code">${item.tracking_code}</span>
@@ -1796,7 +2005,7 @@ if (cookieForm) {
         e.preventDefault();
         const cookieVal = document.getElementById("settings-cookie-input").value.trim();
         cookieAlert.style.display = "none";
-        
+
         try {
             const res = await fetch("/api/user/settings", {
                 method: "POST",
@@ -1808,16 +2017,16 @@ if (cookieForm) {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "Không thể lưu Cookie.");
-            
+
             cookieAlert.className = "alert success";
             cookieAlert.textContent = "Đã lưu Cookie thành công!";
             cookieAlert.style.display = "block";
             document.getElementById("settings-cookie-input").value = "";
-            
+
             const user = JSON.parse(localStorage.getItem("vnpost_user") || "{}");
             user.hasVnpostCookie = true;
             localStorage.setItem("vnpost_user", JSON.stringify(user));
-            
+
         } catch (err) {
             cookieAlert.className = "alert danger";
             cookieAlert.textContent = err.message;
@@ -1834,7 +2043,7 @@ if (passwordForm) {
         e.preventDefault();
         const newPass = document.getElementById("settings-new-password").value;
         const confirmPass = document.getElementById("settings-confirm-password").value;
-        
+
         passwordAlert.style.display = "none";
         if (newPass !== confirmPass) {
             passwordAlert.className = "alert danger";
@@ -1842,7 +2051,7 @@ if (passwordForm) {
             passwordAlert.style.display = "block";
             return;
         }
-        
+
         try {
             const res = await fetch("/api/user/settings", {
                 method: "POST",
@@ -1854,7 +2063,7 @@ if (passwordForm) {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "Không thể đổi mật khẩu.");
-            
+
             passwordAlert.className = "alert success";
             passwordAlert.textContent = "Đổi mật khẩu thành công!";
             passwordAlert.style.display = "block";
@@ -1876,26 +2085,26 @@ if (passwordForm) {
 async function loadUsersList() {
     const tbody = document.getElementById("users-table-tbody");
     tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Đang tải danh sách tài khoản...</td></tr>`;
-    
+
     try {
         const res = await fetch("/api/admin/users", {
             headers: getHeaders()
         });
         if (!res.ok) throw new Error("Không thể tải danh sách tài khoản.");
         const data = await res.json();
-        
+
         if (data.length === 0) {
             tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Không có tài khoản người dùng nào.</td></tr>`;
             return;
         }
-        
+
         tbody.innerHTML = "";
         data.forEach(user => {
             const tr = document.createElement("tr");
             const roleBadge = user.role === "admin" ? "badge badge-success" : "badge badge-primary";
             const roleText = user.role === "admin" ? "Admin" : "Nhân viên";
             const vnpostUserText = user.vnpost_username ? `<code style="font-size: 13px; color: var(--accent-emerald); font-weight: bold;">${user.vnpost_username}</code>` : `<span class="text-muted" style="font-size: 13px;">Chưa cấu hình</span>`;
-            
+
             tr.innerHTML = `
                 <td style="font-weight: 700;">${user.username}</td>
                 <td>${vnpostUserText}</td>
@@ -1907,10 +2116,10 @@ async function loadUsersList() {
                     <button class="btn btn-danger btn-sm btn-delete-user"><i class="fa-solid fa-trash"></i> Xóa</button>
                 </td>
             `;
-            
+
             tr.querySelector(".btn-edit-user").addEventListener("click", () => openEditUserModal(user));
             tr.querySelector(".btn-delete-user").addEventListener("click", () => deleteUserAccount(user.id));
-            
+
             tbody.appendChild(tr);
         });
     } catch (err) {
@@ -1966,7 +2175,7 @@ function parsePastedData(rawText) {
             }
         });
     }
-    
+
     if (users.length === 0) {
         const lines = rawText.split("\n");
         lines.forEach(line => {
@@ -1984,7 +2193,7 @@ function parsePastedData(rawText) {
             }
         });
     }
-    
+
     if (users.length === 0) {
         const lines = rawText.split("\n");
         lines.forEach(line => {
@@ -1998,7 +2207,7 @@ function parsePastedData(rawText) {
             }
         });
     }
-    
+
     const seen = new Set();
     return users.filter(u => {
         if (seen.has(u.username)) return false;
@@ -2014,16 +2223,16 @@ btnProcessPasted.addEventListener("click", () => {
         showToast("Vui lòng dán dữ liệu bôi đen từ trang BCCP trước.", "warning");
         return;
     }
-    
+
     parsedImportUsers = parsePastedData(rawText);
-    
+
     if (parsedImportUsers.length === 0) {
         showToast("Không tìm thấy tài khoản nào trong dữ liệu dán. Hãy kiểm tra lại định dạng.", "warning");
         importPreviewWrapper.style.display = "none";
         btnSubmitImport.disabled = true;
         return;
     }
-    
+
     // Render preview
     importPreviewTbody.innerHTML = "";
     parsedImportUsers.forEach((user, index) => {
@@ -2036,11 +2245,11 @@ btnProcessPasted.addEventListener("click", () => {
         `;
         importPreviewTbody.appendChild(tr);
     });
-    
+
     document.getElementById("import-detected-count").textContent = `Tìm thấy ${parsedImportUsers.length} tài khoản`;
     importPreviewWrapper.style.display = "block";
     btnSubmitImport.disabled = false;
-    
+
     showToast(`Đã bóc tách thành công ${parsedImportUsers.length} tài khoản.`, "success");
 });
 
@@ -2054,14 +2263,14 @@ importSelectAll.addEventListener("change", (e) => {
 btnSubmitImport.addEventListener("click", async () => {
     const selectedUsers = [];
     const rows = importPreviewTbody.querySelectorAll("tr");
-    
+
     rows.forEach(row => {
         const cb = row.querySelector(".import-user-check");
         if (cb && cb.checked) {
             const idx = parseInt(cb.getAttribute("data-idx"));
             const concurrencyInput = row.querySelector(".import-user-concurrency");
             const concurrencyVal = concurrencyInput ? parseInt(concurrencyInput.value) || 3 : 3;
-            
+
             selectedUsers.push({
                 username: parsedImportUsers[idx].username,
                 role: "staff",
@@ -2071,15 +2280,15 @@ btnSubmitImport.addEventListener("click", async () => {
             });
         }
     });
-    
+
     if (selectedUsers.length === 0) {
         showToast("Vui lòng chọn ít nhất 1 tài khoản để nhập.", "warning");
         return;
     }
-    
+
     btnSubmitImport.disabled = true;
     btnSubmitImport.textContent = "Đang đồng bộ...";
-    
+
     try {
         const res = await fetch("/api/admin/import-users", {
             method: "POST",
@@ -2089,10 +2298,10 @@ btnSubmitImport.addEventListener("click", async () => {
             },
             body: JSON.stringify({ users: selectedUsers })
         });
-        
+
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "Đồng bộ thất bại.");
-        
+
         showToast(data.message, "success");
         importModal.style.display = "none";
         loadUsersList();
@@ -2124,7 +2333,7 @@ document.getElementById("btn-open-create-user-modal").addEventListener("click", 
     userModal.style.display = "flex";
 });
 
-window.openEditUserModal = function(user) {
+window.openEditUserModal = function (user) {
     document.getElementById("user-modal-title").textContent = `Chỉnh sửa tài khoản: ${user.username}`;
     document.getElementById("user-modal-id").value = user.id;
     document.getElementById("user-modal-username").value = user.username;
@@ -2155,15 +2364,15 @@ userModalForm.addEventListener("submit", async (e) => {
     const concurrency = parseInt(document.getElementById("user-modal-concurrency").value);
     const vnpostUsername = document.getElementById("user-modal-vnpost-username").value.trim();
     const vnpostPassword = document.getElementById("user-modal-vnpost-password").value;
-    
+
     userAlert.style.display = "none";
-    
+
     const isEdit = id !== "";
     const url = isEdit ? `/api/admin/users/${id}` : "/api/admin/users";
     const method = isEdit ? "PUT" : "POST";
-    
-    const body = { 
-        role, 
+
+    const body = {
+        role,
         concurrency_limit: concurrency,
         vnpost_username: vnpostUsername,
         vnpost_password: vnpostPassword
@@ -2174,7 +2383,7 @@ userModalForm.addEventListener("submit", async (e) => {
     } else if (password.trim() !== "") {
         body.password = password;
     }
-    
+
     try {
         const res = await fetch(url, {
             method: method,
@@ -2186,10 +2395,10 @@ userModalForm.addEventListener("submit", async (e) => {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "Không thể thực hiện tác vụ.");
-        
+
         userModal.style.display = "none";
         loadUsersList();
-        
+
         // If editing the currently logged-in user, refresh their info in localStorage!
         const currentUser = JSON.parse(localStorage.getItem("vnpost_user") || "{}");
         if (isEdit && parseInt(id) === currentUser.id) {
@@ -2197,7 +2406,7 @@ userModalForm.addEventListener("submit", async (e) => {
             localStorage.setItem("vnpost_user", JSON.stringify(currentUser));
             loadSessionsStatus();
         }
-        
+
         userAlert.className = "alert success";
         userAlert.textContent = isEdit ? "Cập nhật tài khoản thành công!" : "Tạo tài khoản thành công!";
         userAlert.style.display = "block";
@@ -2206,7 +2415,7 @@ userModalForm.addEventListener("submit", async (e) => {
     }
 });
 
-window.deleteUserAccount = async function(id) {
+window.deleteUserAccount = async function (id) {
     if (!confirm("Bạn có chắc chắn muốn xóa tài khoản này không? Tác vụ này không thể khôi phục.")) return;
     userAlert.style.display = "none";
     try {
@@ -2216,7 +2425,7 @@ window.deleteUserAccount = async function(id) {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "Không thể xóa tài khoản.");
-        
+
         loadUsersList();
         userAlert.className = "alert success";
         userAlert.textContent = "Đã xóa tài khoản thành công.";
@@ -2242,21 +2451,21 @@ async function init() {
         loadLoginCaptcha();
         return;
     }
-    
+
     // Check if stored JWT token is valid
     try {
         const res = await fetch("/api/auth/me", {
             headers: { "Authorization": `Bearer ${token}` }
         });
         if (!res.ok) throw new Error();
-        
+
         const data = await res.json();
         localStorage.setItem("vnpost_user", JSON.stringify(data));
         showApp(data);
         initSettingsView();
-        
+
         await initDashboard();
-        
+
     } catch (err) {
         localStorage.removeItem("vnpost_token");
         localStorage.removeItem("vnpost_user");
@@ -2272,15 +2481,19 @@ async function initDashboard() {
     document.getElementById("threshold-7").value = localStorage.getItem("default_thresh_7") || "";
     document.getElementById("threshold-14").value = localStorage.getItem("default_thresh_14") || "";
     document.getElementById("threshold-total").value = localStorage.getItem("default_thresh_total") || "";
-    
+
     // Set visual filter-active classes
     document.querySelectorAll(".threshold-inputs input").forEach(el => checkFilterActive(el));
 
     await updateStatus();
     await loadFilters();
     await loadSummary();
+    await loadMatrixConfig();
+    loadColumnConfig();
+    renderColumnConfigUI();
+    renderDetailedHeader();
     await loadDetailed();
-    
+
     // Initialize Matrix Quick Config Popover Modal
     initMatrixTotalQuickConfig();
 }
@@ -2291,14 +2504,14 @@ function initMatrixTotalQuickConfig() {
     const btnCloseMatrixTotalModal = document.getElementById("btn-close-matrix-total-modal");
     const btnCancelMatrixTotalModal = document.getElementById("btn-cancel-matrix-total-modal");
     const btnSaveMatrixTotalModal = document.getElementById("btn-save-matrix-total-modal");
-    
+
     const modalCfgCol3 = document.getElementById("modal-cfg-col-3");
     const modalCfgCol5 = document.getElementById("modal-cfg-col-5");
     const modalCfgCol7 = document.getElementById("modal-cfg-col-7");
     const modalCfgCol14 = document.getElementById("modal-cfg-col-14");
-    
+
     if (!headerTotal || !matrixTotalModal) return;
-    
+
     // Open Modal
     headerTotal.addEventListener("click", () => {
         const savedColsStr = localStorage.getItem("matrix_total_columns");
@@ -2306,23 +2519,23 @@ function initMatrixTotalQuickConfig() {
         if (savedColsStr) {
             try {
                 savedCols = JSON.parse(savedColsStr);
-            } catch(e) {}
+            } catch (e) { }
         }
         if (modalCfgCol3) modalCfgCol3.checked = savedCols.includes("≥3 ngày");
         if (modalCfgCol5) modalCfgCol5.checked = savedCols.includes("≥5 ngày");
         if (modalCfgCol7) modalCfgCol7.checked = savedCols.includes("≥7 ngày");
         if (modalCfgCol14) modalCfgCol14.checked = savedCols.includes("≥14 ngày");
-        
+
         matrixTotalModal.style.display = "flex";
     });
-    
+
     const closeModal = () => {
         matrixTotalModal.style.display = "none";
     };
-    
+
     if (btnCloseMatrixTotalModal) btnCloseMatrixTotalModal.addEventListener("click", closeModal);
     if (btnCancelMatrixTotalModal) btnCancelMatrixTotalModal.addEventListener("click", closeModal);
-    
+
     // Save Quick Config
     if (btnSaveMatrixTotalModal) {
         btnSaveMatrixTotalModal.addEventListener("click", () => {
@@ -2331,14 +2544,14 @@ function initMatrixTotalQuickConfig() {
             if (modalCfgCol5 && modalCfgCol5.checked) selectedCols.push("≥5 ngày");
             if (modalCfgCol7 && modalCfgCol7.checked) selectedCols.push("≥7 ngày");
             if (modalCfgCol14 && modalCfgCol14.checked) selectedCols.push("≥14 ngày");
-            
+
             if (selectedCols.length === 0) {
                 showToast("Phải chọn ít nhất một cột để tính tổng tồn.", "warning");
                 return;
             }
-            
+
             localStorage.setItem("matrix_total_columns", JSON.stringify(selectedCols));
-            
+
             // Sync with system settings checkboxes if visible
             const cfgCol3 = document.getElementById("cfg-col-3");
             const cfgCol5 = document.getElementById("cfg-col-5");
@@ -2348,14 +2561,14 @@ function initMatrixTotalQuickConfig() {
             if (cfgCol5) cfgCol5.checked = selectedCols.includes("≥5 ngày");
             if (cfgCol7) cfgCol7.checked = selectedCols.includes("≥7 ngày");
             if (cfgCol14) cfgCol14.checked = selectedCols.includes("≥14 ngày");
-            
+
             closeModal();
-            
+
             // Re-render Pivot Matrix instantly
             if (cachedSummaryData) {
                 renderSummary(cachedSummaryData);
             }
-            
+
             showToast("Cập nhật cột tính tổng tồn thành công.", "success");
         });
     }
@@ -2395,7 +2608,7 @@ function initSettingsView() {
     // Load saved config
     const savedBatchSize = localStorage.getItem("export_batch_size") || "50";
     if (cfgBatchSize) cfgBatchSize.value = savedBatchSize;
-    
+
     if (cfgThresh3) cfgThresh3.value = localStorage.getItem("default_thresh_3") || "";
     if (cfgThresh7) cfgThresh7.value = localStorage.getItem("default_thresh_7") || "";
     if (cfgThresh14) cfgThresh14.value = localStorage.getItem("default_thresh_14") || "";
@@ -2411,7 +2624,7 @@ function initSettingsView() {
     if (savedColsStr) {
         try {
             savedCols = JSON.parse(savedColsStr);
-        } catch(e) {}
+        } catch (e) { }
     }
     if (cfgCol3) cfgCol3.checked = savedCols.includes("≥3 ngày");
     if (cfgCol5) cfgCol5.checked = savedCols.includes("≥5 ngày");
@@ -2468,7 +2681,7 @@ function initSettingsView() {
                 showToast("Số lượng bưu gửi trên 1 lô phải nằm trong khoảng 1 - 500.", "warning");
                 return;
             }
-            
+
             const thresh3Val = cfgThresh3.value.trim();
             const thresh7Val = cfgThresh7.value.trim();
             const thresh14Val = cfgThresh14.value.trim();
@@ -2480,7 +2693,7 @@ function initSettingsView() {
             if (cfgCol5 && cfgCol5.checked) selectedCols.push("≥5 ngày");
             if (cfgCol7 && cfgCol7.checked) selectedCols.push("≥7 ngày");
             if (cfgCol14 && cfgCol14.checked) selectedCols.push("≥14 ngày");
-            
+
             if (selectedCols.length === 0) {
                 showToast("Phải chọn ít nhất một cột để tính tổng tồn.", "warning");
                 return;
@@ -2492,16 +2705,16 @@ function initSettingsView() {
             localStorage.setItem("default_thresh_14", thresh14Val);
             localStorage.setItem("default_thresh_total", threshTotalVal);
             localStorage.setItem("matrix_total_columns", JSON.stringify(selectedCols));
-            
+
             // Instantly sync dashboard fields so the user doesn't need to refresh
             document.getElementById("threshold-3").value = thresh3Val;
             document.getElementById("threshold-7").value = thresh7Val;
             document.getElementById("threshold-14").value = thresh14Val;
             document.getElementById("threshold-total").value = threshTotalVal;
-            
+
             // Sync filter-active classes on dashboard inputs
             document.querySelectorAll(".threshold-inputs input").forEach(el => checkFilterActive(el));
-            
+
             // Apply new highlight levels
             applyHighlights();
 

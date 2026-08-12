@@ -251,6 +251,10 @@ const btnRefresh = document.getElementById("btn-refresh");
 const btnTriggerCrawl = document.getElementById("btn-trigger-crawl");
 const btnExportExcel = document.getElementById("btn-export-excel");
 const btnLocateExcel = document.getElementById("btn-locate-excel");
+const btnOpenColumnConfig = document.getElementById("btn-open-column-config");
+const btnCloseColumnConfig = document.getElementById("btn-close-column-config");
+const btnSaveColumnConfig = document.getElementById("btn-save-column-config");
+const columnConfigModal = document.getElementById("column-config-modal");
 
 const statusDot = document.getElementById("status-dot");
 const statusText = document.getElementById("status-text");
@@ -918,6 +922,23 @@ btnTriggerCrawl.addEventListener("click", (e) => {
 });
 
 btnExportExcel.addEventListener("click", exportExcel);
+
+if (btnOpenColumnConfig) {
+    btnOpenColumnConfig.addEventListener("click", () => {
+        renderColumnConfigUI();
+        columnConfigModal.style.display = "flex";
+    });
+}
+if (btnCloseColumnConfig) {
+    btnCloseColumnConfig.addEventListener("click", () => {
+        columnConfigModal.style.display = "none";
+    });
+}
+if (btnSaveColumnConfig) {
+    btnSaveColumnConfig.addEventListener("click", () => {
+        columnConfigModal.style.display = "none";
+    });
+}
 
 // Locate all filtered items
 if (btnLocateExcel) {
