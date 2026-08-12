@@ -279,8 +279,8 @@ def get_detailed(
         params = []
         
         if search:
-            where_clauses.append("(item_code LIKE %s OR pos_name LIKE %s)")
-            params.extend([f"%{search}%", f"%{search}%"])
+            where_clauses.append("(item_code LIKE %s OR postman_name LIKE %s OR pos_name LIKE %s)")
+            params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
             
         if pos_name:
             pos_list = [p.strip() for p in pos_name.split(",") if p.strip()]
@@ -327,6 +327,8 @@ def get_detailed(
         
         # Query total count
         count_sql = f"SELECT COUNT(*) FROM detailed_report_staging WHERE {where_str}"
+        logger.info(f"count_sql: {count_sql}")
+        logger.info(f"params: {params}")
         
         # Query paginated rows
         # MS SQL Server uses OFFSET / FETCH NEXT for pagination (supported in SQL Server 2012+)

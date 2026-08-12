@@ -247,18 +247,30 @@ def save_detailed_data(rows):
     conn = get_connection(with_db=True, autocommit=False)
     try:
         with conn.cursor() as cursor:
-            # Step 1: Clear all previous crawl data in a transaction
-            cursor.execute("TRUNCATE TABLE detailed_report_staging")
+            # Step 1: Prepare temp table (no lock on main table)
+            # Using #temp table which is local to the session and automatically dropped
+            cursor.execute("""
+                IF OBJECT_ID('tempdb..#detailed_report_staging_temp') IS NOT NULL
+                    DROP TABLE #detailed_report_staging_temp;
+                
+                CREATE TABLE #detailed_report_staging_temp (
+                    item_code VARCHAR(50) PRIMARY KEY,
+                    province_ton NVARCHAR(100),
+                    pos_code VARCHAR(50),
+                    pos_name NVARCHAR(200),
+                    dk1 VARCHAR(50),
+                    status_name NVARCHAR(100),
+                    loai_ton NVARCHAR(50),
+                    nhom_kh NVARCHAR(100),
+                    cod_amount DECIMAL(15, 2),
+                    weight DECIMAL(10, 3),
+                    color_code VARCHAR(20),
+                    postman_name NVARCHAR(200),
+                    updated_at DATETIME DEFAULT GETDATE()
+                )
+            """)
             
-            # Step 2: Insert new crawl data (deduplicated by item_code)
-            sql = """
-                INSERT INTO detailed_report_staging (
-                    item_code, province_ton, pos_code, pos_name, dk1, 
-                    status_name, loai_ton, nhom_kh, cod_amount, weight, color_code, postman_name
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            
-            # Deduplicate by item_code (Power BI sometimes returns duplicate barcodes, case-insensitive in SQL Server)
+            # Deduplicate by item_code
             seen_codes = set()
             batch_data = []
             for r in rows:
@@ -272,8 +284,46 @@ def save_detailed_data(rows):
                         code_clean, r['province_ton'], r['pos_code'], r['pos_name'], r['dk1'],
                         r['status_name'], r['loai_ton'], r.get('nhom_kh'), r['cod_amount'], r['weight'], r['color_code'], r.get('postman_name')
                     ))
+                    
+            logger.info(f"Prepared {len(batch_data)} rows for insertion into temp table.")
             
-            cursor.executemany(sql, batch_data)
+            # Bulk insert in chunks to avoid slow executemany over network
+            chunk_size = 500
+            for i in range(0, len(batch_data), chunk_size):
+                chunk = batch_data[i:i + chunk_size]
+                # Each row has 12 parameters
+                row_placeholders = '(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
+                all_placeholders = ', '.join([row_placeholders] * len(chunk))
+                
+                bulk_sql = f"""
+                    INSERT INTO #detailed_report_staging_temp (
+                        item_code, province_ton, pos_code, pos_name, dk1, 
+                        status_name, loai_ton, nhom_kh, cod_amount, weight, color_code, postman_name
+                    ) VALUES {all_placeholders}
+                """
+                
+                # Flatten the chunk of tuples into a single list of parameters
+                flat_params = []
+                for row in chunk:
+                    flat_params.extend(row)
+                    
+                cursor.execute(bulk_sql, tuple(flat_params))
+                
+            logger.info(f"Successfully inserted {len(batch_data)} rows into temp table.")
+            
+            # Step 3: Fast server-side transfer to minimize lock time on main table
+            cursor.execute("TRUNCATE TABLE detailed_report_staging")
+            cursor.execute("""
+                INSERT INTO detailed_report_staging (
+                    item_code, province_ton, pos_code, pos_name, dk1, 
+                    status_name, loai_ton, nhom_kh, cod_amount, weight, color_code, postman_name
+                )
+                SELECT 
+                    item_code, province_ton, pos_code, pos_name, dk1, 
+                    status_name, loai_ton, nhom_kh, cod_amount, weight, color_code, postman_name
+                FROM #detailed_report_staging_temp
+            """)
+            
         conn.commit()
                 
         logger.info(f"Live crawl: replaced staging table with {len(batch_data)} unique rows (from {len(rows)} raw rows).")

@@ -599,7 +599,7 @@ async function loadDetailed() {
         const data = await response.json();
         cachedDetailedData = data;
 
-        totalRecords = data.total_records;
+        totalRecords = data.total;
 
         renderDetailed(data);
 
