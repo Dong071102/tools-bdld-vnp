@@ -339,7 +339,7 @@ def crawl_lamdong_data():
                         
             current_row = new_row
             
-            # Map values to dict keys
+            # Map values to dict keys based on Power BI schema order (G0-G9, M0-M1)
             row_dict = {
                 "province_ton": new_row[0],
                 "pos_code": new_row[1],
@@ -349,10 +349,10 @@ def crawl_lamdong_data():
                 "status_name": new_row[5],
                 "loai_ton": new_row[6],
                 "cod_amount": float(new_row[7]) if new_row[7] is not None else 0.0,
-                "weight": float(new_row[8]) if new_row[8] is not None else 0.0,
-                "color_code": new_row[9],
-                "nhom_kh": new_row[10],
-                "postman_name": new_row[11]
+                "nhom_kh": new_row[8],
+                "postman_name": new_row[9],
+                "weight": float(new_row[10]) if new_row[10] is not None else 0.0,
+                "color_code": new_row[11]
             }
             
             if row_dict["province_ton"] == 'BĐT Lâm Đồng' and row_dict["item_code"]:
