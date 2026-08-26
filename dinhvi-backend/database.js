@@ -3,10 +3,10 @@ import sql from 'mssql';
 let pool;
 
 export async function initDatabase() {
-  const host = process.env.DB_HOST || '10.61.202.116';
+  const host = process.env.DB_HOST || process.env.DB_SERVER || '10.61.200.10';
   const user = process.env.DB_USER || 'sa';
   const password = process.env.DB_PASSWORD || 'Sadmin123';
-  const dbName = process.env.DB_NAME || 'dinhvi_bccp';
+  const dbName = process.env.DB_NAME || 'caw_powerbi_db';
   const port = parseInt(process.env.DB_PORT || '1433', 10);
 
   console.log(`[Database] Đang kết nối tới SQL Server ${host}:${port} (master)...`);

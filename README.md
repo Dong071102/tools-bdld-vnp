@@ -103,11 +103,54 @@ tools-bdld-vnp/
 
 ---
 
-## 🚀 Hướng dẫn deploy trên Portainer (Docker Compose Stack)
+## 🛠️ 4. Danh sách Biến môi trường (Environment Variables)
 
-Sử dụng file `docker-compose.yml` trong repository này để triển khai. Toàn bộ kết nối SQL Server đã được gán mặc định trong cấu hình:
-*   IP: `10.61.202.116`
-*   User: `sa`
-*   Password: `Sadmin123`
-*   Database: `caw_powerbi_db`
-*   Giao diện gộp được mở duy nhất ở cổng **`9999`** (Nginx container tự động điều phối yêu cầu API sang các container backend tương ứng).
+Hệ thống hỗ trợ cấu hình qua file `.env` hoặc truyền trực tiếp vào Docker Container / Portainer Stack Environment.
+
+| Biến môi trường | Dịch vụ áp dụng | Giá trị mặc định | Mô tả chi tiết |
+| :--- | :--- | :--- | :--- |
+| `DB_SERVER` / `DB_HOST` | Crawler & Định vị Backend | `10.61.200.10` | Địa chỉ IP / Hostname của máy chủ SQL Server |
+| `DB_PORT` | Crawler & Định vị Backend | `1433` | Cổng kết nối SQL Server |
+| `DB_USER` | Crawler & Định vị Backend | `sa` | Tài khoản kết nối SQL Server |
+| `DB_PASSWORD` | Crawler & Định vị Backend | `Sadmin123` | Mật khẩu kết nối SQL Server |
+| `DB_NAME` | Crawler & Định vị Backend | `caw_powerbi_db` | Tên Cơ sở dữ liệu SQL Server |
+| `POWERBI_URL` | Crawler Backend | *(Link Lâm Đồng)* | URL Báo cáo Power BI public để tự động bóc tách Token & Resource Key |
+| `POWERBI_QUERY_URL` | Crawler Backend | *(URL query WABI)* | *(Tùy chọn)* URL endpoint query của Power BI API |
+| `POWERBI_RESOURCE_KEY` | Crawler Backend | *(Tự động trích xuất)* | *(Tùy chọn)* Key tài nguyên Power BI |
+| `POWERBI_ACCESS_TOKEN` | Crawler Backend | *(Tự động trích xuất)* | *(Tùy chọn)* Access Token Power BI |
+| `DINHVI_BACKEND_URL` | Crawler Backend | `http://vnp-dinhvi-backend:5000` | URL gọi nội bộ từ Crawler sang Node.js Backend |
+| `CRAWLER_PORT` | Crawler Backend | `8000` | Cổng HTTP của Python FastAPI Service (Internal) |
+| `DINHVI_PORT` | Định vị Backend | `5000` | Cổng HTTP của Node.js Express Service (Internal) |
+| `JWT_SECRET` | Định vị Backend | `vnpost-excel-exporter...` | Chuỗi mã hóa bí mật ký Token xác thực người dùng |
+| `FRONTEND_PORT` | Frontend Nginx | `9999` | Cổng public xuất ra máy host cho giao diện Web Dashboard |
+| `TZ` | Crawler Backend | `Asia/Ho_Chi_Minh` | Múi giờ hệ thống |
+
+---
+
+## 🚀 5. Hướng dẫn deploy trên Portainer & Docker Compose
+
+### 📦 Deploy bằng Docker Compose (Command Line)
+
+1. **Tạo file môi trường:**
+   ```bash
+   cp .env.example .env
+   ```
+2. **Tùy chỉnh biến môi trường:** Mở file `.env` và chỉnh sửa các giá trị (ví dụ: IP SQL Server `DB_SERVER`, link Power BI `POWERBI_URL`, hoặc cổng frontend `FRONTEND_PORT`).
+3. **Khởi chạy hệ thống:**
+   ```bash
+   # Nếu deploy từ Image pre-built (Github Container Registry):
+   docker-compose up -d
+
+   # Nếu tự build từ Source Code local:
+   docker-compose -f docker-compose.local.yml up -d --build
+   ```
+
+### 🐳 Deploy trên Portainer Stack
+
+1. Truy cập Portainer -> **Stacks** -> Chọn **Add stack**.
+2. Đặt tên cho Stack (ví dụ: `tools-bdld-vnp`).
+3. Dán nội dung file [`docker-compose.yml`](file:///e:/tools-bdld-vnp/docker-compose.yml) vào khung Web editor.
+4. Tại mục **Environment variables**, bạn có thể thêm/thay đổi các biến tùy chỉnh (ví dụ `DB_SERVER`, `POWERBI_URL`, `FRONTEND_PORT`).
+5. Nhấn **Deploy the stack**.
+6. Truy cập Dashboard hệ thống tại địa chỉ: `http://<IP_SERVER>:9999`.
+

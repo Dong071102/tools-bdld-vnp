@@ -2,17 +2,55 @@ import requests
 import json
 import uuid
 import logging
+import os
+import base64
+import urllib.parse
 from database import save_detailed_data
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Query configuration constants
-URL = "https://wabi-east-asia-a-primary-api.analysis.windows.net/public/reports/querydata?synchronous=true"
+# Default Power BI fallback credentials
+DEFAULT_URL = "https://wabi-east-asia-a-primary-api.analysis.windows.net/public/reports/querydata?synchronous=true"
+DEFAULT_RESOURCE_KEY = "412fbc7f-bec0-4b32-a6a4-7925d8c0eb9d"
+DEFAULT_ACCESS_TOKEN = "eyJrIjoiNDEyZmJjN2YtYmVjMC00YjMyLWE2YTQtNzkyNWQ4YzBlYjlkIiwidCI6IjRkNmQ2N2FlLTViNTUtNDJhYy05ZGFhLTkzOTk3Yzc3YTg3YSIsImMiOjEwfQ=="
 
-# Resource credentials from the public URL
-RESOURCE_KEY = "412fbc7f-bec0-4b32-a6a4-7925d8c0eb9d"
-ACCESS_TOKEN = "eyJrIjoiNDEyZmJjN2YtYmVjMC00YjMyLWE2YTQtNzkyNWQ4YzBlYjlkIiwidCI6IjRkNmQ2N2FlLTViNTUtNDJhYy05ZGFhLTkzOTk3Yzc3YTg3YSIsImMiOjEwfQ=="
+def get_pbi_credentials():
+    """
+    Retrieve Power BI credentials dynamically from environment variables.
+    If POWERBI_URL is set (e.g. https://app.powerbi.com/view?r=eyJr...),
+    it automatically extracts ACCESS_TOKEN and decodes RESOURCE_KEY from it.
+    """
+    pbi_url_env = os.environ.get("POWERBI_URL")
+    resource_key = os.environ.get("POWERBI_RESOURCE_KEY")
+    access_token = os.environ.get("POWERBI_ACCESS_TOKEN")
+
+    if pbi_url_env:
+        try:
+            parsed = urllib.parse.urlparse(pbi_url_env.strip())
+            query_params = urllib.parse.parse_qs(parsed.query)
+            if "r" in query_params:
+                access_token = query_params["r"][0]
+                logger.info("Extracted POWERBI_ACCESS_TOKEN from POWERBI_URL environment variable.")
+        except Exception as e:
+            logger.warning(f"Could not parse POWERBI_URL: {e}")
+
+    if access_token and not resource_key:
+        try:
+            padded_token = access_token + '=' * (-len(access_token) % 4)
+            decoded_bytes = base64.b64decode(padded_token)
+            token_json = json.loads(decoded_bytes.decode('utf-8'))
+            if "k" in token_json:
+                resource_key = token_json["k"]
+                logger.info(f"Extracted POWERBI_RESOURCE_KEY ({resource_key}) from access token.")
+        except Exception as e:
+            logger.warning(f"Could not decode resource_key from access token: {e}")
+
+    final_url = os.environ.get("POWERBI_QUERY_URL", DEFAULT_URL)
+    final_resource_key = resource_key or DEFAULT_RESOURCE_KEY
+    final_access_token = access_token or DEFAULT_ACCESS_TOKEN
+
+    return final_url, final_resource_key, final_access_token
 
 def crawl_lamdong_data():
     """
@@ -21,12 +59,14 @@ def crawl_lamdong_data():
     """
     logger.info("Starting Power BI crawl for BĐT Lâm Đồng with exact dashboard filters...")
     
+    url, resource_key, access_token = get_pbi_credentials()
+
     headers = {
         "Accept": "application/json, text/plain, */*",
         "Content-Type": "application/json;charset=UTF-8",
         "Referer": "https://app.powerbi.com/",
-        "X-PowerBI-User-Access-Token": ACCESS_TOKEN,
-        "X-PowerBI-ResourceKey": RESOURCE_KEY,
+        "X-PowerBI-User-Access-Token": access_token,
+        "X-PowerBI-ResourceKey": resource_key,
         "RequestId": str(uuid.uuid4()),
         "ActivityId": str(uuid.uuid4()),
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -255,7 +295,7 @@ def crawl_lamdong_data():
     }
 
     try:
-        response = requests.post(URL, headers=headers, json=payload, timeout=60)
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
         if response.status_code != 200:
             logger.error(f"Failed to fetch data from Power BI. Status code: {response.status_code}, Response: {response.text}")
             return False

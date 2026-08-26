@@ -7,14 +7,15 @@ services:
     container_name: vnp-crawler-backend
     restart: always
     environment:
-      - DB_SERVER=10.61.200.10
-      - DB_PORT=1433
-      - DB_USER=sa
-      - DB_PASSWORD=Sadmin123
-      - DB_NAME=caw_powerbi_db
-      - PORT=8000
-      - TZ=Asia/Ho_Chi_Minh
-      - DINHVI_BACKEND_URL=http://vnp-dinhvi-backend:5000
+      - DB_SERVER=${DB_SERVER:-10.61.200.10}
+      - DB_PORT=${DB_PORT:-1433}
+      - DB_USER=${DB_USER:-sa}
+      - DB_PASSWORD=${DB_PASSWORD:-Sadmin123}
+      - DB_NAME=${DB_NAME:-caw_powerbi_db}
+      - PORT=${CRAWLER_PORT:-8000}
+      - TZ=${TZ:-Asia/Ho_Chi_Minh}
+      - DINHVI_BACKEND_URL=${DINHVI_BACKEND_URL:-http://vnp-dinhvi-backend:5000}
+      - POWERBI_URL=${POWERBI_URL:-https://app.powerbi.com/view?r=eyJrIjoiNDEyZmJjN2YtYmVjMC00YjMyLWE2YTQtNzkyNWQ4YzBlYjlkIiwidCI6IjRkNmQ2N2FlLTViNTUtNDJhYy05ZGFhLTkzOTk3Yzc3YTg3YSIsImMiOjEwfQ==}
     networks:
       - bdld-vnp-network
 
@@ -24,13 +25,14 @@ services:
     container_name: vnp-dinhvi-backend
     restart: always
     environment:
-      - PORT=5000
-      - JWT_SECRET=vnpost-excel-exporter-jwt-secret-key-2026-dynamic-secure
-      - DB_HOST=10.61.200.10
-      - DB_PORT=1433
-      - DB_USER=sa
-      - DB_PASSWORD=Sadmin123
-      - DB_NAME=caw_powerbi_db
+      - PORT=${DINHVI_PORT:-5000}
+      - JWT_SECRET=${JWT_SECRET:-vnpost-excel-exporter-jwt-secret-key-2026-dynamic-secure}
+      - DB_HOST=${DB_HOST:-${DB_SERVER:-10.61.200.10}}
+      - DB_SERVER=${DB_SERVER:-10.61.200.10}
+      - DB_PORT=${DB_PORT:-1433}
+      - DB_USER=${DB_USER:-sa}
+      - DB_PASSWORD=${DB_PASSWORD:-Sadmin123}
+      - DB_NAME=${DB_NAME:-caw_powerbi_db}
     depends_on:
       - vnp-crawler-backend
     networks:
@@ -42,7 +44,7 @@ services:
     container_name: tools-bdld-vnp-frontend
     restart: always
     ports:
-      - "9999:80"
+      - "${FRONTEND_PORT:-9999}:80"
     depends_on:
       - vnp-dinhvi-backend
     networks:
