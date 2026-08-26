@@ -109,10 +109,10 @@ Hệ thống hỗ trợ cấu hình qua file `.env` hoặc truyền trực tiế
 
 | Biến môi trường | Dịch vụ áp dụng | Giá trị mặc định | Mô tả chi tiết |
 | :--- | :--- | :--- | :--- |
-| `DB_SERVER` / `DB_HOST` | Crawler & Định vị Backend | `10.61.200.10` | Địa chỉ IP / Hostname của máy chủ SQL Server |
-| `DB_PORT` | Crawler & Định vị Backend | `1433` | Cổng kết nối SQL Server |
-| `DB_USER` | Crawler & Định vị Backend | `sa` | Tài khoản kết nối SQL Server |
-| `DB_PASSWORD` | Crawler & Định vị Backend | `Sadmin123` | Mật khẩu kết nối SQL Server |
+| `DB_SERVER` / `DB_HOST` | Crawler & Định vị Backend | `server_buu_dien` | Địa chỉ IP / Hostname của máy chủ SQL Server |
+| `DB_PORT` | Crawler & Định vị Backend | `pgsql` | Cổng kết nối SQL Server |
+| `DB_USER` | Crawler & Định vị Backend | `*****` | Tài khoản kết nối SQL Server |
+| `DB_PASSWORD` | Crawler & Định vị Backend | `******` | Mật khẩu kết nối SQL Server |
 | `DB_NAME` | Crawler & Định vị Backend | `caw_powerbi_db` | Tên Cơ sở dữ liệu SQL Server |
 | `POWERBI_URL` | Crawler Backend | *(Link Lâm Đồng)* | URL Báo cáo Power BI public để tự động bóc tách Token & Resource Key |
 | `POWERBI_QUERY_URL` | Crawler Backend | *(URL query WABI)* | *(Tùy chọn)* URL endpoint query của Power BI API |
