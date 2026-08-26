@@ -10,10 +10,10 @@ from database import save_detailed_data
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Default Power BI fallback credentials
+# Default Power BI fallback credentials (Updated to new report link)
 DEFAULT_URL = "https://wabi-east-asia-a-primary-api.analysis.windows.net/public/reports/querydata?synchronous=true"
-DEFAULT_RESOURCE_KEY = "412fbc7f-bec0-4b32-a6a4-7925d8c0eb9d"
-DEFAULT_ACCESS_TOKEN = "eyJrIjoiNDEyZmJjN2YtYmVjMC00YjMyLWE2YTQtNzkyNWQ4YzBlYjlkIiwidCI6IjRkNmQ2N2FlLTViNTUtNDJhYy05ZGFhLTkzOTk3Yzc3YTg3YSIsImMiOjEwfQ=="
+DEFAULT_RESOURCE_KEY = "6998fa41-e774-4882-8eb0-da7152cd5ff3"
+DEFAULT_ACCESS_TOKEN = "eyJrIjoiNjk5OGZhNDEtZTc3NC00ODgyLThlYjAtZGE3MTUyY2Q1ZmYzIiwidCI6IjRkNmQ2N2FlLTViNTUtNDJhYy05ZGFhLTkzOTk3Yzc3YTg3YSIsImMiOjEwfQ=="
 
 def get_pbi_credentials():
     """
@@ -27,17 +27,19 @@ def get_pbi_credentials():
 
     if pbi_url_env:
         try:
-            parsed = urllib.parse.urlparse(pbi_url_env.strip())
+            clean_url = urllib.parse.unquote(pbi_url_env.strip())
+            parsed = urllib.parse.urlparse(clean_url)
             query_params = urllib.parse.parse_qs(parsed.query)
             if "r" in query_params:
-                access_token = query_params["r"][0]
+                access_token = query_params["r"][0].strip()
                 logger.info("Extracted POWERBI_ACCESS_TOKEN from POWERBI_URL environment variable.")
         except Exception as e:
             logger.warning(f"Could not parse POWERBI_URL: {e}")
 
     if access_token and not resource_key:
         try:
-            padded_token = access_token + '=' * (-len(access_token) % 4)
+            clean_token = urllib.parse.unquote(access_token).strip()
+            padded_token = clean_token + '=' * (-len(clean_token) % 4)
             decoded_bytes = base64.b64decode(padded_token)
             token_json = json.loads(decoded_bytes.decode('utf-8'))
             if "k" in token_json:

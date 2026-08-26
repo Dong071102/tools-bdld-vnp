@@ -15,7 +15,7 @@ services:
       - PORT=${CRAWLER_PORT:-8000}
       - TZ=${TZ:-Asia/Ho_Chi_Minh}
       - DINHVI_BACKEND_URL=${DINHVI_BACKEND_URL:-http://vnp-dinhvi-backend:5000}
-      - POWERBI_URL=${POWERBI_URL:-https://app.powerbi.com/view?r=eyJrIjoiNDEyZmJjN2YtYmVjMC00YjMyLWE2YTQtNzkyNWQ4YzBlYjlkIiwidCI6IjRkNmQ2N2FlLTViNTUtNDJhYy05ZGFhLTkzOTk3Yzc3YTg3YSIsImMiOjEwfQ==}
+      - POWERBI_URL=${POWERBI_URL:-https://app.powerbi.com/view?r=eyJrIjoiNjk5OGZhNDEtZTc3NC00ODgyLThlYjAtZGE3MTUyY2Q1ZmYzIiwidCI6IjRkNmQ2N2FlLTViNTUtNDJhYy05ZGFhLTkzOTk3Yzc3YTg3YSIsImMiOjEwfQ==}
     networks:
       - bdld-vnp-network
 
