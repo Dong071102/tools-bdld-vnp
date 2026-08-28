@@ -260,6 +260,92 @@ def get_summary(nhom_kh: str = ""):
     finally:
         conn.close()
 
+@app.get("/api/bckt-summary")
+def get_bckt_summary():
+    """Get breakdown and detailed item list for Khai thác / KTC1 / BCKT / KHL / GD offices."""
+    conn = get_connection(with_db=True)
+    try:
+        with conn.cursor() as cursor:
+            # 1. Grouped matrix per BCKT office
+            cursor.execute("""
+                SELECT pos_name, pos_code, loai_ton, COUNT(*) as qty, SUM(cod_amount) as cod
+                FROM detailed_report_staging
+                WHERE province_ton = N'BĐT Lâm Đồng'
+                  AND (
+                      pos_name LIKE N'%KTC1%' 
+                      OR pos_name LIKE N'%BCKT%' 
+                      OR pos_name LIKE N'%KHL%' 
+                      OR pos_name LIKE N'%GD%' 
+                      OR pos_name LIKE N'%Hub%'
+                      OR pos_name LIKE N'%KT %'
+                  )
+                GROUP BY pos_name, pos_code, loai_ton
+                ORDER BY pos_name
+            """)
+            raw_summary = cursor.fetchall()
+            
+            summary_dict = {}
+            for r in raw_summary:
+                pos = r[0].strip()
+                code = r[1]
+                cat = r[2]
+                qty = r[3]
+                cod = float(r[4]) if r[4] is not None else 0.0
+                
+                if pos not in summary_dict:
+                    summary_dict[pos] = {
+                        "pos_name": pos,
+                        "pos_code": code,
+                        "total_qty": 0,
+                        "total_cod": 0.0,
+                        "matrix": {}
+                    }
+                summary_dict[pos]["matrix"][cat] = {"qty": qty, "cod": cod}
+                summary_dict[pos]["total_qty"] += qty
+                summary_dict[pos]["total_cod"] += cod
+
+            # 2. Detailed item list
+            cursor.execute("""
+                SELECT item_code, pos_name, pos_code, loai_ton, status_name, cod_amount, weight, nhom_kh, postman_name
+                FROM detailed_report_staging
+                WHERE province_ton = N'BĐT Lâm Đồng'
+                  AND (
+                      pos_name LIKE N'%KTC1%' 
+                      OR pos_name LIKE N'%BCKT%' 
+                      OR pos_name LIKE N'%KHL%' 
+                      OR pos_name LIKE N'%GD%' 
+                      OR pos_name LIKE N'%Hub%'
+                      OR pos_name LIKE N'%KT %'
+                  )
+                ORDER BY cod_amount DESC, pos_name ASC
+            """)
+            raw_items = cursor.fetchall()
+            items_list = []
+            for r in raw_items:
+                items_list.append({
+                    "item_code": r[0],
+                    "pos_name": r[1],
+                    "pos_code": r[2],
+                    "loai_ton": r[3],
+                    "status_name": r[4],
+                    "cod_amount": float(r[5]) if r[5] is not None else 0.0,
+                    "weight": float(r[6]) if r[6] is not None else 0.0,
+                    "nhom_kh": r[7],
+                    "postman_name": r[8]
+                })
+
+            return {
+                "bckt_summary": list(summary_dict.values()),
+                "bckt_items": items_list,
+                "total_bckt_qty": len(items_list),
+                "total_bckt_cod": sum(i["cod_amount"] for i in items_list)
+            }
+    except Exception as e:
+        logger.error(f"Error fetching bckt summary: {e}")
+        return {"bckt_summary": [], "bckt_items": [], "total_bckt_qty": 0, "total_bckt_cod": 0.0}
+    finally:
+        conn.close()
+
 @app.get("/api/detailed")
 def get_detailed(
     page: int = 1,

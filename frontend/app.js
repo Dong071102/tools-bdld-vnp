@@ -2768,18 +2768,200 @@ function initSettingsView() {
     }
 }
 
-// Data Note Modal Event Listeners
+// Data Note Modal Event Listeners & BCKT Detail Explorer
+let cachedBcktData = null;
+
+async function loadBcktSummaryData() {
+    const summaryTbody = document.getElementById("bckt-summary-tbody");
+    const itemsTbody = document.getElementById("bckt-items-tbody");
+    const badge = document.getElementById("bckt-summary-total-badge");
+    const posSelect = document.getElementById("bckt-items-filter-pos");
+
+    if (!summaryTbody || !itemsTbody) return;
+
+    try {
+        summaryTbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted" style="padding: 20px;">Đang tải dữ liệu khai thác...</td></tr>';
+        itemsTbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding: 20px;">Đang tải danh sách mã bưu gửi...</td></tr>';
+
+        const res = await fetch("/api/bckt-summary");
+        const data = await res.json();
+        cachedBcktData = data;
+
+        if (badge) {
+            badge.textContent = `Tổng: ${formatNumber(data.total_bckt_qty || 0)} đơn (${formatCurrency(data.total_bckt_cod || 0)})`;
+        }
+
+        // Render Tab 1: BCKT Summary Table
+        const summaryList = data.bckt_summary || [];
+
+        if (summaryList.length === 0) {
+            summaryTbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted" style="padding: 20px;">Không có dữ liệu khai thác đọng.</td></tr>';
+        } else {
+            let summaryHtml = "";
+            if (posSelect) {
+                posSelect.innerHTML = '<option value="">-- Tất cả bưu cục --</option>';
+            }
+
+            summaryList.forEach((item, idx) => {
+                const m = item.matrix || {};
+                const q3 = m["≥3 ngày"]?.qty || 0;
+                const q4 = m["≥4 ngày"]?.qty || 0;
+                const q5 = m["≥5 ngày"]?.qty || 0;
+                const q7 = m["≥7 ngày"]?.qty || 0;
+                const q14 = m["≥14 ngày"]?.qty || 0;
+
+                summaryHtml += `
+                    <tr>
+                        <td class="text-center">${idx + 1}</td>
+                        <td style="font-weight: 600; color: var(--text-primary);">${item.pos_name}</td>
+                        <td class="text-center" style="font-family: var(--font-mono); font-size: 12px;">${item.pos_code}</td>
+                        <td class="text-right">${formatNumber(q3)}</td>
+                        <td class="text-right">${formatNumber(q4)}</td>
+                        <td class="text-right">${formatNumber(q5)}</td>
+                        <td class="text-right">${formatNumber(q7)}</td>
+                        <td class="text-right">${formatNumber(q14)}</td>
+                        <td class="text-right text-bold" style="color: var(--accent-emerald);">${formatNumber(item.total_qty)}</td>
+                        <td class="text-right text-bold">${formatCurrency(item.total_cod)}</td>
+                    </tr>
+                `;
+
+                if (posSelect) {
+                    const opt = document.createElement("option");
+                    opt.value = item.pos_name;
+                    opt.textContent = `${item.pos_name} (${item.total_qty} đơn)`;
+                    posSelect.appendChild(opt);
+                }
+            });
+            summaryTbody.innerHTML = summaryHtml;
+        }
+
+        // Render Tab 2: BCKT Items List
+        renderBcktItemsList();
+
+    } catch (e) {
+        console.error("Error loading BCKT summary:", e);
+        summaryTbody.innerHTML = '<tr><td colspan="10" class="text-center text-red" style="padding: 20px;">Lỗi tải dữ liệu khai thác.</td></tr>';
+    }
+}
+
+function renderBcktItemsList() {
+    const itemsTbody = document.getElementById("bckt-items-tbody");
+    const countBadge = document.getElementById("bckt-items-count-badge");
+    const searchVal = (document.getElementById("bckt-items-search")?.value || "").toLowerCase().trim();
+    const filterPos = document.getElementById("bckt-items-filter-pos")?.value || "";
+    const filterCat = document.getElementById("bckt-items-filter-cat")?.value || "";
+
+    if (!itemsTbody || !cachedBcktData) return;
+
+    let items = cachedBcktData.bckt_items || [];
+
+    if (searchVal) {
+        items = items.filter(i => 
+            (i.item_code && i.item_code.toLowerCase().includes(searchVal)) ||
+            (i.pos_name && i.pos_name.toLowerCase().includes(searchVal)) ||
+            (i.status_name && i.status_name.toLowerCase().includes(searchVal))
+        );
+    }
+
+    if (filterPos) {
+        items = items.filter(i => i.pos_name === filterPos);
+    }
+
+    if (filterCat) {
+        items = items.filter(i => i.loai_ton === filterCat);
+    }
+
+    if (countBadge) {
+        countBadge.textContent = `Hiển thị: ${formatNumber(items.length)} đơn`;
+    }
+
+    if (items.length === 0) {
+        itemsTbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding: 20px;">Không tìm thấy mã bưu gửi phù hợp.</td></tr>';
+        return;
+    }
+
+    let itemsHtml = "";
+    items.slice(0, 300).forEach((item, idx) => {
+        itemsHtml += `
+            <tr>
+                <td class="text-center">${idx + 1}</td>
+                <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-emerald); font-size: 13px;">${item.item_code}</td>
+                <td style="font-weight: 500;">${item.pos_name}</td>
+                <td class="text-center"><span class="badge" style="background: var(--accent-emerald-light); color: var(--accent-emerald); font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;">${item.loai_ton}</span></td>
+                <td>${item.status_name || ''}</td>
+                <td class="text-right font-mono text-bold">${formatCurrency(item.cod_amount)}</td>
+                <td class="text-center" style="font-size: 12px; color: var(--text-muted);">${item.nhom_kh || ''}</td>
+            </tr>
+        `;
+    });
+
+    if (items.length > 300) {
+        itemsHtml += `<tr><td colspan="7" class="text-center text-muted" style="padding: 10px; font-style: italic;">Hiển thị 300 / ${items.length} bưu gửi. Dùng bộ lọc để thu hẹp kết quả.</td></tr>`;
+    }
+
+    itemsTbody.innerHTML = itemsHtml;
+}
+
 function initDataNoteModal() {
     const btnOpen = document.getElementById("btn-open-data-note-modal");
     const modal = document.getElementById("data-note-modal");
     const btnCloseHeader = document.getElementById("btn-close-data-note-modal");
     const btnCloseFooter = document.getElementById("btn-close-data-note-modal-footer");
 
+    const tabBtnSummary = document.getElementById("bckt-tab-btn-summary");
+    const tabBtnItems = document.getElementById("bckt-tab-btn-items");
+    const tabBtnInfo = document.getElementById("bckt-tab-btn-info");
+
+    const panelSummary = document.getElementById("bckt-panel-summary");
+    const panelItems = document.getElementById("bckt-panel-items");
+    const panelInfo = document.getElementById("bckt-panel-info");
+
     if (!modal) return;
 
+    const switchTab = (activeTab) => {
+        [tabBtnSummary, tabBtnItems, tabBtnInfo].forEach(btn => {
+            if (!btn) return;
+            btn.style.background = "var(--bg-primary)";
+            btn.style.color = "var(--text-secondary)";
+            btn.style.border = "1px solid var(--border-color)";
+        });
+        [panelSummary, panelItems, panelInfo].forEach(p => {
+            if (p) p.style.display = "none";
+        });
+
+        if (activeTab === "summary") {
+            if (tabBtnSummary) {
+                tabBtnSummary.style.background = "var(--accent-emerald)";
+                tabBtnSummary.style.color = "white";
+                tabBtnSummary.style.border = "none";
+            }
+            if (panelSummary) panelSummary.style.display = "block";
+        } else if (activeTab === "items") {
+            if (tabBtnItems) {
+                tabBtnItems.style.background = "var(--accent-emerald)";
+                tabBtnItems.style.color = "white";
+                tabBtnItems.style.border = "none";
+            }
+            if (panelItems) panelItems.style.display = "block";
+        } else if (activeTab === "info") {
+            if (tabBtnInfo) {
+                tabBtnInfo.style.background = "var(--accent-emerald)";
+                tabBtnInfo.style.color = "white";
+                tabBtnInfo.style.border = "none";
+            }
+            if (panelInfo) panelInfo.style.display = "block";
+        }
+    };
+
+    if (tabBtnSummary) tabBtnSummary.addEventListener("click", () => switchTab("summary"));
+    if (tabBtnItems) tabBtnItems.addEventListener("click", () => switchTab("items"));
+    if (tabBtnInfo) tabBtnInfo.addEventListener("click", () => switchTab("info"));
+
     if (btnOpen) {
-        btnOpen.addEventListener("click", () => {
+        btnOpen.addEventListener("click", async () => {
             modal.style.display = "flex";
+            switchTab("summary");
+            await loadBcktSummaryData();
         });
     }
 
@@ -2793,6 +2975,15 @@ function initDataNoteModal() {
     modal.addEventListener("click", (e) => {
         if (e.target === modal) closeModal();
     });
+
+    // Add filter input listeners for BCKT Items List
+    const searchInput = document.getElementById("bckt-items-search");
+    const posSelect = document.getElementById("bckt-items-filter-pos");
+    const catSelect = document.getElementById("bckt-items-filter-cat");
+
+    if (searchInput) searchInput.addEventListener("input", renderBcktItemsList);
+    if (posSelect) posSelect.addEventListener("change", renderBcktItemsList);
+    if (catSelect) catSelect.addEventListener("change", renderBcktItemsList);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
