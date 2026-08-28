@@ -155,6 +155,7 @@ def get_filters():
                 SELECT DISTINCT loai_ton,
                     CASE 
                         WHEN loai_ton = N'≥3 ngày' THEN 3
+                        WHEN loai_ton = N'≥4 ngày' THEN 4
                         WHEN loai_ton = N'≥5 ngày' THEN 5
                         WHEN loai_ton = N'≥7 ngày' THEN 7
                         WHEN loai_ton = N'≥14 ngày' THEN 14
@@ -321,7 +322,7 @@ def get_detailed(
         sort_dir_str = "DESC" if sort_dir.lower() == "desc" else "ASC"
         
         if sort_col == "loai_ton":
-            order_by_clause = f"CASE WHEN loai_ton = N'≥3 ngày' THEN 3 WHEN loai_ton = N'≥5 ngày' THEN 5 WHEN loai_ton = N'≥7 ngày' THEN 7 WHEN loai_ton = N'≥14 ngày' THEN 14 ELSE 99 END {sort_dir_str}"
+            order_by_clause = f"CASE WHEN loai_ton = N'≥3 ngày' THEN 3 WHEN loai_ton = N'≥4 ngày' THEN 4 WHEN loai_ton = N'≥5 ngày' THEN 5 WHEN loai_ton = N'≥7 ngày' THEN 7 WHEN loai_ton = N'≥14 ngày' THEN 14 ELSE 99 END {sort_dir_str}"
         else:
             order_by_clause = f"{sort_col} {sort_dir_str}"
         
@@ -443,7 +444,7 @@ def get_export(
         sort_dir_str = "DESC" if sort_dir.lower() == "desc" else "ASC"
         
         if sort_col == "loai_ton":
-            order_by_clause = f"CASE WHEN loai_ton = N'≥3 ngày' THEN 3 WHEN loai_ton = N'≥5 ngày' THEN 5 WHEN loai_ton = N'≥7 ngày' THEN 7 WHEN loai_ton = N'≥14 ngày' THEN 14 ELSE 99 END {sort_dir_str}"
+            order_by_clause = f"CASE WHEN loai_ton = N'≥3 ngày' THEN 3 WHEN loai_ton = N'≥4 ngày' THEN 4 WHEN loai_ton = N'≥5 ngày' THEN 5 WHEN loai_ton = N'≥7 ngày' THEN 7 WHEN loai_ton = N'≥14 ngày' THEN 14 ELSE 99 END {sort_dir_str}"
         else:
             order_by_clause = f"{sort_col} {sort_dir_str}"
         

@@ -328,7 +328,7 @@ async function loadFilters() {
         }
 
         // Populate Categories into Custom Multiselect with fixed list
-        const fixedLoaiTons = ["≥3 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
+        const fixedLoaiTons = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
         if (multiselectCategoryList) {
             multiselectCategoryList.innerHTML = '';
             fixedLoaiTons.forEach(cat => {
@@ -421,7 +421,7 @@ async function loadSummary() {
 function renderSummary(data) {
     if (!data || !data.matrix) return;
 
-    const categories = ["≥3 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
+    const categories = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
 
     // Load config for Matrix Total Columns
     const savedColsStr = localStorage.getItem("matrix_total_columns");
@@ -440,6 +440,7 @@ function renderSummary(data) {
 
     let colTotals = {
         "≥3 ngày": { qty: 0, cod: 0.0 },
+        "≥4 ngày": { qty: 0, cod: 0.0 },
         "≥5 ngày": { qty: 0, cod: 0.0 },
         "≥7 ngày": { qty: 0, cod: 0.0 },
         "≥14 ngày": { qty: 0, cod: 0.0 },
@@ -1087,6 +1088,7 @@ if (matrixTbody) {
 // Highlight Logic
 function applyHighlights() {
     const thresh3 = parseInt(document.getElementById("threshold-3").value) || 0;
+    const thresh4 = parseInt(document.getElementById("threshold-4")?.value) || 0;
     const thresh5 = parseInt(document.getElementById("threshold-5").value) || 0;
     const thresh7 = parseInt(document.getElementById("threshold-7").value) || 0;
     const thresh14 = parseInt(document.getElementById("threshold-14").value) || 0;
@@ -1107,6 +1109,7 @@ function applyHighlights() {
 
             let isHighlighted = false;
             if (cat === "≥3 ngày" && thresh3 > 0 && qty >= thresh3) isHighlighted = true;
+            else if (cat === "≥4 ngày" && thresh4 > 0 && qty >= thresh4) isHighlighted = true;
             else if (cat === "≥5 ngày" && thresh5 > 0 && qty >= thresh5) isHighlighted = true;
             else if (cat === "≥7 ngày" && thresh7 > 0 && qty >= thresh7) isHighlighted = true;
             else if (cat === "≥14 ngày" && thresh14 > 0 && qty >= thresh14) isHighlighted = true;
@@ -1145,17 +1148,21 @@ document.querySelectorAll(".threshold-inputs input, .filters-container select, .
 });
 
 // Add threshold input event listeners
-document.getElementById("threshold-3").addEventListener("input", applyHighlights);
-document.getElementById("threshold-7").addEventListener("input", applyHighlights);
-document.getElementById("threshold-14").addEventListener("input", applyHighlights);
-document.getElementById("threshold-total").addEventListener("input", applyHighlights);
+if (document.getElementById("threshold-3")) document.getElementById("threshold-3").addEventListener("input", applyHighlights);
+if (document.getElementById("threshold-4")) document.getElementById("threshold-4").addEventListener("input", applyHighlights);
+if (document.getElementById("threshold-5")) document.getElementById("threshold-5").addEventListener("input", applyHighlights);
+if (document.getElementById("threshold-7")) document.getElementById("threshold-7").addEventListener("input", applyHighlights);
+if (document.getElementById("threshold-14")) document.getElementById("threshold-14").addEventListener("input", applyHighlights);
+if (document.getElementById("threshold-total")) document.getElementById("threshold-total").addEventListener("input", applyHighlights);
 
 // Reset all filters and highlights
 document.getElementById("btn-reset-filters").addEventListener("click", () => {
-    document.getElementById("threshold-3").value = "";
-    document.getElementById("threshold-7").value = "";
-    document.getElementById("threshold-14").value = "";
-    document.getElementById("threshold-total").value = "";
+    if (document.getElementById("threshold-3")) document.getElementById("threshold-3").value = "";
+    if (document.getElementById("threshold-4")) document.getElementById("threshold-4").value = "";
+    if (document.getElementById("threshold-5")) document.getElementById("threshold-5").value = "";
+    if (document.getElementById("threshold-7")) document.getElementById("threshold-7").value = "";
+    if (document.getElementById("threshold-14")) document.getElementById("threshold-14").value = "";
+    if (document.getElementById("threshold-total")) document.getElementById("threshold-total").value = "";
 
     document.querySelectorAll(".pos-checkbox").forEach(cb => cb.checked = false);
     if (multiselectPosLabel) multiselectPosLabel.textContent = "-- Tất cả bưu cục --";
@@ -2477,10 +2484,12 @@ async function init() {
 
 async function initDashboard() {
     // Populate default highlight thresholds from localStorage if set
-    document.getElementById("threshold-3").value = localStorage.getItem("default_thresh_3") || "";
-    document.getElementById("threshold-7").value = localStorage.getItem("default_thresh_7") || "";
-    document.getElementById("threshold-14").value = localStorage.getItem("default_thresh_14") || "";
-    document.getElementById("threshold-total").value = localStorage.getItem("default_thresh_total") || "";
+    if (document.getElementById("threshold-3")) document.getElementById("threshold-3").value = localStorage.getItem("default_thresh_3") || "";
+    if (document.getElementById("threshold-4")) document.getElementById("threshold-4").value = localStorage.getItem("default_thresh_4") || "";
+    if (document.getElementById("threshold-5")) document.getElementById("threshold-5").value = localStorage.getItem("default_thresh_5") || "";
+    if (document.getElementById("threshold-7")) document.getElementById("threshold-7").value = localStorage.getItem("default_thresh_7") || "";
+    if (document.getElementById("threshold-14")) document.getElementById("threshold-14").value = localStorage.getItem("default_thresh_14") || "";
+    if (document.getElementById("threshold-total")) document.getElementById("threshold-total").value = localStorage.getItem("default_thresh_total") || "";
 
     // Set visual filter-active classes
     document.querySelectorAll(".threshold-inputs input").forEach(el => checkFilterActive(el));
@@ -2506,6 +2515,7 @@ function initMatrixTotalQuickConfig() {
     const btnSaveMatrixTotalModal = document.getElementById("btn-save-matrix-total-modal");
 
     const modalCfgCol3 = document.getElementById("modal-cfg-col-3");
+    const modalCfgCol4 = document.getElementById("modal-cfg-col-4");
     const modalCfgCol5 = document.getElementById("modal-cfg-col-5");
     const modalCfgCol7 = document.getElementById("modal-cfg-col-7");
     const modalCfgCol14 = document.getElementById("modal-cfg-col-14");
@@ -2522,6 +2532,7 @@ function initMatrixTotalQuickConfig() {
             } catch (e) { }
         }
         if (modalCfgCol3) modalCfgCol3.checked = savedCols.includes("≥3 ngày");
+        if (modalCfgCol4) modalCfgCol4.checked = savedCols.includes("≥4 ngày");
         if (modalCfgCol5) modalCfgCol5.checked = savedCols.includes("≥5 ngày");
         if (modalCfgCol7) modalCfgCol7.checked = savedCols.includes("≥7 ngày");
         if (modalCfgCol14) modalCfgCol14.checked = savedCols.includes("≥14 ngày");
@@ -2541,6 +2552,7 @@ function initMatrixTotalQuickConfig() {
         btnSaveMatrixTotalModal.addEventListener("click", () => {
             const selectedCols = [];
             if (modalCfgCol3 && modalCfgCol3.checked) selectedCols.push("≥3 ngày");
+            if (modalCfgCol4 && modalCfgCol4.checked) selectedCols.push("≥4 ngày");
             if (modalCfgCol5 && modalCfgCol5.checked) selectedCols.push("≥5 ngày");
             if (modalCfgCol7 && modalCfgCol7.checked) selectedCols.push("≥7 ngày");
             if (modalCfgCol14 && modalCfgCol14.checked) selectedCols.push("≥14 ngày");
@@ -2554,10 +2566,12 @@ function initMatrixTotalQuickConfig() {
 
             // Sync with system settings checkboxes if visible
             const cfgCol3 = document.getElementById("cfg-col-3");
+            const cfgCol4 = document.getElementById("cfg-col-4");
             const cfgCol5 = document.getElementById("cfg-col-5");
             const cfgCol7 = document.getElementById("cfg-col-7");
             const cfgCol14 = document.getElementById("cfg-col-14");
             if (cfgCol3) cfgCol3.checked = selectedCols.includes("≥3 ngày");
+            if (cfgCol4) cfgCol4.checked = selectedCols.includes("≥4 ngày");
             if (cfgCol5) cfgCol5.checked = selectedCols.includes("≥5 ngày");
             if (cfgCol7) cfgCol7.checked = selectedCols.includes("≥7 ngày");
             if (cfgCol14) cfgCol14.checked = selectedCols.includes("≥14 ngày");
@@ -2599,6 +2613,8 @@ function initSettingsView() {
     const frmDinhviConfig = document.getElementById("frm-dinhvi-config");
     const cfgBatchSize = document.getElementById("cfg-batch-size");
     const cfgThresh3 = document.getElementById("cfg-thresh-3");
+    const cfgThresh4 = document.getElementById("cfg-thresh-4");
+    const cfgThresh5 = document.getElementById("cfg-thresh-5");
     const cfgThresh7 = document.getElementById("cfg-thresh-7");
     const cfgThresh14 = document.getElementById("cfg-thresh-14");
     const cfgThreshTotal = document.getElementById("cfg-thresh-total");
@@ -2610,12 +2626,15 @@ function initSettingsView() {
     if (cfgBatchSize) cfgBatchSize.value = savedBatchSize;
 
     if (cfgThresh3) cfgThresh3.value = localStorage.getItem("default_thresh_3") || "";
+    if (cfgThresh4) cfgThresh4.value = localStorage.getItem("default_thresh_4") || "";
+    if (cfgThresh5) cfgThresh5.value = localStorage.getItem("default_thresh_5") || "";
     if (cfgThresh7) cfgThresh7.value = localStorage.getItem("default_thresh_7") || "";
     if (cfgThresh14) cfgThresh14.value = localStorage.getItem("default_thresh_14") || "";
     if (cfgThreshTotal) cfgThreshTotal.value = localStorage.getItem("default_thresh_total") || "";
 
     // Load Matrix total columns config
     const cfgCol3 = document.getElementById("cfg-col-3");
+    const cfgCol4 = document.getElementById("cfg-col-4");
     const cfgCol5 = document.getElementById("cfg-col-5");
     const cfgCol7 = document.getElementById("cfg-col-7");
     const cfgCol14 = document.getElementById("cfg-col-14");
@@ -2627,6 +2646,7 @@ function initSettingsView() {
         } catch (e) { }
     }
     if (cfgCol3) cfgCol3.checked = savedCols.includes("≥3 ngày");
+    if (cfgCol4) cfgCol4.checked = savedCols.includes("≥4 ngày");
     if (cfgCol5) cfgCol5.checked = savedCols.includes("≥5 ngày");
     if (cfgCol7) cfgCol7.checked = savedCols.includes("≥7 ngày");
     if (cfgCol14) cfgCol14.checked = savedCols.includes("≥14 ngày");
@@ -2682,14 +2702,17 @@ function initSettingsView() {
                 return;
             }
 
-            const thresh3Val = cfgThresh3.value.trim();
-            const thresh7Val = cfgThresh7.value.trim();
-            const thresh14Val = cfgThresh14.value.trim();
-            const threshTotalVal = cfgThreshTotal.value.trim();
+            const thresh3Val = cfgThresh3 ? cfgThresh3.value.trim() : "";
+            const thresh4Val = cfgThresh4 ? cfgThresh4.value.trim() : "";
+            const thresh5Val = cfgThresh5 ? cfgThresh5.value.trim() : "";
+            const thresh7Val = cfgThresh7 ? cfgThresh7.value.trim() : "";
+            const thresh14Val = cfgThresh14 ? cfgThresh14.value.trim() : "";
+            const threshTotalVal = cfgThreshTotal ? cfgThreshTotal.value.trim() : "";
 
             // Save Matrix total columns config
             const selectedCols = [];
             if (cfgCol3 && cfgCol3.checked) selectedCols.push("≥3 ngày");
+            if (cfgCol4 && cfgCol4.checked) selectedCols.push("≥4 ngày");
             if (cfgCol5 && cfgCol5.checked) selectedCols.push("≥5 ngày");
             if (cfgCol7 && cfgCol7.checked) selectedCols.push("≥7 ngày");
             if (cfgCol14 && cfgCol14.checked) selectedCols.push("≥14 ngày");
@@ -2701,16 +2724,20 @@ function initSettingsView() {
 
             localStorage.setItem("export_batch_size", batchSizeVal);
             localStorage.setItem("default_thresh_3", thresh3Val);
+            localStorage.setItem("default_thresh_4", thresh4Val);
+            localStorage.setItem("default_thresh_5", thresh5Val);
             localStorage.setItem("default_thresh_7", thresh7Val);
             localStorage.setItem("default_thresh_14", thresh14Val);
             localStorage.setItem("default_thresh_total", threshTotalVal);
             localStorage.setItem("matrix_total_columns", JSON.stringify(selectedCols));
 
             // Instantly sync dashboard fields so the user doesn't need to refresh
-            document.getElementById("threshold-3").value = thresh3Val;
-            document.getElementById("threshold-7").value = thresh7Val;
-            document.getElementById("threshold-14").value = thresh14Val;
-            document.getElementById("threshold-total").value = threshTotalVal;
+            if (document.getElementById("threshold-3")) document.getElementById("threshold-3").value = thresh3Val;
+            if (document.getElementById("threshold-4")) document.getElementById("threshold-4").value = thresh4Val;
+            if (document.getElementById("threshold-5")) document.getElementById("threshold-5").value = thresh5Val;
+            if (document.getElementById("threshold-7")) document.getElementById("threshold-7").value = thresh7Val;
+            if (document.getElementById("threshold-14")) document.getElementById("threshold-14").value = thresh14Val;
+            if (document.getElementById("threshold-total")) document.getElementById("threshold-total").value = threshTotalVal;
 
             // Sync filter-active classes on dashboard inputs
             document.querySelectorAll(".threshold-inputs input").forEach(el => checkFilterActive(el));

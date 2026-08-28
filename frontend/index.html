@@ -144,6 +144,10 @@
                                     <input type="number" id="threshold-3" placeholder="0" min="0">
                                 </div>
                                 <div class="threshold-group">
+                                    <label>4 ngày</label>
+                                    <input type="number" id="threshold-4" placeholder="0" min="0">
+                                </div>
+                                <div class="threshold-group">
                                     <label>5 ngày</label>
                                     <input type="number" id="threshold-5" placeholder="0" min="0">
                                 </div>
@@ -179,6 +183,7 @@
                                         <th rowspan="2" style="width: 50px;" class="text-center">STT</th>
                                         <th rowspan="2" class="sortable-matrix" data-sort="pos_name">Bưu cục phát <i class="fa-solid fa-sort"></i></th>
                                         <th colspan="2" class="col-group text-center">≥3 ngày</th>
+                                        <th colspan="2" class="col-group text-center">≥4 ngày</th>
                                         <th colspan="2" class="col-group text-center">≥5 ngày</th>
                                         <th colspan="2" class="col-group text-center">≥7 ngày</th>
                                         <th colspan="2" class="col-group text-center">≥14 ngày</th>
@@ -195,6 +200,8 @@
                                     <tr>
                                         <th class="sortable-matrix" data-sort="qty-≥3 ngày">SL BG <i class="fa-solid fa-sort"></i></th>
                                         <th class="sortable-matrix" data-sort="cod-≥3 ngày">COD (đ) <i class="fa-solid fa-sort"></i></th>
+                                        <th class="sortable-matrix" data-sort="qty-≥4 ngày">SL BG <i class="fa-solid fa-sort"></i></th>
+                                        <th class="sortable-matrix" data-sort="cod-≥4 ngày">COD (đ) <i class="fa-solid fa-sort"></i></th>
                                         <th class="sortable-matrix" data-sort="qty-≥5 ngày">SL BG <i class="fa-solid fa-sort"></i></th>
                                         <th class="sortable-matrix" data-sort="cod-≥5 ngày">COD (đ) <i class="fa-solid fa-sort"></i></th>
                                         <th class="sortable-matrix" data-sort="qty-≥7 ngày">SL BG <i class="fa-solid fa-sort"></i></th>
@@ -207,7 +214,7 @@
                                 </thead>
                                 <tbody id="matrix-tbody">
                                     <tr>
-                                        <td colspan="11" class="text-center text-muted">Đang tải dữ liệu tổng hợp...</td>
+                                        <td colspan="15" class="text-center text-muted">Đang tải dữ liệu tổng hợp...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -592,6 +599,10 @@
                                     <input type="number" id="cfg-thresh-3" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
                                 </div>
                                 <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" for="cfg-thresh-4" style="font-weight: 600; margin-bottom: 6px; display: block;">Tồn ≥ 4 ngày</label>
+                                    <input type="number" id="cfg-thresh-4" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
                                     <label class="form-label" for="cfg-thresh-5" style="font-weight: 600; margin-bottom: 6px; display: block;">Tồn ≥ 5 ngày</label>
                                     <input type="number" id="cfg-thresh-5" class="input-field" min="0" placeholder="0" style="width: 100%; padding: 10px 14px; font-size: 15px; border-radius: 8px;">
                                 </div>
@@ -614,6 +625,9 @@
                             <div style="display: flex; gap: 16px; background: var(--bg-primary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
                                 <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--text-primary); user-select: none;">
                                     <input type="checkbox" id="cfg-col-3" value="≥3 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥3 ngày
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--text-primary); user-select: none;">
+                                    <input type="checkbox" id="cfg-col-4" value="≥4 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥4 ngày
                                 </label>
                                 <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--text-primary); user-select: none;">
                                     <input type="checkbox" id="cfg-col-5" value="≥5 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥5 ngày
@@ -800,6 +814,9 @@
                 <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; background: var(--bg-primary); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color);">
                     <label style="display: flex; align-items: center; gap: 10px; font-size: 14.5px; cursor: pointer; color: var(--text-primary); user-select: none;">
                         <input type="checkbox" id="modal-cfg-col-3" value="≥3 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥3 ngày
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 10px; font-size: 14.5px; cursor: pointer; color: var(--text-primary); user-select: none;">
+                        <input type="checkbox" id="modal-cfg-col-4" value="≥4 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥4 ngày
                     </label>
                     <label style="display: flex; align-items: center; gap: 10px; font-size: 14.5px; cursor: pointer; color: var(--text-primary); user-select: none;">
                         <input type="checkbox" id="modal-cfg-col-5" value="≥5 ngày" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);"> Cột ≥5 ngày
