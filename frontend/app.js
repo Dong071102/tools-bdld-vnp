@@ -2982,6 +2982,8 @@ function initDataNoteModal() {
         }
     };
 
+    window.openDataNoteModal = openModal;
+
     if (btnOpen) {
         btnOpen.addEventListener("click", async (e) => {
             if (e) e.preventDefault();
