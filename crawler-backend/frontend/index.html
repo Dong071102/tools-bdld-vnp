@@ -941,6 +941,15 @@
                         <li style="margin-bottom: 8px;"><strong>Bưu gửi luân chuyển thuộc Phân vùng Khu vực 34:</strong> Bao gồm bưu gửi liên kết luân chuyển với <em>KTC1 Đắk Nông, KTC1 Bình Thuận...</em></li>
                     </ul>
 
+                    <h4 style="font-weight: 600; margin: 16px 0 10px 0; color: var(--text-primary); font-size: 14px;"><i class="fa-solid fa-user-gear" style="color: #b45309;"></i> Giải thích trường hợp bưu gửi "Đã giao cho bưu tá" nhưng thiếu tên Bưu tá:</h4>
+                    <div style="background: rgba(245, 158, 11, 0.08); padding: 12px 14px; border-radius: 8px; border: 1px solid rgba(245, 158, 11, 0.25); color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+                        <ul style="margin: 0; padding-left: 18px;">
+                            <li style="margin-bottom: 6px;"><strong>Phân công theo lô chưa chọn tên bưu tá:</strong> Khi bưu cục tạo chuyến phát hoặc phân công theo lô trên phần mềm VNPost BCCP, trạng thái bưu gửi đổi thành <em>"Đã giao cho bưu tá"</em> nhưng nhân viên giao nhận chưa chọn tên bưu tá phụ trách từ danh mục nhân sự.</li>
+                            <li style="margin-bottom: 6px;"><strong>Đồng bộ nguyên bản từ Power BI:</strong> Hệ thống trích xuất snapshot dữ liệu gốc tại thời điểm Tổng công ty chốt báo cáo. Nếu dữ liệu nguồn chưa ghi nhận tên bưu tá, Dashboard sẽ phản ánh trung thực giá trị để trống (`NULL`).</li>
+                            <li><strong>Chuyển ca phát / Tồn đọng dài ngày (≥5 ngày, ≥14 ngày):</strong> Bưu gửi phát không thành công quay về kho chờ bàn giao ca mới, thông tin bưu tá cũ đã gỡ nhưng ca mới chưa kịp nhận gán.</li>
+                        </ul>
+                    </div>
+
                     <div style="background: var(--accent-emerald-light); padding: 12px 14px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3); color: var(--accent-emerald); font-size: 13px;">
                         <i class="fa-solid fa-shield-check"></i> <strong>Ý nghĩa:</strong> Đảm bảo kiểm soát 100% dòng bưu gửi tồn đọng trên toàn tỉnh, không bỏ sót các bưu gửi đọng ở khâu khai thác trung chuyển mang giá trị COD lớn.
                     </div>
