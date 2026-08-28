@@ -425,17 +425,24 @@ function renderSummary(data) {
 
     // Load config for Matrix Total Columns
     const savedColsStr = localStorage.getItem("matrix_total_columns");
-    let targetCats = ["≥7 ngày", "≥14 ngày"]; // Default fallback
+    let targetCats = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"]; // Default fallback: sum all categories
     if (savedColsStr) {
         try {
-            targetCats = JSON.parse(savedColsStr);
+            const parsed = JSON.parse(savedColsStr);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                targetCats = parsed;
+            }
         } catch (e) { }
     }
 
     // Update the "Toàn tỉnh" column header label dynamically to show selected columns
     const headerSublabel = document.getElementById("matrix-header-sublabel");
     if (headerSublabel) {
-        headerSublabel.textContent = `(${targetCats.join(', ')})`;
+        if (targetCats.length === categories.length && categories.every(c => targetCats.includes(c))) {
+            headerSublabel.textContent = "(Tất cả cột)";
+        } else {
+            headerSublabel.textContent = `(${targetCats.join(', ')})`;
+        }
     }
 
     let colTotals = {
@@ -2525,10 +2532,13 @@ function initMatrixTotalQuickConfig() {
     // Open Modal
     headerTotal.addEventListener("click", () => {
         const savedColsStr = localStorage.getItem("matrix_total_columns");
-        let savedCols = ["≥7 ngày", "≥14 ngày"];
+        let savedCols = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
         if (savedColsStr) {
             try {
-                savedCols = JSON.parse(savedColsStr);
+                const parsed = JSON.parse(savedColsStr);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    savedCols = parsed;
+                }
             } catch (e) { }
         }
         if (modalCfgCol3) modalCfgCol3.checked = savedCols.includes("≥3 ngày");
@@ -2639,10 +2649,13 @@ function initSettingsView() {
     const cfgCol7 = document.getElementById("cfg-col-7");
     const cfgCol14 = document.getElementById("cfg-col-14");
     const savedColsStr = localStorage.getItem("matrix_total_columns");
-    let savedCols = ["≥7 ngày", "≥14 ngày"];
+    let savedCols = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
     if (savedColsStr) {
         try {
-            savedCols = JSON.parse(savedColsStr);
+            const parsed = JSON.parse(savedColsStr);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                savedCols = parsed;
+            }
         } catch (e) { }
     }
     if (cfgCol3) cfgCol3.checked = savedCols.includes("≥3 ngày");
