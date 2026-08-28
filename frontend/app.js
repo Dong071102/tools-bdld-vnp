@@ -350,8 +350,8 @@ async function loadFilters() {
             });
         }
 
-        // Populate Nhom KH into Custom Multiselect with fixed list
-        const fixedNhomKhs = ["KH Mới", "KH Shoppe", "KH Thường", "KH Tiktok"];
+        // Populate Nhom KH into Custom Multiselect
+        const fixedNhomKhs = (data.nhom_khs && data.nhom_khs.length > 0) ? data.nhom_khs : ["KH Mới", "KH Shopee", "KH Thường", "KH Tiktok", "KH Trọng điểm"];
         if (multiselectNhomKhList) {
             multiselectNhomKhList.innerHTML = '';
             fixedNhomKhs.forEach(nhom => {
@@ -2972,13 +2972,31 @@ function initDataNoteModal() {
     if (tabBtnItems) tabBtnItems.addEventListener("click", () => switchTab("items"));
     if (tabBtnInfo) tabBtnInfo.addEventListener("click", () => switchTab("info"));
 
-    if (btnOpen) {
-        btnOpen.addEventListener("click", async () => {
-            modal.style.display = "flex";
+    const openModal = async () => {
+        const modalEl = document.getElementById("data-note-modal");
+        if (modalEl) {
+            modalEl.style.display = "flex";
+            modalEl.style.zIndex = "99999";
             switchTab("summary");
             await loadBcktSummaryData();
+        }
+    };
+
+    if (btnOpen) {
+        btnOpen.addEventListener("click", async (e) => {
+            if (e) e.preventDefault();
+            await openModal();
         });
     }
+
+    // Global document-level click delegation fallback to ensure button is ALWAYS interactive
+    document.addEventListener("click", async (e) => {
+        const targetBtn = e.target.closest("#btn-open-data-note-modal");
+        if (targetBtn) {
+            e.preventDefault();
+            await openModal();
+        }
+    });
 
     const closeModal = () => {
         modal.style.display = "none";
