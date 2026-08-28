@@ -2768,4 +2768,34 @@ function initSettingsView() {
     }
 }
 
-document.addEventListener("DOMContentLoaded", init);
+// Data Note Modal Event Listeners
+function initDataNoteModal() {
+    const btnOpen = document.getElementById("btn-open-data-note-modal");
+    const modal = document.getElementById("data-note-modal");
+    const btnCloseHeader = document.getElementById("btn-close-data-note-modal");
+    const btnCloseFooter = document.getElementById("btn-close-data-note-modal-footer");
+
+    if (!modal) return;
+
+    if (btnOpen) {
+        btnOpen.addEventListener("click", () => {
+            modal.style.display = "flex";
+        });
+    }
+
+    const closeModal = () => {
+        modal.style.display = "none";
+    };
+
+    if (btnCloseHeader) btnCloseHeader.addEventListener("click", closeModal);
+    if (btnCloseFooter) btnCloseFooter.addEventListener("click", closeModal);
+
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal();
+    });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    initDataNoteModal();
+    init();
+});

@@ -136,7 +136,12 @@
                     <!-- Left Panel: Pivot Matrix -->
                     <div class="grid-card matrix-card">
                         <div class="card-header matrix-header">
-                            <h2>- Tổng số lượng tồn -</h2>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <h2 style="margin: 0;">- Tổng số lượng tồn -</h2>
+                                <button type="button" id="btn-open-data-note-modal" title="Xem ghi chú phạm vi dữ liệu API so với bảng phát lẻ" style="padding: 3px 10px; font-size: 12px; border-radius: 16px; border: 1px solid var(--accent-emerald); color: var(--accent-emerald); background: var(--accent-emerald-light); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: var(--transition-spring);">
+                                    <i class="fa-solid fa-circle-info"></i> Ghi chú dữ liệu API
+                                </button>
+                            </div>
                             <div class="threshold-inputs">
                                 <span class="threshold-label"><i class="fa-solid fa-highlighter"></i> Highlight tồn ≥</span>
                                 <div class="threshold-group">
@@ -832,6 +837,36 @@
                     <button type="button" class="btn btn-secondary" id="btn-cancel-matrix-total-modal">Hủy</button>
                     <button type="button" class="btn btn-primary" id="btn-save-matrix-total-modal" style="background: var(--accent-emerald); border-color: var(--accent-emerald);"><i class="fa-solid fa-floppy-disk"></i> Áp dụng</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Note / Comparison Info Modal -->
+    <div id="data-note-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card" style="max-width: 580px; width: 92%; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);">
+            <div class="modal-header" style="background: var(--accent-emerald-light); border-bottom: 1px solid rgba(16, 185, 129, 0.2); padding: 16px 20px;">
+                <h2 style="color: var(--accent-emerald); font-size: 16px; margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-circle-info"></i> Ghi chú Phạm vi Dữ liệu API & Phân loại bổ sung</h2>
+                <button type="button" class="modal-close-btn" id="btn-close-data-note-modal" style="color: var(--text-muted);">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px; font-size: 13.5px; line-height: 1.6; color: var(--text-primary);">
+                <div style="background: var(--bg-primary); padding: 14px; border-radius: 8px; border-left: 4px solid var(--accent-emerald); margin-bottom: 16px; border: 1px solid var(--border-color); border-left-width: 4px;">
+                    <strong style="color: var(--text-primary);"><i class="fa-solid fa-database" style="color: var(--accent-emerald);"></i> Phạm vi thu thập dữ liệu từ Power BI API:</strong>
+                    <p style="margin: 4px 0 0 0; color: var(--text-secondary);">Hệ thống quét 100% dữ liệu thô snapshot từ Power BI backend nhằm quản lý toàn vẹn tất cả bưu gửi tồn đọng thuộc BĐT Lâm Đồng (bao gồm cả các đơn đọng khâu khai thác & trung chuyển):</p>
+                </div>
+                
+                <h4 style="font-weight: 600; margin-bottom: 10px; color: var(--text-primary); font-size: 14px;"><i class="fa-solid fa-boxes-stacked" style="color: var(--accent-emerald);"></i> Các loại bưu gửi được thu thập bổ sung so với bảng phát lẻ:</h4>
+                <ul style="margin: 0 0 16px 0; padding-left: 20px; color: var(--text-secondary);">
+                    <li style="margin-bottom: 8px;"><strong>Bưu cục Khai thác & Trung chuyển (BCKT / KTC1):</strong> Bao gồm bưu gửi đọng ở khâu khai thác tỉnh (<em>KTC1 Lâm Đồng, BCKT Đà Lạt, BCKT Di Linh, BCKT Bảo Lộc, BCKT Đạ Huoai...</em>).</li>
+                    <li style="margin-bottom: 8px;"><strong>Bưu cục Khách hàng lớn (KHL) & Điểm Giao dịch (GD):</strong> Thu thập bưu gửi đọng tại <em>KHL Đà Lạt, GD Đức Trọng, Hub Tân Phúc...</em></li>
+                    <li style="margin-bottom: 8px;"><strong>Bưu gửi luân chuyển thuộc Phân vùng Khu vực 34:</strong> Bao gồm bưu gửi liên kết luân chuyển với <em>KTC1 Đắk Nông, KTC1 Bình Thuận...</em></li>
+                </ul>
+
+                <div style="background: var(--accent-emerald-light); padding: 12px 14px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3); color: var(--accent-emerald); font-size: 13px;">
+                    <i class="fa-solid fa-shield-check"></i> <strong>Ý nghĩa:</strong> Đảm bảo kiểm soát 100% dòng bưu gửi tồn đọng trên toàn tỉnh, không bỏ sót các bưu gửi đọng ở khâu khai thác trung chuyển mang giá trị COD lớn.
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 12px 20px; background: var(--bg-secondary); border-top: 1px solid var(--border-color); text-align: right;">
+                <button type="button" class="btn btn-secondary" id="btn-close-data-note-modal-footer">Đóng</button>
             </div>
         </div>
     </div>
