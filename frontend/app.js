@@ -2815,11 +2815,11 @@ async function loadBcktSummaryData() {
                         <td class="text-center">${idx + 1}</td>
                         <td style="font-weight: 600; color: var(--text-primary);">${item.pos_name}</td>
                         <td class="text-center" style="font-family: var(--font-mono); font-size: 12px;">${item.pos_code}</td>
-                        <td class="text-right">${formatNumber(q3)}</td>
-                        <td class="text-right">${formatNumber(q4)}</td>
-                        <td class="text-right">${formatNumber(q5)}</td>
-                        <td class="text-right">${formatNumber(q7)}</td>
-                        <td class="text-right">${formatNumber(q14)}</td>
+                        <td class="text-right" style="${q3 > 0 ? 'background: rgba(16, 185, 129, 0.08); color: #047857; font-weight: 600;' : ''}">${formatNumber(q3)}</td>
+                        <td class="text-right" style="${q4 > 0 ? 'background: rgba(16, 185, 129, 0.08); color: #047857; font-weight: 600;' : ''}">${formatNumber(q4)}</td>
+                        <td class="text-right" style="${q5 > 0 ? 'background: rgba(245, 158, 11, 0.09); color: #b45309; font-weight: 600;' : ''}">${formatNumber(q5)}</td>
+                        <td class="text-right" style="${q7 > 0 ? 'background: rgba(245, 158, 11, 0.09); color: #b45309; font-weight: 600;' : ''}">${formatNumber(q7)}</td>
+                        <td class="text-right" style="${q14 > 0 ? 'background: rgba(239, 68, 68, 0.09); color: #b91c1c; font-weight: 700;' : ''}">${formatNumber(q14)}</td>
                         <td class="text-right text-bold" style="color: var(--accent-emerald);">${formatNumber(item.total_qty)}</td>
                         <td class="text-right text-bold">${formatCurrency(item.total_cod)}</td>
                     </tr>
@@ -2842,6 +2842,20 @@ async function loadBcktSummaryData() {
         console.error("Error loading BCKT summary:", e);
         summaryTbody.innerHTML = '<tr><td colspan="10" class="text-center text-red" style="padding: 20px;">Lỗi tải dữ liệu khai thác.</td></tr>';
     }
+}
+
+function getLoaiTonBadgeStyle(loaiTon) {
+    if (!loaiTon) return "background: var(--bg-secondary); color: var(--text-secondary);";
+    if (loaiTon.includes("3") || loaiTon.includes("4")) {
+        return "background: rgba(16, 185, 129, 0.15); color: #047857; border: 1px solid rgba(16, 185, 129, 0.3); font-weight: 600;";
+    }
+    if (loaiTon.includes("5") || loaiTon.includes("7")) {
+        return "background: rgba(245, 158, 11, 0.15); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.3); font-weight: 600;";
+    }
+    if (loaiTon.includes("14")) {
+        return "background: rgba(239, 68, 68, 0.15); color: #b91c1c; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 700;";
+    }
+    return "background: var(--bg-secondary); color: var(--text-secondary);";
 }
 
 function renderBcktItemsList() {
@@ -2882,12 +2896,13 @@ function renderBcktItemsList() {
 
     let itemsHtml = "";
     items.slice(0, 300).forEach((item, idx) => {
+        const badgeStyle = getLoaiTonBadgeStyle(item.loai_ton);
         itemsHtml += `
             <tr>
                 <td class="text-center">${idx + 1}</td>
                 <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-emerald); font-size: 13px;">${item.item_code}</td>
                 <td style="font-weight: 500;">${item.pos_name}</td>
-                <td class="text-center"><span class="badge" style="background: var(--accent-emerald-light); color: var(--accent-emerald); font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;">${item.loai_ton}</span></td>
+                <td class="text-center"><span class="badge" style="font-size: 11px; padding: 3px 9px; border-radius: 12px; ${badgeStyle}">${item.loai_ton}</span></td>
                 <td>${item.status_name || ''}</td>
                 <td class="text-right font-mono text-bold">${formatCurrency(item.cod_amount)}</td>
                 <td class="text-center" style="font-size: 12px; color: var(--text-muted);">${item.nhom_kh || ''}</td>
