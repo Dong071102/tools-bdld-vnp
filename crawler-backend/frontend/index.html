@@ -135,14 +135,14 @@
                 <div class="dashboard-grid">
                     <!-- Left Panel: Pivot Matrix -->
                     <div class="grid-card matrix-card">
-                        <div class="card-header matrix-header">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <h2 style="margin: 0;">- Tổng số lượng tồn -</h2>
-                                <button type="button" id="btn-open-data-note-modal" title="Xem ghi chú phạm vi dữ liệu API so với bảng phát lẻ" style="padding: 3px 10px; font-size: 12px; border-radius: 16px; border: 1px solid var(--accent-emerald); color: var(--accent-emerald); background: var(--accent-emerald-light); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: var(--transition-spring);">
+                        <div class="card-header matrix-header" style="display: flex; flex-direction: column; gap: 12px; align-items: stretch; padding: 16px 20px;">
+                            <div class="matrix-header-top" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <h2 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">- Tổng số lượng tồn -</h2>
+                                <button type="button" id="btn-open-data-note-modal" title="Xem ghi chú phạm vi dữ liệu API so với bảng phát lẻ" style="padding: 5px 14px; font-size: 12.5px; border-radius: 20px; border: 1px solid var(--accent-emerald); color: var(--accent-emerald); background: var(--accent-emerald-light); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: var(--transition-spring);">
                                     <i class="fa-solid fa-circle-info"></i> Ghi chú dữ liệu API
                                 </button>
                             </div>
-                            <div class="threshold-inputs">
+                            <div class="threshold-inputs" style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%;">
                                 <span class="threshold-label"><i class="fa-solid fa-highlighter"></i> Highlight tồn ≥</span>
                                 <div class="threshold-group">
                                     <label>3 ngày</label>
@@ -168,7 +168,7 @@
                                     <label>Tổng</label>
                                     <input type="number" id="threshold-total" placeholder="0" min="0">
                                 </div>
-                                <div class="threshold-group" style="margin-left: 10px;">
+                                <div class="threshold-group" style="margin-left: auto;">
                                     <label>Nhóm KH</label>
                                     <select id="matrix-nhom-kh" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 4px; font-size: 12.5px; height: 32px; min-width: 120px;">
                                         <option value="">-- Tất cả --</option>
@@ -178,7 +178,7 @@
                                         <option value="KH Tiktok">KH Tiktok</option>
                                     </select>
                                 </div>
-                                <button class="btn btn-secondary" id="btn-reset-filters" style="padding: 6px 12px; font-size: 12.5px; border-radius: 8px; margin-left: 8px;"><i class="fa-solid fa-arrow-rotate-left"></i> Reset bộ lọc</button>
+                                <button class="btn btn-secondary" id="btn-reset-filters" style="padding: 6px 12px; font-size: 12.5px; border-radius: 8px;"><i class="fa-solid fa-arrow-rotate-left"></i> Reset bộ lọc</button>
                             </div>
                         </div>
                         <div class="table-container matrix-container">
