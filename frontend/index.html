@@ -92,6 +92,46 @@
         <main class="main-content">
             <!-- Dashboard View -->
             <div id="view-dashboard" class="content-view active">
+                <!-- Fullscreen Dashboard URL Error Banner Overlay -->
+                <div id="dashboard-url-error-overlay" class="dashboard-url-error-overlay" style="display: none;">
+                    <div class="url-error-modal-card">
+                        <div class="url-error-badge-glow">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <h2 class="url-error-title">LỖI ĐƯỜNG DẪN TRUY CẬP POWER BI</h2>
+                        <p class="url-error-subtitle">
+                            Hệ thống không thể kết nối hoặc xác thực với đường dẫn (URL) báo cáo Power BI nguồn.
+                            Mọi thao tác tra cứu, phân tích dữ liệu và đồng bộ trên Dashboard tạm thời bị khóa để tránh sai lệch dữ liệu.
+                        </p>
+
+                        <div class="url-error-detail-box" id="url-error-detail-text">
+                            <i class="fa-solid fa-circle-exclamation"></i>
+                            <span id="url-error-detail-content">Mã lỗi HTTP: 401 - Đường link báo cáo đã hết hạn hoặc bị hủy chia sẻ công khai.</span>
+                        </div>
+
+                        <div class="it-contact-box">
+                            <div class="it-contact-icon">
+                                <i class="fa-solid fa-headset"></i>
+                            </div>
+                            <div class="it-contact-content">
+                                <div class="it-contact-title">Vui lòng liên hệ bộ phận IT để xử lý</div>
+                                <div class="it-contact-desc">
+                                    Bộ phận IT cần cập nhật lại đường link chia sẻ báo cáo Power BI mới (Publish to web) trong file cấu hình hệ thống (.env).
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="url-error-actions">
+                            <button type="button" class="btn btn-secondary" id="btn-retry-pbi-url">
+                                <i class="fa-solid fa-arrows-rotate"></i> Kiểm tra lại kết nối
+                            </button>
+                            <button type="button" class="btn btn-primary" id="btn-goto-export-from-error">
+                                <i class="fa-solid fa-truck-fast"></i> Chuyển sang Tra cứu định vị
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Header -->
                 <header class="header">
                     <div class="header-title">

@@ -15,6 +15,46 @@ DEFAULT_URL = "https://wabi-east-asia-a-primary-api.analysis.windows.net/public/
 DEFAULT_RESOURCE_KEY = "6998fa41-e774-4882-8eb0-da7152cd5ff3"
 DEFAULT_ACCESS_TOKEN = "eyJrIjoiNjk5OGZhNDEtZTc3NC00ODgyLThlYjAtZGE3MTUyY2Q1ZmYzIiwidCI6IjRkNmQ2N2FlLTViNTUtNDJhYy05ZGFhLTkzOTk3Yzc3YTg3YSIsImMiOjEwfQ=="
 
+class PowerBIUrlError(Exception):
+    """Exception raised when the Power BI URL or credentials are invalid, expired or unreachable."""
+    def __init__(self, message, status_code=None, raw_response=None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.raw_response = raw_response
+
+def check_powerbi_url_health():
+    """
+    Quickly probe the Power BI endpoint to verify URL & credentials validity.
+    Returns (is_valid: bool, error_message: str, status_code: int)
+    """
+    url, resource_key, access_token = get_pbi_credentials()
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Content-Type": "application/json;charset=UTF-8",
+        "Referer": "https://app.powerbi.com/",
+        "X-PowerBI-User-Access-Token": access_token,
+        "X-PowerBI-ResourceKey": resource_key,
+        "RequestId": str(uuid.uuid4()),
+        "ActivityId": str(uuid.uuid4()),
+        "User-Agent": "Mozilla/5.0"
+    }
+    payload = {
+        "version": "1.0.0",
+        "queries": [],
+        "cancelQueries": [],
+        "modelId": 2539655
+    }
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=10)
+        if resp.status_code == 200:
+            return True, "", 200
+        elif resp.status_code in [401, 403, 404]:
+            return False, f"Mã lỗi HTTP {resp.status_code}: URL báo cáo Power BI không tồn tại hoặc đã bị gỡ bỏ chia sẻ công khai.", resp.status_code
+        else:
+            return False, f"Mã lỗi HTTP {resp.status_code}: Máy chủ Power BI phản hồi lỗi ({resp.status_code}).", resp.status_code
+    except Exception as e:
+        return False, f"Không thể kết nối đến URL máy chủ Power BI ({e}).", None
+
 def get_pbi_credentials():
     """
     Retrieve Power BI credentials dynamically from environment variables.
@@ -300,7 +340,11 @@ def crawl_lamdong_data():
         response = requests.post(url, headers=headers, json=payload, timeout=60)
         if response.status_code != 200:
             logger.error(f"Failed to fetch data from Power BI. Status code: {response.status_code}, Response: {response.text}")
-            return False
+            raise PowerBIUrlError(
+                f"Mã lỗi HTTP {response.status_code}: URL báo cáo Power BI không hợp lệ hoặc đã bị gỡ bỏ chia sẻ công khai.",
+                status_code=response.status_code,
+                raw_response=response.text
+            )
             
         body = response.json()
         results = body.get("results", [])
@@ -411,6 +455,11 @@ def crawl_lamdong_data():
             logger.warning("No valid Lâm Đồng rows decoded.")
             return False
             
+    except PowerBIUrlError:
+        raise
+    except requests.exceptions.RequestException as re:
+        logger.error(f"Network error during crawl process: {re}")
+        raise PowerBIUrlError(f"Lỗi kết nối mạng đến URL Power BI ({re}).", raw_response=str(re))
     except Exception as e:
         logger.error(f"Error during crawl process: {e}")
         raise e

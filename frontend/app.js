@@ -366,20 +366,111 @@ async function loadFilters() {
     }
 }
 
+// State tracking for Power BI URL error
+let isDashboardUrlError = false;
+
+function setDashboardUrlError(hasError, message = "") {
+    isDashboardUrlError = hasError;
+    const overlay = document.getElementById("dashboard-url-error-overlay");
+    const viewDashboard = document.getElementById("view-dashboard");
+    const errorDetailContent = document.getElementById("url-error-detail-content");
+
+    if (hasError) {
+        if (overlay) overlay.style.display = "flex";
+        if (viewDashboard) viewDashboard.classList.add("dashboard-locked");
+        if (errorDetailContent && message) {
+            errorDetailContent.textContent = message;
+        }
+
+        // Lock & disable dashboard controls
+        if (btnRefresh) {
+            btnRefresh.disabled = true;
+            btnRefresh.title = "Dashboard tạm thời bị khóa do lỗi URL Power BI";
+        }
+        if (btnTriggerCrawl) {
+            btnTriggerCrawl.classList.add("disabled");
+            btnTriggerCrawl.style.opacity = "0.5";
+            btnTriggerCrawl.style.cursor = "not-allowed";
+            btnTriggerCrawl.title = "Đồng bộ bị khóa do lỗi URL Power BI";
+        }
+
+        // Update status dot & text in sidebar
+        if (statusDot) {
+            statusDot.className = "dot dot-error";
+        }
+        if (statusText) {
+            statusText.textContent = "Lỗi URL Power BI";
+            statusText.style.color = "#ef4444";
+        }
+    } else {
+        if (overlay) overlay.style.display = "none";
+        if (viewDashboard) viewDashboard.classList.remove("dashboard-locked");
+
+        if (btnRefresh) {
+            btnRefresh.disabled = false;
+            btnRefresh.title = "";
+        }
+        if (btnTriggerCrawl) {
+            btnTriggerCrawl.classList.remove("disabled");
+            btnTriggerCrawl.style.opacity = "";
+            btnTriggerCrawl.style.cursor = "";
+            btnTriggerCrawl.title = "";
+        }
+        if (statusText) {
+            statusText.style.color = "";
+        }
+    }
+}
+
+async function retryPbiConnection() {
+    const btn = document.getElementById("btn-retry-pbi-url");
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang kiểm tra...`;
+    }
+    try {
+        const resp = await fetch("/api/check-pbi-url");
+        const data = await resp.json();
+        if (data.is_valid) {
+            showToast("Kết nối URL Power BI thành công!", "success");
+            setDashboardUrlError(false);
+            await updateStatus();
+            await loadSummary();
+            await loadDetailed();
+        } else {
+            showToast(data.error_message || "URL Power BI vẫn chưa thể truy cập.", "error");
+            setDashboardUrlError(true, data.error_message);
+        }
+    } catch (e) {
+        showToast("Lỗi kiểm tra kết nối tới máy chủ.", "error");
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="fa-solid fa-arrows-rotate"></i> Kiểm tra lại kết nối`;
+        }
+    }
+}
+
 // Fetch Status & Update Indicator
 async function updateStatus() {
     try {
         const response = await fetch("/api/status");
         const data = await response.json();
 
-        // Update Indicator
-        statusDot.className = "dot";
-        if (data.is_crawling) {
-            statusDot.classList.add("crawling");
-            statusText.textContent = "Đang đồng bộ...";
+        // Check for URL Error flag first
+        if (data.url_error) {
+            setDashboardUrlError(true, data.error_message || "Mã lỗi HTTP: 401/403 - URL báo cáo Power BI không tồn tại hoặc đã bị hủy quyền truy cập.");
         } else {
-            statusDot.classList.add("active");
-            statusText.textContent = `Online (Crawl: ${data.last_crawl_status})`;
+            setDashboardUrlError(false);
+            // Update Normal Indicator
+            statusDot.className = "dot";
+            if (data.is_crawling) {
+                statusDot.classList.add("crawling");
+                statusText.textContent = "Đang đồng bộ...";
+            } else {
+                statusDot.classList.add("active");
+                statusText.textContent = `Online (Crawl: ${data.last_crawl_status})`;
+            }
         }
 
         if (data.last_crawl_time) {
@@ -905,6 +996,10 @@ btnNextPage.addEventListener("click", () => {
 });
 
 btnRefresh.addEventListener("click", () => {
+    if (isDashboardUrlError) {
+        showToast("Dashboard tạm thời bị khóa do lỗi URL Power BI. Vui lòng liên hệ bộ phận IT.", "error");
+        return;
+    }
     loadSummary();
     loadDetailed();
     updateStatus();
@@ -914,6 +1009,7 @@ btnRefresh.addEventListener("click", () => {
 const matrixNhomKh = document.getElementById("matrix-nhom-kh");
 if (matrixNhomKh) {
     matrixNhomKh.addEventListener("change", () => {
+        if (isDashboardUrlError) return;
         loadSummary(); // Reload matrix data when group changes
     });
 }
@@ -926,6 +1022,10 @@ selectPageSize.addEventListener("change", (e) => {
 
 btnTriggerCrawl.addEventListener("click", (e) => {
     e.preventDefault();
+    if (isDashboardUrlError) {
+        showToast("Không thể thực hiện đồng bộ do lỗi URL Power BI. Vui lòng liên hệ bộ phận IT.", "error");
+        return;
+    }
     triggerCrawl();
 });
 
@@ -2605,9 +2705,9 @@ setInterval(async () => {
     }
 }, 15000);
 
-// Background dashboard reload (runs only when viewing dashboard tab)
+// Background dashboard reload (runs only when viewing dashboard tab and no URL error)
 setInterval(async () => {
-    if (localStorage.getItem("vnpost_token") && activeView === "dashboard") {
+    if (localStorage.getItem("vnpost_token") && activeView === "dashboard" && !isDashboardUrlError) {
         await loadSummary();
         await loadDetailed();
     }
@@ -3021,7 +3121,15 @@ function initDataNoteModal() {
     if (catSelect) catSelect.addEventListener("change", renderBcktItemsList);
 }
 
+function initUrlErrorOverlay() {
+    const btnRetry = document.getElementById("btn-retry-pbi-url");
+    const btnGotoExport = document.getElementById("btn-goto-export-from-error");
+    if (btnRetry) btnRetry.addEventListener("click", retryPbiConnection);
+    if (btnGotoExport) btnGotoExport.addEventListener("click", () => switchView("export"));
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     initDataNoteModal();
+    initUrlErrorOverlay();
     init();
 });

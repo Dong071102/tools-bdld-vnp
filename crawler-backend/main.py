@@ -20,7 +20,7 @@ import os
 import requests
 
 from database import get_connection, create_daily_snapshot, init_db
-from pbi_crawler import crawl_lamdong_data
+from pbi_crawler import crawl_lamdong_data, PowerBIUrlError, check_powerbi_url_health
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -43,10 +43,13 @@ crawl_lock = threading.Lock()
 is_crawling = False
 last_crawl_time = None
 last_crawl_status = "Not started"
+last_crawl_url_error = False
+last_crawl_error_detail = ""
+last_crawl_http_status = None
 
 def run_crawler_task():
     """Wrapper to run crawler thread-safely."""
-    global is_crawling, last_crawl_time, last_crawl_status
+    global is_crawling, last_crawl_time, last_crawl_status, last_crawl_url_error, last_crawl_error_detail, last_crawl_http_status
     if crawl_lock.locked():
         logger.warning("Crawl already in progress. Skipping.")
         return
@@ -59,11 +62,26 @@ def run_crawler_task():
             last_crawl_time = datetime.now()
             if success:
                 last_crawl_status = "Success"
+                last_crawl_url_error = False
+                last_crawl_error_detail = ""
+                last_crawl_http_status = 200
             else:
                 last_crawl_status = "Failed"
+        except PowerBIUrlError as pbi_err:
+            last_crawl_time = datetime.now()
+            last_crawl_status = f"URL Error ({pbi_err.status_code or 'Network'})"
+            last_crawl_url_error = True
+            last_crawl_error_detail = str(pbi_err)
+            last_crawl_http_status = pbi_err.status_code
+            logger.error(f"Power BI URL error: {pbi_err}")
         except Exception as e:
+            last_crawl_time = datetime.now()
             logger.error(f"Error in background crawl: {e}")
             last_crawl_status = f"Error: {e}"
+            err_str = str(e).lower()
+            if any(k in err_str for k in ["401", "403", "404", "url", "connection"]):
+                last_crawl_url_error = True
+                last_crawl_error_detail = str(e)
         finally:
             is_crawling = False
 
@@ -71,12 +89,28 @@ def run_crawler_task():
 def scheduler_thread():
     """
     Background scheduler to:
-    1. Run crawl every 10 minutes.
-    2. Run daily snapshot at 00:00 midnight.
+    1. Probe URL health immediately on startup.
+    2. Run crawl every 10 minutes.
+    3. Run daily snapshot at 00:00 midnight.
     """
     logger.info("Background scheduler thread started.")
+    global last_crawl_url_error, last_crawl_error_detail, last_crawl_http_status, last_crawl_status
+
+    # 1. Quick probe on startup
+    try:
+        is_valid, msg, code = check_powerbi_url_health()
+        if not is_valid:
+            last_crawl_url_error = True
+            last_crawl_error_detail = msg
+            last_crawl_http_status = code
+            last_crawl_status = f"URL Error ({code or 'Network'})"
+            logger.warning(f"Initial Power BI health check failed: {msg}")
+        else:
+            logger.info("Initial Power BI health check passed.")
+    except Exception as e:
+        logger.error(f"Error in initial health check: {e}")
     
-    # Run initial crawl on startup after a brief delay
+    # Run initial crawl on startup after a brief delay (only if not blocked by URL error)
     time.sleep(5)
     run_crawler_task()
     
@@ -88,8 +122,6 @@ def scheduler_thread():
             now = datetime.now()
             
             # 1. Check for midnight snapshot (00:00)
-            # If the current day is different from the last snapshot date, we run the snapshot
-            # To be precise, we check if the hour is 00 (midnight) and day has changed
             if now.hour == 0 and now.date() > last_snapshot_date:
                 logger.info(f"Midnight reached. Creating daily snapshot for date {now.date()}...")
                 create_daily_snapshot()
@@ -113,16 +145,56 @@ def get_status():
     return {
         "is_crawling": is_crawling,
         "last_crawl_time": last_crawl_time.strftime("%Y-%m-%d %H:%M:%S") if last_crawl_time else None,
-        "last_crawl_status": last_crawl_status
+        "last_crawl_status": last_crawl_status,
+        "url_error": last_crawl_url_error,
+        "error_message": last_crawl_error_detail,
+        "http_status": last_crawl_http_status
+    }
+
+@app.get("/api/check-pbi-url")
+def check_pbi_url():
+    """Explicitly check Power BI URL health."""
+    global last_crawl_url_error, last_crawl_error_detail, last_crawl_http_status, last_crawl_status
+    is_valid, msg, code = check_powerbi_url_health()
+    if not is_valid:
+        last_crawl_url_error = True
+        last_crawl_error_detail = msg
+        last_crawl_http_status = code
+        last_crawl_status = f"URL Error ({code or 'Network'})"
+    else:
+        last_crawl_url_error = False
+        last_crawl_error_detail = ""
+        last_crawl_http_status = 200
+        last_crawl_status = "Online"
+    return {
+        "is_valid": is_valid,
+        "error_message": msg,
+        "http_status": code
     }
 
 @app.post("/api/trigger-crawl")
 def trigger_crawl(background_tasks: BackgroundTasks):
     """Manually trigger a crawl in a background task."""
-    global is_crawling
+    global is_crawling, last_crawl_url_error, last_crawl_error_detail, last_crawl_http_status, last_crawl_status
     if is_crawling:
         return {"status": "already_running", "message": "Crawl is already in progress"}
     
+    # If URL error is flagged, probe first to see if link was updated
+    is_valid, msg, code = check_powerbi_url_health()
+    if not is_valid:
+        last_crawl_url_error = True
+        last_crawl_error_detail = msg
+        last_crawl_http_status = code
+        last_crawl_status = f"URL Error ({code or 'Network'})"
+        return {
+            "status": "url_error",
+            "message": f"Không thể đồng bộ do lỗi URL Power BI ({msg}). Vui lòng liên hệ bộ phận IT để xử lý."
+        }
+
+    # URL is valid, clear error and run
+    last_crawl_url_error = False
+    last_crawl_error_detail = ""
+    last_crawl_http_status = 200
     background_tasks.add_task(run_crawler_task)
     return {"status": "triggered", "message": "Crawl triggered successfully"}
 
@@ -1159,12 +1231,25 @@ async def proxy_history_base(request: Request):
         logger.error(f"Proxy to Node.js backend failed for /api/history: {e}")
         raise HTTPException(status_code=500, detail=f"Lỗi kết nối Node.js backend: {e}")
 
-# Serves static frontend files
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
+# Serves static frontend files (Dynamic lookup: prefers root ../frontend, falls back gracefully)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend"))
+if not os.path.exists(FRONTEND_DIR):
+    FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
-@app.get("/")
-def read_root():
-    return FileResponse("frontend/index.html")
+if os.path.exists(FRONTEND_DIR):
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
+    @app.get("/")
+    def read_root():
+        index_path = os.path.join(FRONTEND_DIR, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        return {"status": "ok", "message": "Crawler API is running."}
+else:
+    @app.get("/")
+    def read_root():
+        return {"status": "ok", "message": "Crawler API is running. Frontend is served separately via Nginx."}
 
 def open_browser_delayed():
     """Wait for server to start, then open standard browser."""
