@@ -90,47 +90,55 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Dashboard View -->
-            <div id="view-dashboard" class="content-view active">
-                <!-- Fullscreen Dashboard URL Error Banner Overlay -->
-                <div id="dashboard-url-error-overlay" class="dashboard-url-error-overlay" style="display: none;">
-                    <div class="url-error-modal-card">
-                        <div class="url-error-badge-glow">
-                            <i class="fa-solid fa-triangle-exclamation"></i>
-                        </div>
-                        <h2 class="url-error-title">LỖI ĐƯỜNG DẪN TRUY CẬP POWER BI</h2>
-                        <p class="url-error-subtitle">
-                            Hệ thống không thể kết nối hoặc xác thực với đường dẫn (URL) báo cáo Power BI nguồn.
-                            Mọi thao tác tra cứu, phân tích dữ liệu và đồng bộ trên Dashboard tạm thời bị khóa để tránh sai lệch dữ liệu.
-                        </p>
+            <!-- Fullscreen Power BI URL Error Banner Overlay (Active on both Dashboard and Tab Định Vị) -->
+            <div id="dashboard-url-error-overlay" class="dashboard-url-error-overlay" style="display: none;">
+                <div class="url-error-modal-card">
+                    <div class="url-error-badge-glow">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <h2 class="url-error-title">LỖI ĐỒNG BỘ URL POWER BI</h2>
+                    <p class="url-error-subtitle">
+                        Hệ thống không thể kết nối hoặc xác thực với đường dẫn (URL) báo cáo Power BI nguồn.<br>
+                        Mọi thao tác đồng bộ dữ liệu và phân tích báo cáo tạm thời bị khóa.
+                    </p>
 
-                        <div class="url-error-detail-box" id="url-error-detail-text">
+                    <!-- Red Warning Notification Box -->
+                    <div class="url-error-notification-red" id="url-error-detail-text">
+                        <div class="noti-red-header">
                             <i class="fa-solid fa-circle-exclamation"></i>
-                            <span id="url-error-detail-content">Mã lỗi HTTP: 401 - Đường link báo cáo đã hết hạn hoặc bị hủy chia sẻ công khai.</span>
+                            <span>CẢNH BÁO LỖI HỆ THỐNG</span>
                         </div>
-
-                        <div class="it-contact-box">
-                            <div class="it-contact-icon">
-                                <i class="fa-solid fa-headset"></i>
-                            </div>
-                            <div class="it-contact-content">
-                                <div class="it-contact-title">Vui lòng liên hệ bộ phận IT để xử lý</div>
-                                <div class="it-contact-desc">
-                                    Bộ phận IT cần cập nhật lại đường link chia sẻ báo cáo Power BI mới (Publish to web) trong file cấu hình hệ thống (.env).
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="url-error-actions">
-                            <button type="button" class="btn btn-secondary" id="btn-retry-pbi-url">
-                                <i class="fa-solid fa-arrows-rotate"></i> Kiểm tra lại kết nối
-                            </button>
-                            <button type="button" class="btn btn-primary" id="btn-goto-export-from-error">
-                                <i class="fa-solid fa-truck-fast"></i> Chuyển sang Tra cứu định vị
-                            </button>
+                        <div class="noti-red-body" id="url-error-detail-content">
+                            Không thể đồng bộ do lỗi URL Power BI (Mã lỗi HTTP 401: URL báo cáo Power BI không tồn tại hoặc đã bị gỡ bỏ chia sẻ công khai.). Vui lòng liên hệ bộ phận IT để xử lý.
                         </div>
                     </div>
+
+                    <!-- Red IT Contact Box -->
+                    <div class="it-contact-box it-contact-red">
+                        <div class="it-contact-icon">
+                            <i class="fa-solid fa-headset"></i>
+                        </div>
+                        <div class="it-contact-content">
+                            <div class="it-contact-title">Vui lòng liên hệ bộ phận IT để xử lý</div>
+                            <div class="it-contact-desc">
+                                Báo cáo Power BI đã hết hạn truy cập hoặc đã bị thu hồi link chia sẻ công khai. Bộ phận IT cần cấu hình lại URL Power BI (Publish to Web) hợp lệ trong file cấu hình hệ thống (.env).
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="url-error-actions">
+                        <button type="button" class="btn btn-danger-pbi" id="btn-retry-pbi-url">
+                            <i class="fa-solid fa-arrows-rotate"></i> Kiểm tra lại kết nối
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" id="btn-minimize-pbi-error">
+                            <i class="fa-solid fa-file-excel"></i> Tạm ẩn để nhập mã định vị thủ công
+                        </button>
+                    </div>
                 </div>
+            </div>
+
+            <!-- Dashboard View -->
+            <div id="view-dashboard" class="content-view active">
 
                 <!-- Header -->
                 <header class="header">
@@ -411,6 +419,19 @@
 
             <!-- Export View -->
             <div id="view-export" class="content-view">
+                <!-- Persistent Sticky Red Warning Banner for Tab Định Vị -->
+                <div id="sticky-pbi-error-banner" class="sticky-pbi-error-banner" style="display: none;">
+                    <div class="sticky-banner-left">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span><strong>CẢNH BÁO LỖI:</strong> <span id="sticky-pbi-error-text">Không thể đồng bộ do lỗi URL Power BI (Mã lỗi HTTP 401: URL báo cáo Power BI không tồn tại hoặc đã bị gỡ bỏ chia sẻ công khai.). Vui lòng liên hệ bộ phận IT để xử lý.</span></span>
+                    </div>
+                    <div class="sticky-banner-right">
+                        <button type="button" class="btn-sticky-expand" id="btn-expand-pbi-error">
+                            <i class="fa-solid fa-expand"></i> Chi tiết
+                        </button>
+                    </div>
+                </div>
+
                 <header class="header">
                     <div class="header-title">
                         <h1>Xuất Excel Định vị</h1>

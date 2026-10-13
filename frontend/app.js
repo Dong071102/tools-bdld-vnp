@@ -368,18 +368,38 @@ async function loadFilters() {
 
 // State tracking for Power BI URL error
 let isDashboardUrlError = false;
+let isErrorBannerMinimized = false;
 
 function setDashboardUrlError(hasError, message = "") {
     isDashboardUrlError = hasError;
     const overlay = document.getElementById("dashboard-url-error-overlay");
     const viewDashboard = document.getElementById("view-dashboard");
+    const viewExport = document.getElementById("view-export");
     const errorDetailContent = document.getElementById("url-error-detail-content");
+    const stickyBanner = document.getElementById("sticky-pbi-error-banner");
+    const stickyText = document.getElementById("sticky-pbi-error-text");
+
+    const defaultErrMsg = "Không thể đồng bộ do lỗi URL Power BI (Mã lỗi HTTP 401: URL báo cáo Power BI không tồn tại hoặc đã bị gỡ bỏ chia sẻ công khai.). Vui lòng liên hệ bộ phận IT để xử lý.";
+    const finalMsg = message || defaultErrMsg;
 
     if (hasError) {
-        if (overlay) overlay.style.display = "flex";
+        if (errorDetailContent) {
+            errorDetailContent.textContent = finalMsg;
+        }
+        if (stickyText) {
+            stickyText.textContent = finalMsg;
+        }
+
         if (viewDashboard) viewDashboard.classList.add("dashboard-locked");
-        if (errorDetailContent && message) {
-            errorDetailContent.textContent = message;
+
+        if (!isErrorBannerMinimized) {
+            if (overlay) overlay.style.display = "flex";
+            if (viewExport) viewExport.classList.add("view-locked");
+            if (stickyBanner) stickyBanner.style.display = "none";
+        } else {
+            if (overlay) overlay.style.display = "none";
+            if (viewExport) viewExport.classList.remove("view-locked");
+            if (stickyBanner) stickyBanner.style.display = "flex";
         }
 
         // Lock & disable dashboard controls
@@ -403,8 +423,11 @@ function setDashboardUrlError(hasError, message = "") {
             statusText.style.color = "#ef4444";
         }
     } else {
+        isErrorBannerMinimized = false;
         if (overlay) overlay.style.display = "none";
+        if (stickyBanner) stickyBanner.style.display = "none";
         if (viewDashboard) viewDashboard.classList.remove("dashboard-locked");
+        if (viewExport) viewExport.classList.remove("view-locked");
 
         if (btnRefresh) {
             btnRefresh.disabled = false;
@@ -459,7 +482,7 @@ async function updateStatus() {
 
         // Check for URL Error flag first
         if (data.url_error) {
-            setDashboardUrlError(true, data.error_message || "Mã lỗi HTTP: 401/403 - URL báo cáo Power BI không tồn tại hoặc đã bị hủy quyền truy cập.");
+            setDashboardUrlError(true, data.error_message || "Không thể đồng bộ do lỗi URL Power BI (Mã lỗi HTTP 401: URL báo cáo Power BI không tồn tại hoặc đã bị gỡ bỏ chia sẻ công khai.). Vui lòng liên hệ bộ phận IT để xử lý.");
         } else {
             setDashboardUrlError(false);
             // Update Normal Indicator
@@ -1460,6 +1483,28 @@ function switchView(viewName) {
             if (viewEl) viewEl.classList.remove("active");
         }
     });
+
+    // Handle Power BI URL error overlay & sticky banner visibility across views
+    if (isDashboardUrlError) {
+        const overlay = document.getElementById("dashboard-url-error-overlay");
+        const stickyBanner = document.getElementById("sticky-pbi-error-banner");
+        const viewExport = document.getElementById("view-export");
+
+        if (viewName === "dashboard") {
+            if (overlay) overlay.style.display = "flex";
+            if (stickyBanner) stickyBanner.style.display = "none";
+        } else if (viewName === "export") {
+            if (!isErrorBannerMinimized) {
+                if (overlay) overlay.style.display = "flex";
+                if (viewExport) viewExport.classList.add("view-locked");
+                if (stickyBanner) stickyBanner.style.display = "none";
+            } else {
+                if (overlay) overlay.style.display = "none";
+                if (viewExport) viewExport.classList.remove("view-locked");
+                if (stickyBanner) stickyBanner.style.display = "flex";
+            }
+        }
+    }
 
     // Start active view specific operations
     if (viewName === "export") {
@@ -3123,9 +3168,37 @@ function initDataNoteModal() {
 
 function initUrlErrorOverlay() {
     const btnRetry = document.getElementById("btn-retry-pbi-url");
-    const btnGotoExport = document.getElementById("btn-goto-export-from-error");
+    const btnMinimize = document.getElementById("btn-minimize-pbi-error");
+    const btnExpand = document.getElementById("btn-expand-pbi-error");
+
     if (btnRetry) btnRetry.addEventListener("click", retryPbiConnection);
-    if (btnGotoExport) btnGotoExport.addEventListener("click", () => switchView("export"));
+
+    if (btnMinimize) {
+        btnMinimize.addEventListener("click", () => {
+            isErrorBannerMinimized = true;
+            const overlay = document.getElementById("dashboard-url-error-overlay");
+            const stickyBanner = document.getElementById("sticky-pbi-error-banner");
+            const viewExport = document.getElementById("view-export");
+
+            if (overlay) overlay.style.display = "none";
+            switchView("export");
+            if (stickyBanner) stickyBanner.style.display = "flex";
+            if (viewExport) viewExport.classList.remove("view-locked");
+        });
+    }
+
+    if (btnExpand) {
+        btnExpand.addEventListener("click", () => {
+            isErrorBannerMinimized = false;
+            const overlay = document.getElementById("dashboard-url-error-overlay");
+            const stickyBanner = document.getElementById("sticky-pbi-error-banner");
+            const viewExport = document.getElementById("view-export");
+
+            if (overlay) overlay.style.display = "flex";
+            if (stickyBanner) stickyBanner.style.display = "none";
+            if (viewExport) viewExport.classList.add("view-locked");
+        });
+    }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
