@@ -101,7 +101,7 @@ def scheduler_thread():
         is_valid, msg, code = check_powerbi_url_health()
         if not is_valid:
             last_crawl_url_error = True
-            last_crawl_error_detail = f"Không thể đồng bộ do lỗi URL Power BI ({msg}). Vui lòng liên hệ bộ phận IT để xử lý."
+            last_crawl_error_detail = "Lỗi URL Power BI, liên hệ bộ phận IT để hỗ trợ"
             last_crawl_http_status = code
             last_crawl_status = f"URL Error ({code or 'Network'})"
             logger.warning(f"Initial Power BI health check failed: {msg}")
@@ -157,7 +157,7 @@ def check_pbi_url():
     global last_crawl_url_error, last_crawl_error_detail, last_crawl_http_status, last_crawl_status
     is_valid, msg, code = check_powerbi_url_health()
     if not is_valid:
-        full_msg = f"Không thể đồng bộ do lỗi URL Power BI ({msg}). Vui lòng liên hệ bộ phận IT để xử lý."
+        full_msg = "Lỗi URL Power BI, liên hệ bộ phận IT để hỗ trợ"
         last_crawl_url_error = True
         last_crawl_error_detail = full_msg
         last_crawl_http_status = code
@@ -185,12 +185,12 @@ def trigger_crawl(background_tasks: BackgroundTasks):
     is_valid, msg, code = check_powerbi_url_health()
     if not is_valid:
         last_crawl_url_error = True
-        last_crawl_error_detail = msg
+        last_crawl_error_detail = "Lỗi URL Power BI, liên hệ bộ phận IT để hỗ trợ"
         last_crawl_http_status = code
         last_crawl_status = f"URL Error ({code or 'Network'})"
         return {
             "status": "url_error",
-            "message": f"Không thể đồng bộ do lỗi URL Power BI ({msg}). Vui lòng liên hệ bộ phận IT để xử lý."
+            "message": "Lỗi URL Power BI, liên hệ bộ phận IT để hỗ trợ"
         }
 
     # URL is valid, clear error and run

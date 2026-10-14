@@ -379,7 +379,7 @@ function setDashboardUrlError(hasError, message = "") {
     const stickyBanner = document.getElementById("sticky-pbi-error-banner");
     const stickyText = document.getElementById("sticky-pbi-error-text");
 
-    const defaultErrMsg = "Không thể đồng bộ do lỗi URL Power BI (Mã lỗi HTTP 401: URL báo cáo Power BI không tồn tại hoặc đã bị gỡ bỏ chia sẻ công khai.). Vui lòng liên hệ bộ phận IT để xử lý.";
+    const defaultErrMsg = "Lỗi URL Power BI, liên hệ bộ phận IT để hỗ trợ";
     const finalMsg = message || defaultErrMsg;
 
     if (hasError) {
@@ -482,7 +482,7 @@ async function updateStatus() {
 
         // Check for URL Error flag first
         if (data.url_error) {
-            setDashboardUrlError(true, data.error_message || "Không thể đồng bộ do lỗi URL Power BI (Mã lỗi HTTP 401: URL báo cáo Power BI không tồn tại hoặc đã bị gỡ bỏ chia sẻ công khai.). Vui lòng liên hệ bộ phận IT để xử lý.");
+            setDashboardUrlError(true, data.error_message || "Lỗi URL Power BI, liên hệ bộ phận IT để hỗ trợ");
         } else {
             setDashboardUrlError(false);
             // Update Normal Indicator
