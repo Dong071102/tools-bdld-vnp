@@ -12,8 +12,47 @@ logger = logging.getLogger(__name__)
 
 # Default Power BI fallback credentials (Updated to new report link)
 DEFAULT_URL = "https://wabi-east-asia-a-primary-api.analysis.windows.net/public/reports/querydata?synchronous=true"
-DEFAULT_RESOURCE_KEY = "6998fa41-e774-4882-8eb0-da7152cd5ff3"
-DEFAULT_ACCESS_TOKEN = "eyJrIjoiNjk5OGZhNDEtZTc3NC00ODgyLThlYjAtZGE3MTUyY2Q1ZmYzIiwidCI6IjRkNmQ2N2FlLTViNTUtNDJhYy05ZGFhLTkzOTk3Yzc3YTg3YSIsImMiOjEwfQ=="
+DEFAULT_RESOURCE_KEY = "e5064578-8933-4fac-abfc-81691efc421d"
+DEFAULT_ACCESS_TOKEN = "eyJrIjoiZTUwNjQ1NzgtODkzMy00ZmFjLWFiZmMtODE2OTFlZmM0MjFkIiwidCI6IjRkNmQ2N2FlLTViNTUtNDJhYy05ZGFhLTkzOTk3Yzc3YTg3YSIsImMiOjEwfQ=="
+DEFAULT_MODEL_ID = 3195541
+
+_CACHED_MODEL_ID = None
+_CACHED_RESOURCE_KEY = None
+
+def get_report_model_id(resource_key, access_token):
+    """
+    Dynamically discover the modelId from Power BI for the given resource key.
+    Falls back to cached value or DEFAULT_MODEL_ID if discovery fails.
+    """
+    global _CACHED_MODEL_ID, _CACHED_RESOURCE_KEY
+    if _CACHED_MODEL_ID and _CACHED_RESOURCE_KEY == resource_key:
+        return _CACHED_MODEL_ID
+    
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://app.powerbi.com/",
+        "X-PowerBI-User-Access-Token": access_token,
+        "X-PowerBI-ResourceKey": resource_key,
+        "RequestId": str(uuid.uuid4()),
+        "ActivityId": str(uuid.uuid4()),
+        "User-Agent": "Mozilla/5.0"
+    }
+    models_url = f"https://wabi-east-asia-a-primary-api.analysis.windows.net/public/reports/{resource_key}/modelsAndExploration?preferReturn=representation"
+    try:
+        resp = requests.get(models_url, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            models = data.get("models", [])
+            if models and "id" in models[0]:
+                discovered_id = models[0]["id"]
+                _CACHED_MODEL_ID = discovered_id
+                _CACHED_RESOURCE_KEY = resource_key
+                logger.info(f"Dynamically discovered modelId: {discovered_id} for resourceKey: {resource_key}")
+                return discovered_id
+    except Exception as e:
+        logger.warning(f"Error discovering modelId from Power BI: {e}")
+        
+    return DEFAULT_MODEL_ID
 
 class PowerBIUrlError(Exception):
     """Exception raised when the Power BI URL or credentials are invalid, expired or unreachable."""
@@ -24,13 +63,12 @@ class PowerBIUrlError(Exception):
 
 def check_powerbi_url_health():
     """
-    Quickly probe the Power BI endpoint to verify URL & credentials validity.
+    Probe the Power BI endpoint via modelsAndExploration to verify URL & credentials validity.
     Returns (is_valid: bool, error_message: str, status_code: int)
     """
     url, resource_key, access_token = get_pbi_credentials()
     headers = {
         "Accept": "application/json, text/plain, */*",
-        "Content-Type": "application/json;charset=UTF-8",
         "Referer": "https://app.powerbi.com/",
         "X-PowerBI-User-Access-Token": access_token,
         "X-PowerBI-ResourceKey": resource_key,
@@ -38,15 +76,16 @@ def check_powerbi_url_health():
         "ActivityId": str(uuid.uuid4()),
         "User-Agent": "Mozilla/5.0"
     }
-    payload = {
-        "version": "1.0.0",
-        "queries": [],
-        "cancelQueries": [],
-        "modelId": 2539655
-    }
+    probe_url = f"https://wabi-east-asia-a-primary-api.analysis.windows.net/public/reports/{resource_key}/modelsAndExploration?preferReturn=representation"
     try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=10)
+        resp = requests.get(probe_url, headers=headers, timeout=10)
         if resp.status_code == 200:
+            data = resp.json()
+            models = data.get("models", [])
+            if models and "id" in models[0]:
+                global _CACHED_MODEL_ID, _CACHED_RESOURCE_KEY
+                _CACHED_MODEL_ID = models[0]["id"]
+                _CACHED_RESOURCE_KEY = resource_key
             return True, "", 200
         elif resp.status_code in [401, 403, 404]:
             return False, f"Mã lỗi HTTP {resp.status_code}: URL báo cáo Power BI không tồn tại hoặc đã bị gỡ bỏ chia sẻ công khai.", resp.status_code
@@ -102,6 +141,7 @@ def crawl_lamdong_data():
     logger.info("Starting Power BI crawl for BĐT Lâm Đồng with exact dashboard filters...")
     
     url, resource_key, access_token = get_pbi_credentials()
+    model_id = get_report_model_id(resource_key, access_token)
 
     headers = {
         "Accept": "application/json, text/plain, */*",
@@ -333,7 +373,7 @@ def crawl_lamdong_data():
             }
         ],
         "cancelQueries": [],
-        "modelId": 2539655
+        "modelId": model_id
     }
 
     try:
