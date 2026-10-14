@@ -781,48 +781,15 @@ def auth_login(req: LoginRequest):
             has_captcha = bool(req.captchaSolution and req.initialFields and req.initialCookies)
             
             if is_first_login:
-                # ── FIRST LOGIN: must use captcha to verify against VNPost ──
-                sync_user_to_sqlite(db_username, db_role, db_concurrency_limit, db_password_hash)
-
-                if not has_captcha:
-                    raise HTTPException(status_code=400, detail="Tài khoản đăng nhập lần đầu cần giải Captcha để xác thực.")
-                
-                payload = {
-                    "username": username,
-                    "password": password,
-                    "captchaSolution": req.captchaSolution,
-                    "initialFields": req.initialFields,
-                    "initialCookies": req.initialCookies
-                }
-                try:
-                    node_res = requests.post(f"{DINHVI_BACKEND_URL}/api/auth/login", json=payload)
-                    if node_res.status_code != 200:
-                        try:
-                            err_msg = node_res.json().get("error", "Xác thực với VNPost thất bại.")
-                        except:
-                            err_msg = f"HTTP {node_res.status_code}"
-                        raise HTTPException(status_code=400, detail=err_msg)
-                except HTTPException as he:
-                    raise he
-                except Exception as e:
-                    logger.error(f"First login VNPost check failed: {e}")
-                    raise HTTPException(status_code=500, detail=f"Lỗi kết nối máy chủ xác thực VNPost: {e}")
-                
-                # Fetch the fresh cookie that Node.js saved after VNPost auth directly from SQL Server
-                cursor.execute("SELECT vnpost_cookie FROM users WHERE username = %s", (username,))
-                sql_row = cursor.fetchone()
-                sqlite_cookie = sql_row[0] if sql_row else None
-
-                # Save bcrypt-hashed password and the fresh cookie into SQL Server
+                # ── FIRST LOGIN: Set password directly without requiring Captcha ──
                 hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                 cursor.execute("""
                     UPDATE users 
-                    SET password_hash = %s, vnpost_username = %s, vnpost_password = %s, vnpost_cookie = %s
+                    SET password_hash = %s, vnpost_username = %s, vnpost_password = %s
                     WHERE id = %s
-                """, (hashed, username, password, sqlite_cookie, user_id))
-                
-                db_cookie = sqlite_cookie
-                logger.info(f"First login complete for '{username}' — VNPost session slot 0 established.")
+                """, (hashed, username, password, user_id))
+                sync_user_to_sqlite(db_username, db_role, db_concurrency_limit, hashed)
+                logger.info(f"First login complete for '{username}' — password initialized.")
 
             else:
                 # ── REGULAR LOGIN: verify password locally ──
@@ -834,8 +801,14 @@ def auth_login(req: LoginRequest):
                 if not is_correct:
                     raise HTTPException(status_code=400, detail="Mật khẩu không chính xác.")
                 
-                # ── CAPTCHA BONUS: always try to refresh VNPost session slot 0 with the captcha ──
-                # This ensures every login automatically establishes/refreshes a live session
+                # Always sync vnpost_username and vnpost_password so worker threads have credentials
+                cursor.execute("""
+                    UPDATE users 
+                    SET vnpost_username = %s, vnpost_password = %s 
+                    WHERE id = %s
+                """, (username, password, user_id))
+                
+                # Optional: If captcha was provided, refresh VNPost session slot 0
                 if has_captcha:
                     try:
                         payload = {
@@ -851,7 +824,6 @@ def auth_login(req: LoginRequest):
                             timeout=15
                         )
                         if node_res.status_code == 200:
-                            # Update SQL Server with fresh VNPost cookie directly from SQL Server
                             cursor.execute("SELECT vnpost_cookie FROM users WHERE username = %s", (username,))
                             sql_row = cursor.fetchone()
                             fresh_cookie = sql_row[0] if sql_row else None
@@ -862,11 +834,8 @@ def auth_login(req: LoginRequest):
                                 """, (fresh_cookie, user_id))
                                 db_cookie = fresh_cookie
                                 logger.info(f"Login: refreshed VNPost session slot 0 for '{username}' using captcha.")
-                        else:
-                            logger.warning(f"Login captcha VNPost refresh failed for '{username}': HTTP {node_res.status_code}")
                     except Exception as e:
-                        # Non-fatal: login still succeeds even if VNPost session refresh fails
-                        logger.warning(f"Login captcha VNPost refresh error for '{username}': {e}")
+                        logger.warning(f"Login optional captcha VNPost refresh error for '{username}': {e}")
                         
             # Create JWT token
             token = jwt.encode({

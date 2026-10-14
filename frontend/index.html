@@ -31,21 +31,9 @@
                     <label class="form-label" for="login-username"><i class="fa-solid fa-user"></i> Tên đăng nhập</label>
                     <input type="text" id="login-username" class="input-field" placeholder="Nhập tên đăng nhập..." required autocomplete="username">
                 </div>
-                <div class="form-group" style="margin-bottom: 16px;">
+                <div class="form-group" style="margin-bottom: 24px;">
                     <label class="form-label" for="login-password"><i class="fa-solid fa-lock"></i> Mật khẩu</label>
                     <input type="password" id="login-password" class="input-field" placeholder="Nhập mật khẩu..." required autocomplete="current-password">
-                </div>
-                <div class="form-group" style="margin-bottom: 24px;">
-                    <label class="form-label" for="login-captcha-input"><i class="fa-solid fa-key"></i> Mã xác thực (Captcha)</label>
-                    <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
-                        <div id="login-captcha-img-wrapper" style="height: 44px; min-width: 130px; border-radius: 8px; background: #fff; border: 1px solid var(--border-color); overflow: hidden; display: flex; align-items: center; justify-content: center; flex-grow: 1;">
-                            <span class="captcha-placeholder" style="font-size: 12px; color: var(--text-muted);">Đang tải...</span>
-                        </div>
-                        <button type="button" id="btn-refresh-login-captcha" class="btn btn-secondary" style="padding: 0; height: 44px; width: 44px; min-width: 44px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                            <i class="fa-solid fa-arrows-rotate"></i>
-                        </button>
-                        <input type="text" id="login-captcha-input" class="input-field" placeholder="Mã..." required autocomplete="off" style="width: 100px; height: 44px; padding: 6px 12px; font-size: 15px; border-radius: 8px;">
-                    </div>
                 </div>
                 <button type="submit" id="btn-login-submit" class="btn btn-primary btn-block" style="width: 100%;">Đăng nhập</button>
             </form>

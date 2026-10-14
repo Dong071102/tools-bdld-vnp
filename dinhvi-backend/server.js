@@ -342,7 +342,7 @@ app.get('/api/vnpost/session-captcha', authenticateToken, async (req, res) => {
 
 // Thêm một luồng phiên kết nối mới bằng cách giải captcha
 app.post('/api/vnpost/add-session', authenticateToken, async (req, res) => {
-  const { captchaSolution, initialFields, initialCookies } = req.body;
+  const { captchaSolution, initialFields, initialCookies, sessionIndex, password } = req.body;
   const username = req.user.username;
 
   if (!captchaSolution || !initialFields || !initialCookies) {
@@ -352,12 +352,15 @@ app.post('/api/vnpost/add-session', authenticateToken, async (req, res) => {
   try {
     // Lấy thông tin tài khoản mật khẩu đã lưu
     const user = await get(`SELECT vnpost_username, vnpost_password, vnpost_cookie FROM users WHERE username = ?`, [username]);
-    if (!user || !user.vnpost_username || !user.vnpost_password) {
+    const vnUsername = user?.vnpost_username || user?.username || username;
+    const vnPassword = password || user?.vnpost_password;
+
+    if (!vnUsername || !vnPassword) {
       return res.status(400).json({ error: 'Bạn cần cấu hình tài khoản và mật khẩu VNPost trước hoặc đăng nhập lại.' });
     }
 
     // Đăng nhập luồng mới
-    const result = await loginToVnpost(user.vnpost_username, user.vnpost_password, captchaSolution, initialFields, initialCookies);
+    const result = await loginToVnpost(vnUsername, vnPassword, captchaSolution, initialFields, initialCookies);
     if (!result.success) {
       return res.status(400).json({ error: result.error || 'Đăng nhập luồng mới thất bại.' });
     }
@@ -367,7 +370,7 @@ app.post('/api/vnpost/add-session', authenticateToken, async (req, res) => {
 
     // Parse danh sách cookie hiện tại
     let cookiesArray = [];
-    if (user.vnpost_cookie) {
+    if (user && user.vnpost_cookie) {
       try {
         cookiesArray = JSON.parse(user.vnpost_cookie);
         if (!Array.isArray(cookiesArray)) {
@@ -378,8 +381,21 @@ app.post('/api/vnpost/add-session', authenticateToken, async (req, res) => {
       }
     }
 
-    // Thêm cookie mới
-    cookiesArray.push(newCookieStr);
+    const requestedIdx = sessionIndex !== undefined && sessionIndex !== null ? parseInt(sessionIndex, 10) : null;
+    if (requestedIdx === 0 || cookiesArray.length === 0 || !cookiesArray[0]) {
+      if (cookiesArray.length === 0) {
+        cookiesArray = [newCookieStr];
+      } else {
+        cookiesArray[0] = newCookieStr;
+      }
+    } else if (requestedIdx !== null && !isNaN(requestedIdx) && requestedIdx >= 0) {
+      while (cookiesArray.length <= requestedIdx) {
+        cookiesArray.push('');
+      }
+      cookiesArray[requestedIdx] = newCookieStr;
+    } else {
+      cookiesArray.push(newCookieStr);
+    }
 
     if (cookiesArray.length > 5) {
       return res.status(400).json({ error: 'Đã đạt giới hạn tối đa 5 luồng tải song song.' });
@@ -387,14 +403,14 @@ app.post('/api/vnpost/add-session', authenticateToken, async (req, res) => {
 
     // Cập nhật DB
     await run(
-      `UPDATE users SET vnpost_cookie = ? WHERE username = ?`,
-      [JSON.stringify(cookiesArray), username]
+      `UPDATE users SET vnpost_cookie = ?, vnpost_username = ?, vnpost_password = ? WHERE username = ?`,
+      [JSON.stringify(cookiesArray), vnUsername, vnPassword, username]
     );
 
     res.json({
       success: true,
       count: cookiesArray.length,
-      message: `Khởi tạo thành công phiên kết nối thứ ${cookiesArray.length}!`
+      message: `Khởi tạo thành công phiên kết nối!`
     });
   } catch (err) {
     console.error(err);
@@ -402,34 +418,18 @@ app.post('/api/vnpost/add-session', authenticateToken, async (req, res) => {
   }
 });
 
-// Đặt lại số luồng về 1
+// Đặt lại các luồng kết nối
 app.post('/api/vnpost/reset-sessions', authenticateToken, async (req, res) => {
   const username = req.user.username;
   try {
-    const user = await get(`SELECT vnpost_cookie FROM users WHERE username = ?`, [username]);
-    if (!user || !user.vnpost_cookie) {
-      return res.status(400).json({ error: 'Không tìm thấy phiên kết nối nào.' });
-    }
-
-    let cookiesArray = [];
-    try {
-      cookiesArray = JSON.parse(user.vnpost_cookie);
-      if (!Array.isArray(cookiesArray)) {
-        cookiesArray = [user.vnpost_cookie];
-      }
-    } catch (e) {
-      cookiesArray = [user.vnpost_cookie];
-    }
-
-    const firstCookie = cookiesArray[0] || '';
     await run(
       `UPDATE users SET vnpost_cookie = ? WHERE username = ?`,
-      [JSON.stringify([firstCookie]), username]
+      [JSON.stringify([]), username]
     );
 
     res.json({
       success: true,
-      message: 'Đã đặt lại về 1 luồng kết nối thành công.'
+      message: 'Đã đặt lại tất cả các luồng kết nối thành công.'
     });
   } catch (err) {
     res.status(500).json({ error: 'Lỗi hệ thống khi đặt lại luồng.' });
@@ -442,7 +442,7 @@ app.get('/api/vnpost/sessions-status', authenticateToken, async (req, res) => {
   try {
     const user = await get(`SELECT vnpost_cookie FROM users WHERE username = ?`, [username]);
     if (!user || !user.vnpost_cookie) {
-      return res.json({ sessions: [] });
+      return res.json({ sessions: [{ index: 0, active: false }] });
     }
 
     let cookiesArray = [];
@@ -455,7 +455,10 @@ app.get('/api/vnpost/sessions-status', authenticateToken, async (req, res) => {
       cookiesArray = [user.vnpost_cookie];
     }
 
-    const sessions = [];
+    if (cookiesArray.length === 0) {
+      return res.json({ sessions: [{ index: 0, active: false }] });
+    }
+
     const checkPromises = cookiesArray.map(async (cookieStr, idx) => {
       if (!cookieStr) {
         return { index: idx, active: false };
@@ -490,7 +493,7 @@ app.get('/api/vnpost/sessions-status', authenticateToken, async (req, res) => {
 
 // Đăng nhập lại một luồng cụ thể thông qua Captcha
 app.post('/api/vnpost/refresh-session', authenticateToken, async (req, res) => {
-  const { sessionIndex, captchaSolution, initialFields, initialCookies } = req.body;
+  const { sessionIndex, captchaSolution, initialFields, initialCookies, password } = req.body;
   const username = req.user.username;
 
   const idx = parseInt(sessionIndex, 10);
@@ -504,11 +507,14 @@ app.post('/api/vnpost/refresh-session', authenticateToken, async (req, res) => {
 
   try {
     const user = await get(`SELECT vnpost_username, vnpost_password, vnpost_cookie FROM users WHERE username = ?`, [username]);
-    if (!user || !user.vnpost_username || !user.vnpost_password) {
-      return res.status(400).json({ error: 'Không tìm thấy thông tin tài khoản VNPost đã cấu hình.' });
+    const vnUsername = user?.vnpost_username || user?.username || username;
+    const vnPassword = password || user?.vnpost_password;
+
+    if (!vnUsername || !vnPassword) {
+      return res.status(400).json({ error: 'Không tìm thấy thông tin tài khoản VNPost đã cấu hình. Vui lòng thử đăng nhập lại ứng dụng.' });
     }
 
-    const result = await loginToVnpost(user.vnpost_username, user.vnpost_password, captchaSolution, initialFields, initialCookies);
+    const result = await loginToVnpost(vnUsername, vnPassword, captchaSolution, initialFields, initialCookies);
     if (!result.success) {
       return res.status(400).json({ error: result.error || 'Đăng nhập luồng thất bại.' });
     }
@@ -516,7 +522,7 @@ app.post('/api/vnpost/refresh-session', authenticateToken, async (req, res) => {
     const newCookieStr = Object.entries(result.cookies).map(([k, v]) => `${k}=${v}`).join('; ');
 
     let cookiesArray = [];
-    if (user.vnpost_cookie) {
+    if (user && user.vnpost_cookie) {
       try {
         cookiesArray = JSON.parse(user.vnpost_cookie);
         if (!Array.isArray(cookiesArray)) {
@@ -533,8 +539,8 @@ app.post('/api/vnpost/refresh-session', authenticateToken, async (req, res) => {
     cookiesArray[idx] = newCookieStr;
 
     await run(
-      `UPDATE users SET vnpost_cookie = ? WHERE username = ?`,
-      [JSON.stringify(cookiesArray), username]
+      `UPDATE users SET vnpost_cookie = ?, vnpost_username = ?, vnpost_password = ? WHERE username = ?`,
+      [JSON.stringify(cookiesArray), vnUsername, vnPassword, username]
     );
 
     res.json({

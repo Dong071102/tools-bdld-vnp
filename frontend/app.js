@@ -1354,40 +1354,22 @@ const mainAppContainer = document.getElementById("main-app-container");
 const loginForm = document.getElementById("login-form");
 const loginError = document.getElementById("login-error");
 
-// Login Captcha State
-let loginCaptchaFields = null;
-let loginCaptchaCookies = null;
-
+// Login Captcha State (no longer required during login)
 async function loadLoginCaptcha() {
-    const imgWrapper = document.getElementById("login-captcha-img-wrapper");
-    if (!imgWrapper) return;
-
-    imgWrapper.innerHTML = `<span class="captcha-placeholder" style="font-size: 12.5px; color: var(--text-muted);">Đang tải...</span>`;
-    document.getElementById("login-captcha-input").value = "";
-
-    try {
-        const res = await fetch("/api/auth/login-captcha");
-        if (!res.ok) throw new Error("Không thể tải captcha");
-        const data = await res.json();
-
-        loginCaptchaFields = data.fields;
-        loginCaptchaCookies = data.cookies;
-
-        imgWrapper.innerHTML = `<img src="${data.captchaImage}" alt="Captcha VNPost" style="max-height: 100%; max-width: 100%; object-fit: contain;" />`;
-    } catch (err) {
-        imgWrapper.innerHTML = `<span class="text-red" style="font-size: 11.5px; font-weight: bold;">Lỗi tải Captcha.</span>`;
-    }
+    // No-op: login captcha removed
 }
 
-// Bind refresh button
-document.getElementById("btn-refresh-login-captcha").addEventListener("click", loadLoginCaptcha);
+// Bind refresh button if exists
+const btnRefreshLoginCaptcha = document.getElementById("btn-refresh-login-captcha");
+if (btnRefreshLoginCaptcha) {
+    btnRefreshLoginCaptcha.addEventListener("click", loadLoginCaptcha);
+}
 
 // Login Submit Handler (Local DB checks on python backend port 8000)
 loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const username = document.getElementById("login-username").value;
+    const username = document.getElementById("login-username").value.trim();
     const password = document.getElementById("login-password").value;
-    const captchaSolution = document.getElementById("login-captcha-input").value.trim();
 
     loginError.style.display = "none";
     try {
@@ -1398,22 +1380,18 @@ loginForm.addEventListener("submit", async (e) => {
             },
             body: JSON.stringify({
                 username,
-                password,
-                captchaSolution,
-                initialFields: loginCaptchaFields,
-                initialCookies: loginCaptchaCookies
+                password
             })
         });
 
         const data = await res.json();
         if (!res.ok) {
-            // Reload captcha on error
-            loadLoginCaptcha();
             throw new Error(data.detail || "Đăng nhập thất bại.");
         }
 
         localStorage.setItem("vnpost_token", data.token);
         localStorage.setItem("vnpost_user", JSON.stringify(data.user));
+        sessionStorage.setItem("vnpost_pass", password);
 
         showApp(data.user);
         initDashboard();
@@ -1458,10 +1436,10 @@ document.getElementById("menu-logout").addEventListener("click", (e) => {
     e.preventDefault();
     localStorage.removeItem("vnpost_token");
     localStorage.removeItem("vnpost_user");
+    sessionStorage.removeItem("vnpost_pass");
     stopSessionPolling();
     mainAppContainer.style.display = "none";
     loginContainer.style.display = "flex";
-    loadLoginCaptcha();
 });
 
 
@@ -1593,7 +1571,8 @@ async function loadSessionsStatus() {
                 activeSessionIndexes.push(i);
             } else {
                 btn.classList.add("expired");
-                const isRefresh = (session !== undefined);
+                // For Luồng 1 (index 0), it is always treated as refreshable slot 0
+                const isRefresh = (session !== undefined) || (i === 0);
                 const statusText = isRefresh ? "Hết hạn" : "Chưa kết nối";
                 btn.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> Luồng ${i + 1}`;
                 btn.title = `Luồng ${i + 1}: ${statusText} (Bấm để giải captcha kết nối)`;
@@ -1655,9 +1634,12 @@ document.getElementById("btn-session-captcha-cancel").addEventListener("click", 
 document.getElementById("frm-session-captcha").addEventListener("submit", async (e) => {
     e.preventDefault();
     const solution = document.getElementById("session-captcha-input").value;
-    const url = isCaptchaRefresh
+    const isRefresh = isCaptchaRefresh || (captchaSessionIndex === 0);
+    const url = isRefresh
         ? `${API_BASE_DINHVI}/api/vnpost/refresh-session`
         : `${API_BASE_DINHVI}/api/vnpost/add-session`;
+
+    const storedPass = sessionStorage.getItem("vnpost_pass") || "";
 
     try {
         const res = await fetch(url, {
@@ -1670,7 +1652,8 @@ document.getElementById("frm-session-captcha").addEventListener("submit", async 
                 sessionIndex: captchaSessionIndex,
                 captchaSolution: solution,
                 initialFields: currentCaptchaFields,
-                initialCookies: currentCaptchaCookies
+                initialCookies: currentCaptchaCookies,
+                password: storedPass
             })
         });
 
@@ -1681,6 +1664,7 @@ document.getElementById("frm-session-captcha").addEventListener("submit", async 
 
         document.getElementById("session-captcha-input").value = "";
         document.getElementById("session-captcha-form").style.display = "none";
+        showToast(data.message || `Đã kết nối thành công Luồng ${captchaSessionIndex + 1}!`, "success");
         loadSessionsStatus();
 
     } catch (err) {
@@ -2607,7 +2591,6 @@ async function init() {
     if (!token) {
         loginContainer.style.display = "flex";
         mainAppContainer.style.display = "none";
-        loadLoginCaptcha();
         return;
     }
 
@@ -2628,9 +2611,9 @@ async function init() {
     } catch (err) {
         localStorage.removeItem("vnpost_token");
         localStorage.removeItem("vnpost_user");
+        sessionStorage.removeItem("vnpost_pass");
         loginContainer.style.display = "flex";
         mainAppContainer.style.display = "none";
-        loadLoginCaptcha();
     }
 }
 
