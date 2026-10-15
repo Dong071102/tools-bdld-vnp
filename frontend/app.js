@@ -3167,6 +3167,24 @@ function initUrlErrorOverlay() {
             if (overlay) overlay.style.display = "none";
             switchView("export");
             if (stickyBanner) stickyBanner.style.display = "flex";
+            if (viewExport) viewExport.classList.remove("view-locked");
+        });
+    }
+
+    if (btnExpand) {
+        btnExpand.addEventListener("click", () => {
+            isErrorBannerMinimized = false;
+            const overlay = document.getElementById("dashboard-url-error-overlay");
+            const stickyBanner = document.getElementById("sticky-pbi-error-banner");
+            const viewExport = document.getElementById("view-export");
+
+            if (overlay) overlay.style.display = "flex";
+            if (stickyBanner) stickyBanner.style.display = "none";
+            if (viewExport) viewExport.classList.add("view-locked");
+        });
+    }
+}
+
 // ==========================================
 // --- POS OFFICES CONFIGURATION MODULE ---
 // ==========================================
