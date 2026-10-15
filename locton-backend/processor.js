@@ -162,6 +162,39 @@ export function isExcludedStatus(status) {
   return false;
 }
 
+export function isKnownVnpostStatus(text) {
+  if (!text || typeof text !== 'string') return false;
+  const s = text.trim().toLowerCase();
+  if (s.length < 3 || s.length > 100) return false;
+  const statusKeywords = [
+    'phát thành công', 'phat thanh cong',
+    'chưa phát', 'chua phat',
+    'phát không thành công', 'phat khong thanh cong',
+    'xác nhận đi', 'xac nhan di',
+    'đóng chuyến thư', 'dong chuyen thu',
+    'chuyến thư đi', 'chuyen thu di',
+    'tới bưu cục nhận', 'toi buu cuc nhan',
+    'đến bưu cục', 'den buu cuc',
+    'giao bưu tá', 'giao buu ta',
+    'thu tiền', 'thu tien',
+    'chuyển tiếp', 'chuyen tiep',
+    'nhập khai thác', 'nhap khai thac',
+    'xuất khai thác', 'xuat khai thac',
+    'mất bưu gửi', 'mat buu gui',
+    'trả tiền', 'tra tien',
+    'từ chối nhận', 'tu choi nhan',
+    'lưu kho', 'luu kho',
+    'hẹn phát', 'hen phat',
+    'chờ phát', 'cho phat',
+    'chờ xử lý', 'cho xu ly',
+    'đang phát', 'dang phat',
+    'chuyển hoàn', 'chuyen hoan',
+    'kết thúc', 'ket thuc',
+    'hủy', 'huy'
+  ];
+  return statusKeywords.some(kw => s.includes(kw));
+}
+
 /**
  * Helper tìm giá trị của key theo danh sách tên cột có thể có
  */
@@ -221,54 +254,157 @@ export function processExcelFiles(hangtonBuffer, dinhViBufferOrData) {
       cellFormula: false,
       cellHTML: false,
       cellNF: false,
-      cellStyles: false,
-      cellText: false
+      cellStyles: false
     });
     const wsDinhVi = wbDinhVi.Sheets['DanhSach'] || wbDinhVi.Sheets[wbDinhVi.SheetNames[0]];
     if (wsDinhVi) {
       const rawRows = XLSX.utils.sheet_to_json(wsDinhVi, { header: 1, defval: '' });
-      let colSoHieu = 1;
-      let colTrangThai = 24;
-      let colViTri = 23;
-      let dataStartRow = 1;
+      let colSoHieu = 1;      // Cột B (mặc định)
+      let colTrangThai = 24;  // Cột Y (mặc định)
+      let colViTri = 23;      // Cột X (mặc định)
+      let headerRowIdx = -1;
 
-      // Quét tự động header từ dòng 0 đến dòng 6
-      for (let r = 0; r < Math.min(7, rawRows.length); r++) {
+      // Quét tìm hàng header thực sự trong 15 dòng đầu tiên
+      for (let r = 0; r < Math.min(15, rawRows.length); r++) {
         const row = rawRows[r] || [];
-        for (let c = 0; c < row.length; c++) {
-          const val = String(row[c] || '').trim().toLowerCase();
-          if ((val.includes('số hiệu') || val.includes('so hieu') || val.includes('mã bưu gửi') || val.includes('itemcode')) && !val.includes('khách hàng')) {
+        const isHeader = row.some(cell => {
+          const s = String(cell || '').trim().toLowerCase();
+          return (s.includes('số hiệu') || s.includes('so hieu') || s.includes('mã bưu gửi') || s.includes('mã bg') || s.includes('itemcode')) && !s.includes('khách hàng');
+        });
+        if (isHeader) {
+          headerRowIdx = r;
+          break;
+        }
+      }
+
+      if (headerRowIdx !== -1) {
+        const hRow = rawRows[headerRowIdx] || [];
+        // 1. Xác định cột Số hiệu
+        for (let c = 0; c < hRow.length; c++) {
+          const s = String(hRow[c] || '').trim().toLowerCase();
+          if ((s.includes('số hiệu') || s.includes('so hieu') || s.includes('mã bưu gửi') || s.includes('mã bg') || s.includes('itemcode')) && !s.includes('khách hàng')) {
             colSoHieu = c;
-            dataStartRow = Math.max(dataStartRow, r + 1);
-          } else if (val.includes('trạng thái cuối cùng') || val.includes('trang thai cuoi cung') || (val.includes('trạng thái') && !val.includes('trước'))) {
+            break;
+          }
+        }
+
+        // 2. Xác định cột Trạng thái cuối cùng (theo thứ tự ưu tiên)
+        let foundTT = false;
+        for (let c = 0; c < hRow.length; c++) {
+          const s = String(hRow[c] || '').trim().toLowerCase();
+          if (s.includes('trạng thái cuối cùng') || s.includes('trang thai cuoi cung')) {
             colTrangThai = c;
-            dataStartRow = Math.max(dataStartRow, r + 1);
-          } else if (
-            val.includes('vị trí cuối cùng') || val.includes('vi tri cuoi cung') ||
-            val.includes('bưu cục phát hiện tại') || val.includes('đơn vị cuối cùng') ||
-            val.startsWith('vị trí') || val.startsWith('vi tri')
-          ) {
+            foundTT = true;
+            break;
+          }
+        }
+        if (!foundTT) {
+          for (let c = 0; c < hRow.length; c++) {
+            const s = String(hRow[c] || '').trim().toLowerCase();
+            if (s.includes('trạng thái hiện tại') || s.includes('trang thai hien tai') || s.includes('tên trạng thái')) {
+              colTrangThai = c;
+              foundTT = true;
+              break;
+            }
+          }
+        }
+        if (!foundTT) {
+          for (let c = 0; c < hRow.length; c++) {
+            const s = String(hRow[c] || '').trim().toLowerCase();
+            if ((s.includes('trạng thái') || s.includes('status')) && !s.includes('mã') && !s.includes('code') && !s.includes('ngày') && !s.includes('giờ') && !s.includes('trước')) {
+              colTrangThai = c;
+              foundTT = true;
+              break;
+            }
+          }
+        }
+
+        // 3. Xác định cột Vị trí cuối cùng (theo thứ tự ưu tiên)
+        let foundVT = false;
+        for (let c = 0; c < hRow.length; c++) {
+          const s = String(hRow[c] || '').trim().toLowerCase();
+          if (s.includes('vị trí cuối cùng') || s.includes('vi tri cuoi cung')) {
             colViTri = c;
-            dataStartRow = Math.max(dataStartRow, r + 1);
+            foundVT = true;
+            break;
+          }
+        }
+        if (!foundVT) {
+          for (let c = 0; c < hRow.length; c++) {
+            const s = String(hRow[c] || '').trim().toLowerCase();
+            if (s.includes('vị trí hiện tại') || s.includes('vi tri hien tai') || s.includes('bưu cục phát hiện tại') || s.includes('đơn vị cuối cùng') || s.includes('bưu cục cuối cùng')) {
+              colViTri = c;
+              foundVT = true;
+              break;
+            }
+          }
+        }
+        if (!foundVT) {
+          for (let c = 0; c < hRow.length; c++) {
+            const s = String(hRow[c] || '').trim().toLowerCase();
+            if ((s.startsWith('vị trí') || s.startsWith('vi tri') || s.includes('đơn vị hiện tại')) && !s.includes('mã') && !s.includes('code')) {
+              colViTri = c;
+              foundVT = true;
+              break;
+            }
           }
         }
       }
 
-      if (colViTri === 23 && colTrangThai !== 24 && colTrangThai > 0) {
-        colViTri = colTrangThai - 1;
-      }
+      const dataStartRow = headerRowIdx !== -1 ? headerRowIdx + 1 : 1;
 
       for (let r = dataStartRow; r < rawRows.length; r++) {
         const row = rawRows[r] || [];
         const soHieu = String(row[colSoHieu] || '').trim();
         if (!soHieu) continue;
 
-        const ttCuoiCung = String(row[colTrangThai] || '').trim();
+        let ttCuoiCung = String(row[colTrangThai] || '').trim();
         let vtCuoiCung = String(row[colViTri] || '').trim();
-        if (!vtCuoiCung && colTrangThai > 0 && row[colTrangThai - 1]) {
-          const neighbor = String(row[colTrangThai - 1]).trim();
-          if (hasTargetBcPrefix(neighbor) || neighbor.length > 3) {
-            vtCuoiCung = neighbor;
+
+        // Fallback 1: Nếu tt rỗng, kiểm tra các cột ứng viên chuẩn
+        if (!ttCuoiCung) {
+          const candidates = [24, 25, 23, 22, 26, 21];
+          for (const c of candidates) {
+            if (c < row.length && c !== colSoHieu) {
+              const cellVal = String(row[c] || '').trim();
+              if (isKnownVnpostStatus(cellVal)) {
+                ttCuoiCung = cellVal;
+                if (!vtCuoiCung && c > 0) {
+                  vtCuoiCung = String(row[c - 1] || '').trim();
+                }
+                break;
+              }
+            }
+          }
+        }
+
+        // Fallback 2: Quét tất cả các ô trong dòng tìm trạng thái VNPost
+        if (!ttCuoiCung) {
+          for (let c = 0; c < row.length; c++) {
+            if (c === colSoHieu) continue;
+            const cellVal = String(row[c] || '').trim();
+            if (isKnownVnpostStatus(cellVal)) {
+              ttCuoiCung = cellVal;
+              if (!vtCuoiCung && c > 0) {
+                const neighbor = String(row[c - 1] || '').trim();
+                if (hasTargetBcPrefix(neighbor) || neighbor.length > 3) {
+                  vtCuoiCung = neighbor;
+                }
+              }
+              break;
+            }
+          }
+        }
+
+        // Fallback cho vị trí
+        if (!vtCuoiCung) {
+          if (colTrangThai > 0 && row[colTrangThai - 1]) {
+            const neighbor = String(row[colTrangThai - 1]).trim();
+            if (hasTargetBcPrefix(neighbor) || neighbor.length > 3) {
+              vtCuoiCung = neighbor;
+            }
+          } else if (row[23]) {
+            vtCuoiCung = String(row[23]).trim();
           }
         }
 
