@@ -3743,13 +3743,63 @@ function isLoctonExcludedStatus(status) {
     return false;
 }
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+function updateLoctonStep(stepNum, status) {
+    const stepEl = document.getElementById(`locton-step-${stepNum}`);
+    if (!stepEl) return;
+    stepEl.classList.remove('pending', 'active', 'completed');
+    stepEl.classList.add(status);
+    const iconWrap = stepEl.querySelector('.step-icon-wrap');
+    if (!iconWrap) return;
+
+    if (status === 'completed') {
+        iconWrap.innerHTML = '<i class="fa-solid fa-check"></i>';
+    } else if (status === 'active') {
+        iconWrap.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+    } else {
+        const defaultIcons = {
+            1: '<i class="fa-solid fa-location-crosshairs"></i>',
+            2: '<i class="fa-solid fa-boxes-stacked"></i>',
+            3: '<i class="fa-solid fa-code-compare"></i>',
+            4: '<i class="fa-solid fa-chart-pie"></i>'
+        };
+        iconWrap.innerHTML = defaultIcons[stepNum] || '<i class="fa-solid fa-circle"></i>';
+    }
+}
+
+function setLoctonProgress(percent, title, subtitle, activeStep) {
+    const card = document.getElementById('locton-processing-card');
+    if (card) card.style.display = 'block';
+
+    const bar = document.getElementById('locton-progress-bar-fill');
+    if (bar) bar.style.width = `${percent}%`;
+
+    const titleEl = document.getElementById('locton-progress-title');
+    if (titleEl) titleEl.textContent = title;
+
+    const subEl = document.getElementById('locton-progress-subtitle');
+    if (subEl) subEl.textContent = subtitle;
+
+    if (activeStep) {
+        for (let i = 1; i <= 4; i++) {
+            if (i < activeStep) updateLoctonStep(i, 'completed');
+            else if (i === activeStep) updateLoctonStep(i, 'active');
+            else updateLoctonStep(i, 'pending');
+        }
+    }
+}
+
 // Client-side Excel Processor using SheetJS (runs 100% in browser, fast & offline-ready)
-async function processExcelLocTonInBrowser(hangtonFile, dinhViFile) {
+async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
     if (!window.XLSX) {
         throw new Error("Thư viện SheetJS (XLSX) chưa được tải trên trình duyệt.");
     }
 
     // 1. Đọc file định vị (dinh_vi.xlsx)
+    if (onStage) onStage(1, 15, "Bước 1/4: Đọc file Định vị (dinh_vi.xlsx)...", "Đang trích xuất mã số hiệu và trạng thái cuối cùng");
+    await sleep(250);
+
     const bufDinhVi = await dinhViFile.arrayBuffer();
     const wbDinhVi = window.XLSX.read(bufDinhVi, {
         type: 'array',
@@ -3778,6 +3828,9 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile) {
     }
 
     // 2. Đọc file hàng tồn (hangton.xlsx)
+    if (onStage) onStage(2, 40, "Bước 2/4: Đọc file Hàng tồn (hangton.xlsx)...", `Đã nạp ${dinhViMap.size} mã định vị. Đang đọc danh sách tồn`);
+    await sleep(250);
+
     const bufHangton = await hangtonFile.arrayBuffer();
     const wbHangton = window.XLSX.read(bufHangton, {
         type: 'array',
@@ -3791,6 +3844,9 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile) {
     const hangtonRows = window.XLSX.utils.sheet_to_json(wsHangton, { defval: '' });
 
     // 3. Phân loại Bảng 1 & Bảng 2
+    if (onStage) onStage(3, 70, "Bước 3/4: Đang đối soát dữ liệu & phân loại...", `Đang khớp ${hangtonRows.length} dòng hàng tồn với trạng thái định vị`);
+    await sleep(300);
+
     const bang1 = [];
     const bang2 = [];
 
@@ -3834,6 +3890,9 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile) {
     }
 
     // 4. Tổng hợp Bảng 3: Nhóm theo bưu cục từ Bảng 1
+    if (onStage) onStage(4, 90, "Bước 4/4: Đang tổng hợp báo cáo các bưu cục...", `Bảng 1: ${bang1.length} bưu gửi | Bảng 2: ${bang2.length} bưu gửi`);
+    await sleep(250);
+
     const groups = new Map();
 
     for (const row of bang1) {
@@ -3915,6 +3974,9 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile) {
 
     const bang3 = [rowTongLamDong, ...bang3List];
 
+    if (onStage) onStage(4, 100, "Hoàn tất đối soát bưu gửi!", "Đang chuẩn bị hiển thị dữ liệu lên bảng");
+    await sleep(350);
+
     return {
         bang1,
         bang2,
@@ -3988,18 +4050,42 @@ async function handleLoctonProcess() {
     const originalHtml = btnProcess ? btnProcess.innerHTML : "";
     if (btnProcess) {
         btnProcess.disabled = true;
-        btnProcess.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang xử lý đối soát bưu gửi...`;
+        btnProcess.classList.add("btn-locton-pulsing");
+        btnProcess.innerHTML = `<i class="fa-solid fa-atom fa-spin"></i> Đang phân tích...`;
     }
     hideLoctonAlert();
+
+    // Ẩn bảng kết quả cũ để tập trung vào animation xử lý
+    const kpiSec = document.getElementById("locton-kpis");
+    const tblCard = document.getElementById("locton-table-card");
+    const procCard = document.getElementById("locton-processing-card");
+
+    if (kpiSec) kpiSec.style.display = "none";
+    if (tblCard) tblCard.style.display = "none";
+    if (procCard) {
+        procCard.style.display = "block";
+        procCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
 
     try {
         let result = null;
 
-        // Ưu tiên xử lý trực tiếp trên trình duyệt bằng SheetJS nếu có thư viện
+        // Ưu tiên xử lý trực tiếp trên trình duyệt bằng SheetJS với hiệu ứng chuyển bước sinh động
         if (typeof window.XLSX !== 'undefined') {
-            result = await processExcelLocTonInBrowser(loctonHangtonFile, loctonDinhViFile);
+            result = await processExcelLocTonInBrowser(
+                loctonHangtonFile, 
+                loctonDinhViFile, 
+                (step, pct, title, sub) => {
+                    setLoctonProgress(pct, title, sub, step);
+                    if (btnProcess) {
+                        btnProcess.innerHTML = `<i class="fa-solid fa-atom fa-spin"></i> Đang xử lý (${pct}%)...`;
+                    }
+                }
+            );
         } else {
             // Dự phòng: gọi lên backend service nếu SheetJS chưa nạp
+            setLoctonProgress(30, "Đang tải file lên máy chủ...", "Vui lòng chờ máy chủ xử lý dữ liệu", 2);
+
             const formData = new FormData();
             formData.append("hangton", loctonHangtonFile);
             formData.append("dinh_vi", loctonDinhViFile);
@@ -4008,6 +4094,8 @@ async function handleLoctonProcess() {
                 method: "POST",
                 body: formData
             });
+
+            setLoctonProgress(80, "Đang nhận kết quả từ máy chủ...", "Đang đối soát hoàn tất", 3);
 
             const contentType = resp.headers.get("content-type") || "";
             if (!contentType.includes("application/json")) {
@@ -4025,6 +4113,8 @@ async function handleLoctonProcess() {
                 bang3: jsonResp.data.bang3,
                 stats: jsonResp.stats
             };
+            setLoctonProgress(100, "Hoàn tất đối soát bưu gửi!", "Đang chuẩn bị hiển thị dữ liệu", 4);
+            await sleep(300);
         }
 
         loctonData = {
@@ -4054,13 +4144,24 @@ async function handleLoctonProcess() {
         if (countTab2) countTab2.textContent = formatNumber(loctonData.bang2.length);
         if (countTab3) countTab3.textContent = formatNumber(loctonData.bang3.length);
 
-        // Show KPI, table card and export button
-        const kpiSec = document.getElementById("locton-kpis");
-        const tblCard = document.getElementById("locton-table-card");
-        const btnExp = document.getElementById("btn-locton-export-excel");
+        // Ẩn thanh progress và kích hoạt animation fade-in xuất hiện kết quả
+        if (procCard) procCard.style.display = "none";
 
-        if (kpiSec) kpiSec.style.display = "grid";
-        if (tblCard) tblCard.style.display = "block";
+        if (kpiSec) {
+            kpiSec.classList.remove("locton-fade-in");
+            void kpiSec.offsetWidth; // Trigger reflow
+            kpiSec.classList.add("locton-fade-in");
+            kpiSec.style.display = "grid";
+        }
+
+        if (tblCard) {
+            tblCard.classList.remove("locton-fade-in");
+            void tblCard.offsetWidth; // Trigger reflow
+            tblCard.classList.add("locton-fade-in");
+            tblCard.style.display = "block";
+        }
+
+        const btnExp = document.getElementById("btn-locton-export-excel");
         if (btnExp) btnExp.style.display = "inline-flex";
 
         showToast("Lọc và đối soát dữ liệu thành công!", "success");
@@ -4068,9 +4169,11 @@ async function handleLoctonProcess() {
     } catch (err) {
         console.error("Lỗi lọc tồn:", err);
         showLoctonAlert("Lỗi: " + err.message, "danger");
+        if (procCard) procCard.style.display = "none";
     } finally {
         if (btnProcess) {
             btnProcess.disabled = false;
+            btnProcess.classList.remove("btn-locton-pulsing");
             btnProcess.innerHTML = originalHtml;
         }
     }

@@ -583,6 +583,45 @@
                     <div id="locton-alert" class="alert" style="display: none; margin-top: 16px; padding: 12px 16px; border-radius: 8px;"></div>
                 </div>
 
+                <!-- Processing Progress & Animation Card -->
+                <div id="locton-processing-card" class="grid-card padded locton-anim-card" style="display: none; margin-bottom: 24px; text-align: center; border: 1.5px solid var(--accent-emerald); background: linear-gradient(135deg, rgba(15, 118, 110, 0.04) 0%, rgba(59, 130, 246, 0.04) 100%);">
+                    <div class="locton-orbit-spinner" style="margin: 0 auto 16px auto;">
+                        <div class="orbit-circle orbit-outer"></div>
+                        <div class="orbit-circle orbit-inner"></div>
+                        <i class="fa-solid fa-bolt-lightning orbit-core-icon"></i>
+                    </div>
+
+                    <h3 id="locton-progress-title" style="font-size: 17px; font-weight: 700; color: var(--accent-emerald); margin-bottom: 6px;">Đang chuẩn bị dữ liệu...</h3>
+                    <p id="locton-progress-subtitle" style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 16px;">Vui lòng giữ nguyên màn hình trong giây lát</p>
+
+                    <!-- Animated Progress Bar -->
+                    <div class="locton-progress-bar-track" style="width: 100%; max-width: 520px; height: 10px; background: var(--bg-tertiary); border-radius: 10px; margin: 0 auto 20px auto; overflow: hidden; position: relative; box-shadow: inset 0 1px 2px rgba(0,0,0,0.06);">
+                        <div id="locton-progress-bar-fill" class="locton-progress-bar-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-emerald) 0%, #10b981 50%, #3b82f6 100%); border-radius: 10px; transition: width 0.35s ease; position: relative;">
+                            <div class="locton-bar-shimmer"></div>
+                        </div>
+                    </div>
+
+                    <!-- Step-by-step Timeline Indicator -->
+                    <div class="locton-steps-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; max-width: 680px; margin: 0 auto;">
+                        <div class="locton-step-item pending" id="locton-step-1">
+                            <div class="step-icon-wrap"><i class="fa-solid fa-location-crosshairs"></i></div>
+                            <span class="step-label">1. File Định vị</span>
+                        </div>
+                        <div class="locton-step-item pending" id="locton-step-2">
+                            <div class="step-icon-wrap"><i class="fa-solid fa-boxes-stacked"></i></div>
+                            <span class="step-label">2. File Hàng tồn</span>
+                        </div>
+                        <div class="locton-step-item pending" id="locton-step-3">
+                            <div class="step-icon-wrap"><i class="fa-solid fa-code-compare"></i></div>
+                            <span class="step-label">3. Đối soát mã</span>
+                        </div>
+                        <div class="locton-step-item pending" id="locton-step-4">
+                            <div class="step-icon-wrap"><i class="fa-solid fa-chart-pie"></i></div>
+                            <span class="step-label">4. Tổng hợp BC</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- KPI Result Cards -->
                 <section class="kpi-grid" id="locton-kpis" style="display: none; margin-bottom: 24px;">
                     <div class="kpi-card">

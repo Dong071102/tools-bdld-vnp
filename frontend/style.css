@@ -2071,3 +2071,160 @@ body {
         transform: scale(0.8);
     }
 }
+
+/* ==========================================
+   LOCTON ANIMATIONS & PROCESSING STYLES
+   ========================================== */
+
+@keyframes orbitRotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes orbitCounterRotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(-360deg); }
+}
+
+@keyframes pulseGlow {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px rgba(15, 118, 110, 0.4)); }
+    50% { transform: scale(1.08); filter: drop-shadow(0 0 12px rgba(15, 118, 110, 0.8)); }
+}
+
+@keyframes shimmerWave {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(200%); }
+}
+
+@keyframes loctonFadeInUp {
+    0% { opacity: 0; transform: translateY(18px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes popBounce {
+    0% { transform: scale(0.8); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+
+.locton-orbit-spinner {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.orbit-circle {
+    position: absolute;
+    border-radius: 50%;
+    border-style: solid;
+}
+
+.orbit-outer {
+    width: 64px;
+    height: 64px;
+    border-width: 3px;
+    border-color: rgba(15, 118, 110, 0.25) transparent rgba(15, 118, 110, 0.8) transparent;
+    animation: orbitRotate 1.4s linear infinite;
+}
+
+.orbit-inner {
+    width: 44px;
+    height: 44px;
+    border-width: 2.5px;
+    border-color: transparent rgba(59, 130, 246, 0.8) transparent rgba(59, 130, 246, 0.25);
+    animation: orbitCounterRotate 1s linear infinite;
+}
+
+.orbit-core-icon {
+    font-size: 20px;
+    color: var(--accent-emerald);
+    animation: pulseGlow 1.5s ease-in-out infinite;
+}
+
+.locton-bar-shimmer {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+    animation: shimmerWave 1.8s infinite;
+}
+
+.locton-steps-grid .locton-step-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 8px;
+    border-radius: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.locton-step-item .step-icon-wrap {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13.5px;
+    transition: all 0.3s ease;
+}
+
+.locton-step-item .step-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: color 0.3s ease;
+}
+
+/* Status states for steps */
+.locton-step-item.pending .step-icon-wrap {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+}
+
+.locton-step-item.active {
+    border-color: var(--accent-emerald);
+    box-shadow: 0 0 14px rgba(15, 118, 110, 0.18);
+    transform: translateY(-2px);
+}
+
+.locton-step-item.active .step-icon-wrap {
+    background: var(--accent-emerald-light);
+    color: var(--accent-emerald);
+    animation: pulseGlow 1.2s infinite;
+}
+
+.locton-step-item.active .step-label {
+    color: var(--accent-emerald);
+}
+
+.locton-step-item.completed {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.05);
+}
+
+.locton-step-item.completed .step-icon-wrap {
+    background: #10b981;
+    color: #ffffff;
+    animation: popBounce 0.4s ease;
+}
+
+.locton-step-item.completed .step-label {
+    color: #047857;
+}
+
+.locton-fade-in {
+    animation: loctonFadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Pulse animation on processing button */
+.btn-locton-pulsing {
+    background: linear-gradient(135deg, var(--accent-emerald), #059669) !important;
+    box-shadow: 0 0 18px rgba(15, 118, 110, 0.6) !important;
+    animation: pulseGlow 1.2s infinite;
+}
