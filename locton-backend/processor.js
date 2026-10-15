@@ -53,39 +53,82 @@ export const EXCLUDE_STATUSES = new Set((config.excludeStatuses || []).map(s => 
 export const EXCLUDE_BC = new Set((config.excludeBC || []).map(b => String(b).trim()));
 
 /**
- * Kiểm tra mã bưu cục trong Vị trí cuối cùng có đầu 2 số là 64, 67, 80 hay không.
+ * Trọng số thời gian tồn để sắp xếp giảm dần (≥14 ngày > ≥7 ngày > ≥5 ngày > ≥3 ngày)
+ */
+export function getThoiGianTonWeight(tg) {
+  if (!tg) return 0;
+  const s = String(tg).toLowerCase();
+  if (s.includes('14')) return 14;
+  if (s.includes('7')) return 7;
+  if (s.includes('5')) return 5;
+  if (s.includes('3')) return 3;
+  const match = s.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
+}
+
+/**
+ * Sắp xếp danh sách bưu gửi theo thứ tự ưu tiên:
+ * 1. Thời gian tồn giảm dần (≥14N > ≥7N > ≥5N > ≥3N)
+ * 2. Tiền COD giảm dần
+ * 3. Mã bưu cục giảm dần
+ */
+export function sortLoctonRows(rows) {
+  return [...rows].sort((a, b) => {
+    // 1. Thời gian tồn giảm dần
+    const tgA = getThoiGianTonWeight(a['Thời gian tồn']);
+    const tgB = getThoiGianTonWeight(b['Thời gian tồn']);
+    if (tgB !== tgA) return tgB - tgA;
+
+    // 2. Tiền COD giảm dần
+    const codA = Number(a['COD'] || a['Tiền COD'] || 0);
+    const codB = Number(b['COD'] || b['Tiền COD'] || 0);
+    if (codB !== codA) return codB - codA;
+
+    // 3. Mã bưu cục giảm dần
+    const bcA = String(a['Mã bưu cục'] || a['Mã BC phát'] || a['Mã BC'] || '');
+    const bcB = String(b['Mã bưu cục'] || b['Mã BC phát'] || b['Mã BC'] || '');
+    return bcB.localeCompare(bcA, undefined, { numeric: true });
+  });
+}
+
+/**
+ * Kiểm tra mã bưu cục trong Vị trí cuối cùng có đầu 2 số là 64, 67, 80 hoặc thuộc địa bàn các tỉnh này
  */
 export function hasTargetBcPrefix(vt) {
   if (!vt) return false;
   const s = String(vt).trim();
-  // 1. Bắt đầu bằng 64, 67 hoặc 80 (vd: "670000", "641190 - Gia Nghĩa", "800000")
+  // 1. Chứa mã số bắt đầu bằng 64, 67 hoặc 80
   if (/^(64|67|80)/.test(s)) return true;
-  // 2. Chứa mã bưu cục (2-6 chữ số) có tiền tố 64, 67, 80 sau ký tự phân cách (vd: "BCKT (670000)", "Bưu điện 641190")
   if (/(?:^|[^\d])(64|67|80)(?:\d{4}|\d{2}|[^\d]|$)/.test(s)) return true;
+
+  // 2. Chứa tên bưu cục/địa danh thuộc Lâm Đồng (67), Đắk Nông (64), Bình Thuận (80)
+  const lower = s.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd');
+  const targetLocations = [
+    'lam dong', 'da lat', 'bao loc', 'duc trong', 'di linh', 'don duong', 
+    'lam ha', 'bao lam', 'cat tien', 'da huoai', 'da teh', 'dam rong',
+    'dak nong', 'dac nong', 'gia nghia', 'dak r lap', 'dak mil', 'cu jut', 'krong no',
+    'binh thuan', 'phan thiet', 'la gi', 'ham thuan', 'bac binh', 'tuy phong'
+  ];
+  for (const loc of targetLocations) {
+    if (lower.includes(loc)) return true;
+  }
   return false;
 }
 
 /**
- * Kiểm tra trạng thái có phải là "[BĐ8]Đã xác nhận đi" hoặc "Đã đóng chuyến thư đi"
+ * Kiểm tra trạng thái có phải là "Đã xác nhận đi" (bao gồm [BĐ8]) hoặc "Đã đóng chuyến thư đi"
  */
 export function isSpecialTransitStatus(status) {
   if (!status) return false;
-  const s = String(status).trim();
-  const lower = s.toLowerCase();
-  if (s.includes('[BĐ8]Đã xác nhận đi') || s.includes('Đã xác nhận đi') || lower.includes('đã xác nhận đi') || lower.includes('da xac nhan di')) {
-    return true;
-  }
-  if (s.includes('Đã đóng chuyến thư đi') || lower.includes('đã đóng chuyến thư đi') || lower.includes('da dong chuyen thu di')) {
-    return true;
-  }
-  return false;
+  const s = String(status).trim().toLowerCase();
+  return s.includes('xác nhận đi') || s.includes('xac nhan di') || 
+         s.includes('đóng chuyến thư') || s.includes('dong chuyen thu');
 }
 
 /**
  * Quyết định bưu gửi có bị loại trừ (vào Bảng 2) hay giữ lại hàng tồn (Bảng 1).
- * Đối với "[BĐ8]Đã xác nhận đi" hoặc "Đã đóng chuyến thư đi":
- * - Vị trí cuối cùng ở bc có đầu 2 số 64, 67, 80 -> giữ lại hàng tồn (Bảng 1).
- * - Nếu không có -> vào bảng bg trạng thái khác (Bảng 2).
  */
 export function shouldExcludeItem(status, location) {
   if (isSpecialTransitStatus(status)) {
@@ -173,7 +216,6 @@ export function processExcelFiles(hangtonBuffer, dinhViBufferOrData) {
       }
     }
   } else if (dinhViBufferOrData) {
-    // Đọc buffer tối ưu
     const wbDinhVi = XLSX.read(dinhViBufferOrData, { 
       type: 'buffer', 
       cellFormula: false,
@@ -183,62 +225,64 @@ export function processExcelFiles(hangtonBuffer, dinhViBufferOrData) {
       cellText: false
     });
     const wsDinhVi = wbDinhVi.Sheets['DanhSach'] || wbDinhVi.Sheets[wbDinhVi.SheetNames[0]];
-    if (wsDinhVi && wsDinhVi['!ref']) {
-      const range = XLSX.utils.decode_range(wsDinhVi['!ref']);
-      
-      let colSoHieu = 1;      // Cột B
-      let colTrangThai = 24;  // Cột Y
-      let colViTri = 23;      // Cột X
-      let dataStartRow = 2;   // Dòng 3
+    if (wsDinhVi) {
+      const rawRows = XLSX.utils.sheet_to_json(wsDinhVi, { header: 1, defval: '' });
+      let colSoHieu = 1;
+      let colTrangThai = 24;
+      let colViTri = 23;
+      let dataStartRow = 1;
 
-      // Quét tự động header từ dòng 0 đến dòng 4
-      for (let r = range.s.r; r <= Math.min(range.s.r + 4, range.e.r); r++) {
-        for (let c = range.s.c; c <= range.e.c; c++) {
-          const cell = wsDinhVi[XLSX.utils.encode_cell({ r, c })];
-          if (cell && cell.v !== undefined && cell.v !== null) {
-            const val = String(cell.v).trim().toLowerCase();
-            if (val.includes('trạng thái cuối cùng') || val.includes('trang thai cuoi cung')) {
-              colTrangThai = c;
-              dataStartRow = Math.max(dataStartRow, r + 1);
-            } else if (
-              val.includes('vị trí cuối cùng') || val.includes('vi tri cuoi cung') ||
-              val.includes('bưu cục phát hiện tại') || val.includes('đơn vị cuối cùng') ||
-              val.startsWith('vị trí') || val.startsWith('vi tri')
-            ) {
-              colViTri = c;
-              dataStartRow = Math.max(dataStartRow, r + 1);
-            } else if ((val === 'số hiệu' || val === 'so hieu' || val.includes('mã bưu gửi') || val.includes('itemcode') || val === 'số hiệu bưu gửi') && !val.includes('khách hàng')) {
-              colSoHieu = c;
-              dataStartRow = Math.max(dataStartRow, r + 1);
-            }
+      // Quét tự động header từ dòng 0 đến dòng 6
+      for (let r = 0; r < Math.min(7, rawRows.length); r++) {
+        const row = rawRows[r] || [];
+        for (let c = 0; c < row.length; c++) {
+          const val = String(row[c] || '').trim().toLowerCase();
+          if ((val.includes('số hiệu') || val.includes('so hieu') || val.includes('mã bưu gửi') || val.includes('itemcode')) && !val.includes('khách hàng')) {
+            colSoHieu = c;
+            dataStartRow = Math.max(dataStartRow, r + 1);
+          } else if (val.includes('trạng thái cuối cùng') || val.includes('trang thai cuoi cung') || (val.includes('trạng thái') && !val.includes('trước'))) {
+            colTrangThai = c;
+            dataStartRow = Math.max(dataStartRow, r + 1);
+          } else if (
+            val.includes('vị trí cuối cùng') || val.includes('vi tri cuoi cung') ||
+            val.includes('bưu cục phát hiện tại') || val.includes('đơn vị cuối cùng') ||
+            val.startsWith('vị trí') || val.startsWith('vi tri')
+          ) {
+            colViTri = c;
+            dataStartRow = Math.max(dataStartRow, r + 1);
           }
         }
       }
 
-      for (let r = dataStartRow; r <= range.e.r; r++) {
-        const cellB = wsDinhVi[XLSX.utils.encode_cell({ r, c: colSoHieu })];
-        if (cellB && cellB.v) {
-          const soHieu = String(cellB.v).trim();
-          if (!soHieu) continue;
+      if (colViTri === 23 && colTrangThai !== 24 && colTrangThai > 0) {
+        colViTri = colTrangThai - 1;
+      }
 
-          const cellTT = wsDinhVi[XLSX.utils.encode_cell({ r, c: colTrangThai })];
-          const ttCuoiCung = cellTT && cellTT.v !== undefined && cellTT.v !== null ? String(cellTT.v).trim() : '';
+      for (let r = dataStartRow; r < rawRows.length; r++) {
+        const row = rawRows[r] || [];
+        const soHieu = String(row[colSoHieu] || '').trim();
+        if (!soHieu) continue;
 
-          const cellVT = wsDinhVi[XLSX.utils.encode_cell({ r, c: colViTri })];
-          const vtCuoiCung = cellVT && cellVT.v !== undefined && cellVT.v !== null ? String(cellVT.v).trim() : '';
-
-          dinhViMap.set(soHieu, {
-            tt: ttCuoiCung,
-            vt: vtCuoiCung
-          });
+        const ttCuoiCung = String(row[colTrangThai] || '').trim();
+        let vtCuoiCung = String(row[colViTri] || '').trim();
+        if (!vtCuoiCung && colTrangThai > 0 && row[colTrangThai - 1]) {
+          const neighbor = String(row[colTrangThai - 1]).trim();
+          if (hasTargetBcPrefix(neighbor) || neighbor.length > 3) {
+            vtCuoiCung = neighbor;
+          }
         }
+
+        dinhViMap.set(soHieu, {
+          tt: ttCuoiCung,
+          vt: vtCuoiCung
+        });
       }
     }
   }
 
   // 3. Thực hiện INNER JOIN và tách thành 2 bảng
-  const bang1 = []; // Danh sách bưu gửi tồn (Chưa phát thành công)
-  const bang2 = []; // Danh sách bg trạng thái khác (Đã phát/loại trừ)
+  let rawBang1 = []; // Danh sách bưu gửi tồn (Chưa phát thành công)
+  let rawBang2 = []; // Danh sách bg trạng thái khác (Đã phát/loại trừ)
 
   for (const item of hangtonRows) {
     const rawMaBG = getVal(item, ['Mã bưu gửi', 'Số hiệu bưu gửi', 'ItemCode', 'item_code', 'MaBG']);
@@ -257,23 +301,42 @@ export function processExcelFiles(hangtonBuffer, dinhViBufferOrData) {
       ttcc = String(dvInfo || '').trim();
     }
 
+    const maBCHangTon = String(getVal(item, ['Mã bưu cục', 'POSCode', 'pos_code', 'MaBC'], '')).trim();
+    const tenBCHangTon = String(getVal(item, ['Bưu cục Phát', 'POSName', 'pos_name', 'TenBC'], '')).trim();
+
+    // Xác định vị trí hiệu lực
+    let effectiveLocation = vtcc;
+    if (!effectiveLocation && hasTargetBcPrefix(maBCHangTon)) {
+      effectiveLocation = tenBCHangTon ? `${maBCHangTon} - ${tenBCHangTon}` : maBCHangTon;
+    }
+
+    let isExcluded = isExcludedStatus(ttcc);
+    let trangThaiLuu = ttcc;
+
+    if (isSpecialTransitStatus(ttcc)) {
+      if (hasTargetBcPrefix(effectiveLocation) || hasTargetBcPrefix(vtcc)) {
+        isExcluded = false; // Bảng 1 (Hàng tồn)
+        const loc = effectiveLocation || vtcc;
+        trangThaiLuu = loc ? `${ttcc} - ${loc}` : ttcc;
+      } else {
+        isExcluded = true; // Bảng 2 (Trạng thái khác)
+        if (vtcc) {
+          trangThaiLuu = `${ttcc} - ${vtcc}`;
+        }
+      }
+    }
+
     const codVal = Number(getVal(item, ['COD', 'cod_amount', 'Tiền COD', 'CODAmount'], 0)) || 0;
     const trongLuongVal = Number(getVal(item, ['Trọng lượng', 'weight', 'TL', 'TL_2'], 0)) || 0;
 
-    // Đổi tên trạng thái đối với trường hợp [BĐ8]Đã xác nhận đi hoặc Đã đóng chuyến thư đi có vị trí ở bc đầu 64, 67, 80
-    let trangThaiLuu = ttcc;
-    if (isSpecialTransitStatus(ttcc) && hasTargetBcPrefix(vtcc)) {
-      trangThaiLuu = vtcc ? `${ttcc} - ${vtcc}` : ttcc;
-    }
-
     const rowData = {
       'Mã bưu gửi': maBG,
-      'Mã bưu cục': String(getVal(item, ['Mã bưu cục', 'POSCode', 'pos_code', 'MaBC'], '')).trim(),
-      'Bưu cục Phát': String(getVal(item, ['Bưu cục Phát', 'POSName', 'pos_name', 'TenBC'], '')).trim(),
+      'Mã bưu cục': maBCHangTon,
+      'Bưu cục Phát': tenBCHangTon,
       'DK1': String(getVal(item, ['DK1', 'dk1'], '')).trim(),
       'Thời gian tồn': String(getVal(item, ['Thời gian tồn', 'loai_ton', 'PTC Category_Ngay_'], '')).trim(),
       'Trạng thái cuối cùng': trangThaiLuu,
-      'Vị trí cuối cùng': vtcc,
+      'Vị trí cuối cùng': effectiveLocation || vtcc,
       'Nhóm KH': String(getVal(item, ['Nhóm KH', 'nhom_kh', 'Nhóm_KH'], '')).trim(),
       'Bưu tá': String(getVal(item, ['Bưu tá', 'postman_name', 'PostManName'], '')).trim(),
       'COD': codVal,
@@ -281,12 +344,16 @@ export function processExcelFiles(hangtonBuffer, dinhViBufferOrData) {
       'Thời gian quét': String(getVal(item, ['Thời gian quét', 'updated_at', 'NgayGioQuet'], '')).trim()
     };
 
-    if (shouldExcludeItem(ttcc, vtcc)) {
-      bang2.push(rowData);
+    if (isExcluded) {
+      rawBang2.push(rowData);
     } else {
-      bang1.push(rowData);
+      rawBang1.push(rowData);
     }
   }
+
+  // Sắp xếp theo: Thời gian tồn giảm dần -> COD giảm dần -> Mã bưu cục giảm dần
+  const bang1 = sortLoctonRows(rawBang1);
+  const bang2 = sortLoctonRows(rawBang2);
 
   // 4. Tổng hợp Bảng 3: "Tổng tồn các BC" từ Bảng 1
   const groups = new Map();

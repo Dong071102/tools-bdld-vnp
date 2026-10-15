@@ -3578,6 +3578,10 @@ let loctonDinhViFile = null;
 let loctonData = { bang1: [], bang2: [], bang3: [] };
 let loctonActiveTab = 3; // 3: Tổng hợp BC, 1: Chưa phát, 2: Đã giao/thu tiền
 let loctonSearchText = "";
+let loctonFilterBC = "";
+let loctonFilterTGT = "";
+let loctonFilterStatus = "";
+let loctonFilterCOD = "";
 let loctonCurrentPage = 1;
 let loctonPageSize = 50;
 let isLoctonInitialized = false;
@@ -3683,6 +3687,61 @@ function initLoctonView() {
         });
     }
 
+    // Filter toolbar controls
+    const filterBC = document.getElementById("locton-filter-bc");
+    if (filterBC) {
+        filterBC.addEventListener("change", (e) => {
+            loctonFilterBC = (e.target.value || "").trim();
+            loctonCurrentPage = 1;
+            renderLoctonTable();
+        });
+    }
+
+    const filterTGT = document.getElementById("locton-filter-tgt");
+    if (filterTGT) {
+        filterTGT.addEventListener("change", (e) => {
+            loctonFilterTGT = (e.target.value || "").trim();
+            loctonCurrentPage = 1;
+            renderLoctonTable();
+        });
+    }
+
+    const filterStatus = document.getElementById("locton-filter-status");
+    if (filterStatus) {
+        filterStatus.addEventListener("change", (e) => {
+            loctonFilterStatus = (e.target.value || "").trim();
+            loctonCurrentPage = 1;
+            renderLoctonTable();
+        });
+    }
+
+    const filterCOD = document.getElementById("locton-filter-cod");
+    if (filterCOD) {
+        filterCOD.addEventListener("change", (e) => {
+            loctonFilterCOD = (e.target.value || "").trim();
+            loctonCurrentPage = 1;
+            renderLoctonTable();
+        });
+    }
+
+    const btnResetFilters = document.getElementById("btn-locton-reset-filters");
+    if (btnResetFilters) {
+        btnResetFilters.addEventListener("click", () => {
+            loctonFilterBC = "";
+            loctonFilterTGT = "";
+            loctonFilterStatus = "";
+            loctonFilterCOD = "";
+            loctonSearchText = "";
+            if (filterBC) filterBC.value = "";
+            if (filterTGT) filterTGT.value = "";
+            if (filterStatus) filterStatus.value = "";
+            if (filterCOD) filterCOD.value = "";
+            if (searchInput) searchInput.value = "";
+            loctonCurrentPage = 1;
+            renderLoctonTable();
+        });
+    }
+
     // Page size selector
     const pageSizeSelect = document.getElementById("locton-page-size");
     if (pageSizeSelect) {
@@ -3732,37 +3791,80 @@ const LOCTON_EXCLUDE_BC = new Set([
     '673300', '674169', '674790'
 ]);
 
+/**
+ * Trọng số thời gian tồn để sắp xếp giảm dần (≥14 ngày > ≥7 ngày > ≥5 ngày > ≥3 ngày > khác)
+ */
+function getThoiGianTonWeight(tg) {
+    if (!tg) return 0;
+    const s = String(tg).toLowerCase();
+    if (s.includes('14')) return 14;
+    if (s.includes('7')) return 7;
+    if (s.includes('5')) return 5;
+    if (s.includes('3')) return 3;
+    const match = s.match(/\d+/);
+    return match ? parseInt(match[0], 10) : 0;
+}
+
+/**
+ * Sắp xếp danh sách bưu gửi theo thứ tự ưu tiên:
+ * 1. Thời gian tồn giảm dần (≥14 ngày -> ≥7 ngày -> ≥5 ngày -> ≥3 ngày)
+ * 2. Tiền COD giảm dần
+ * 3. Mã bưu cục giảm dần
+ */
+function sortLoctonRows(rows) {
+    return [...rows].sort((a, b) => {
+        // 1. Thời gian tồn giảm dần
+        const tgA = getThoiGianTonWeight(a['Thời gian tồn']);
+        const tgB = getThoiGianTonWeight(b['Thời gian tồn']);
+        if (tgB !== tgA) return tgB - tgA;
+
+        // 2. Tiền COD giảm dần
+        const codA = Number(a['COD'] !== undefined ? a['COD'] : (a['Tiền COD'] || 0));
+        const codB = Number(b['COD'] !== undefined ? b['COD'] : (b['Tiền COD'] || 0));
+        if (codB !== codA) return codB - codA;
+
+        // 3. Mã bưu cục giảm dần
+        const bcA = String(a['Mã bưu cục'] || a['Mã BC phát'] || a['Mã BC'] || '');
+        const bcB = String(b['Mã bưu cục'] || b['Mã BC phát'] || b['Mã BC'] || '');
+        return bcB.localeCompare(bcA, undefined, { numeric: true });
+    });
+}
+
 function hasTargetBcPrefix(vt) {
     if (!vt) return false;
     const s = String(vt).trim();
-    // 1. Bắt đầu bằng 64, 67 hoặc 80 (vd: "670000", "641190 - Gia Nghĩa", "800000")
+    // 1. Chứa mã số bắt đầu bằng 64, 67 hoặc 80 (vd: "670000", "641190 - Gia Nghĩa", "800000")
     if (/^(64|67|80)/.test(s)) return true;
-    // 2. Chứa mã bưu cục (2-6 chữ số) có tiền tố 64, 67, 80 sau ký tự phân cách (vd: "BCKT (670000)", "Bưu điện 641190")
     if (/(?:^|[^\d])(64|67|80)(?:\d{4}|\d{2}|[^\d]|$)/.test(s)) return true;
+
+    // 2. Chứa tên bưu cục/địa danh thuộc Lâm Đồng (67), Đắk Nông (64), Bình Thuận (80)
+    const lower = s.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd');
+    const targetLocations = [
+        'lam dong', 'da lat', 'bao loc', 'duc trong', 'di linh', 'don duong', 
+        'lam ha', 'bao lam', 'cat tien', 'da huoai', 'da teh', 'dam rong',
+        'dak nong', 'dac nong', 'gia nghia', 'dak r lap', 'dak mil', 'cu jut', 'krong no',
+        'binh thuan', 'phan thiet', 'la gi', 'ham thuan', 'bac binh', 'tuy phong'
+    ];
+    for (const loc of targetLocations) {
+        if (lower.includes(loc)) return true;
+    }
     return false;
 }
 
 function isSpecialTransitStatus(status) {
     if (!status) return false;
-    const s = String(status).trim();
-    const lower = s.toLowerCase();
-    if (s.includes('[BĐ8]Đã xác nhận đi') || s.includes('Đã xác nhận đi') || lower.includes('đã xác nhận đi') || lower.includes('da xac nhan di')) {
-        return true;
-    }
-    if (s.includes('Đã đóng chuyến thư đi') || lower.includes('đã đóng chuyến thư đi') || lower.includes('da dong chuyen thu di')) {
-        return true;
-    }
-    return false;
+    const s = String(status).trim().toLowerCase();
+    return s.includes('xác nhận đi') || s.includes('xac nhan di') || 
+           s.includes('đóng chuyến thư') || s.includes('dong chuyen thu');
 }
 
 function shouldExcludeItem(status, location) {
     if (isSpecialTransitStatus(status)) {
-        // Đối với "[BĐ8]Đã xác nhận đi" hoặc "Đã đóng chuyến thư đi":
-        // Vị trí cuối cùng ở bc có đầu 2 số 64, 67, 80 -> Bảng 1 (Hàng tồn)
         if (hasTargetBcPrefix(location)) {
             return false; // Hàng tồn -> Bảng 1
         }
-        // Nếu không có -> Bảng 2 (Trạng thái khác)
         return true; // Trạng thái khác -> Bảng 2
     }
     return isLoctonExcludedStatus(status);
@@ -3805,7 +3907,9 @@ function updateLoctonStep(stepNum, status) {
 
 function setLoctonProgress(percent, title, subtitle, activeStep) {
     const card = document.getElementById('locton-processing-card');
-    if (card) card.style.display = 'block';
+    if (card) {
+        card.style.display = 'block';
+    }
 
     const bar = document.getElementById('locton-progress-bar-fill');
     if (bar) bar.style.width = `${percent}%`;
@@ -3825,6 +3929,50 @@ function setLoctonProgress(percent, title, subtitle, activeStep) {
     }
 }
 
+function populateLoctonFilters(sourceList) {
+    const selBC = document.getElementById("locton-filter-bc");
+    const selStatus = document.getElementById("locton-filter-status");
+    if (!selBC || !selStatus) return;
+
+    const currentBC = loctonFilterBC;
+    const currentStatus = loctonFilterStatus;
+
+    // Thu thập Bưu Cục
+    const bcMap = new Map();
+    // Thu thập Trạng Thái
+    const statusSet = new Set();
+
+    (sourceList || []).forEach(row => {
+        const maBC = String(row['Mã BC phát'] || row['Mã bưu cục'] || row['Mã BC'] || '').trim();
+        const tenBC = String(row['Tên BC phát'] || row['Bưu cục Phát'] || row['Tên bưu cục'] || '').trim();
+        if (maBC && !maBC.includes('TOÀN TỈNH') && maBC !== 'TONG') {
+            bcMap.set(maBC, tenBC ? `${maBC} - ${tenBC}` : maBC);
+        }
+        const st = String(row['Trạng thái hiện tại'] || row['Trạng thái cuối cùng'] || '').trim();
+        if (st) {
+            statusSet.add(st);
+        }
+    });
+
+    // Populate BC select
+    const sortedBCs = Array.from(bcMap.entries()).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
+    let bcHtml = `<option value="">-- Tất cả bưu cục (${sortedBCs.length}) --</option>`;
+    sortedBCs.forEach(([code, label]) => {
+        const isSel = code === currentBC ? 'selected' : '';
+        bcHtml += `<option value="${code}" ${isSel}>${label}</option>`;
+    });
+    selBC.innerHTML = bcHtml;
+
+    // Populate Status select
+    const sortedStatuses = Array.from(statusSet).sort((a, b) => a.localeCompare(b));
+    let stHtml = `<option value="">-- Tất cả trạng thái (${sortedStatuses.length}) --</option>`;
+    sortedStatuses.forEach(st => {
+        const isSel = st === currentStatus ? 'selected' : '';
+        stHtml += `<option value="${st.replace(/"/g, '&quot;')}" ${isSel}>${st}</option>`;
+    });
+    selStatus.innerHTML = stHtml;
+}
+
 // Client-side Excel Processor using SheetJS (runs 100% in browser, fast & offline-ready)
 async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
     if (!window.XLSX) {
@@ -3832,8 +3980,8 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
     }
 
     // 1. Đọc file định vị (dinh_vi.xlsx)
-    if (onStage) onStage(1, 15, "Bước 1/4: Đọc file Định vị (dinh_vi.xlsx)...", "Đang trích xuất mã số hiệu, trạng thái và vị trí cuối cùng");
-    await sleep(250);
+    if (onStage) onStage(1, 20, "Bước 1/4: Đọc file Định vị (dinh_vi.xlsx)...", "Đang trích xuất mã số hiệu, trạng thái và vị trí cuối cùng");
+    await sleep(350);
 
     const bufDinhVi = await dinhViFile.arrayBuffer();
     const wbDinhVi = window.XLSX.read(bufDinhVi, {
@@ -3849,58 +3997,60 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
     const wsDinhVi = wbDinhVi.Sheets[sheetNameDV];
     const dinhViMap = new Map();
 
-    if (wsDinhVi && wsDinhVi['!ref']) {
-        const range = window.XLSX.utils.decode_range(wsDinhVi['!ref']);
-        
+    if (wsDinhVi) {
+        const rawRows = window.XLSX.utils.sheet_to_json(wsDinhVi, { header: 1, defval: '' });
         let colSoHieu = 1;      // Cột B
         let colTrangThai = 24;  // Cột Y
         let colViTri = 23;      // Cột X
-        let dataStartRow = 2;   // Dòng 3
+        let dataStartRow = 1;
 
-        // Quét tự động header từ dòng 0 đến dòng 4
-        for (let r = range.s.r; r <= Math.min(range.s.r + 4, range.e.r); r++) {
-            for (let c = range.s.c; c <= range.e.c; c++) {
-                const cell = wsDinhVi[window.XLSX.utils.encode_cell({ r, c })];
-                if (cell && cell.v !== undefined && cell.v !== null) {
-                    const val = String(cell.v).trim().toLowerCase();
-                    if (val.includes('trạng thái cuối cùng') || val.includes('trang thai cuoi cung')) {
-                        colTrangThai = c;
-                        dataStartRow = Math.max(dataStartRow, r + 1);
-                    } else if (
-                        val.includes('vị trí cuối cùng') || val.includes('vi tri cuoi cung') ||
-                        val.includes('bưu cục phát hiện tại') || val.includes('đơn vị cuối cùng') ||
-                        val.startsWith('vị trí') || val.startsWith('vi tri')
-                    ) {
-                        colViTri = c;
-                        dataStartRow = Math.max(dataStartRow, r + 1);
-                    } else if ((val === 'số hiệu' || val === 'so hieu' || val.includes('mã bưu gửi') || val.includes('itemcode') || val === 'số hiệu bưu gửi') && !val.includes('khách hàng')) {
-                        colSoHieu = c;
-                        dataStartRow = Math.max(dataStartRow, r + 1);
-                    }
+        // Quét tự động header từ dòng 0 đến dòng 6
+        for (let r = 0; r < Math.min(7, rawRows.length); r++) {
+            const row = rawRows[r] || [];
+            for (let c = 0; c < row.length; c++) {
+                const val = String(row[c] || '').trim().toLowerCase();
+                if ((val.includes('số hiệu') || val.includes('so hieu') || val.includes('mã bưu gửi') || val.includes('itemcode')) && !val.includes('khách hàng')) {
+                    colSoHieu = c;
+                    dataStartRow = Math.max(dataStartRow, r + 1);
+                } else if (val.includes('trạng thái cuối cùng') || val.includes('trang thai cuoi cung') || (val.includes('trạng thái') && !val.includes('trước'))) {
+                    colTrangThai = c;
+                    dataStartRow = Math.max(dataStartRow, r + 1);
+                } else if (
+                    val.includes('vị trí cuối cùng') || val.includes('vi tri cuoi cung') ||
+                    val.includes('bưu cục phát hiện tại') || val.includes('đơn vị cuối cùng') ||
+                    val.startsWith('vị trí') || val.startsWith('vi tri')
+                ) {
+                    colViTri = c;
+                    dataStartRow = Math.max(dataStartRow, r + 1);
                 }
             }
         }
 
-        for (let r = dataStartRow; r <= range.e.r; r++) {
-            const cellB = wsDinhVi[window.XLSX.utils.encode_cell({ r, c: colSoHieu })];
-            if (cellB && cellB.v !== undefined && cellB.v !== null) {
-                const soHieu = String(cellB.v).trim();
-                if (!soHieu) continue;
+        if (colViTri === 23 && colTrangThai !== 24 && colTrangThai > 0) {
+            colViTri = colTrangThai - 1;
+        }
 
-                const cellTT = wsDinhVi[window.XLSX.utils.encode_cell({ r, c: colTrangThai })];
-                const tt = cellTT && cellTT.v !== undefined && cellTT.v !== null ? String(cellTT.v).trim() : '';
+        for (let r = dataStartRow; r < rawRows.length; r++) {
+            const row = rawRows[r] || [];
+            const soHieu = String(row[colSoHieu] || '').trim();
+            if (!soHieu) continue;
 
-                const cellVT = wsDinhVi[window.XLSX.utils.encode_cell({ r, c: colViTri })];
-                const vt = cellVT && cellVT.v !== undefined && cellVT.v !== null ? String(cellVT.v).trim() : '';
-
-                dinhViMap.set(soHieu, { tt, vt });
+            const tt = String(row[colTrangThai] || '').trim();
+            let vt = String(row[colViTri] || '').trim();
+            if (!vt && colTrangThai > 0 && row[colTrangThai - 1]) {
+                const neighbor = String(row[colTrangThai - 1]).trim();
+                if (hasTargetBcPrefix(neighbor) || neighbor.length > 3) {
+                    vt = neighbor;
+                }
             }
+
+            dinhViMap.set(soHieu, { tt, vt });
         }
     }
 
     // 2. Đọc file hàng tồn (hangton.xlsx)
-    if (onStage) onStage(2, 40, "Bước 2/4: Đọc file Hàng tồn (hangton.xlsx)...", `Đã nạp ${dinhViMap.size} mã định vị. Đang đọc danh sách tồn`);
-    await sleep(250);
+    if (onStage) onStage(2, 50, "Bước 2/4: Đọc file Hàng tồn (hangton.xlsx)...", `Đã nạp ${dinhViMap.size} mã định vị. Đang đọc danh sách tồn`);
+    await sleep(350);
 
     const bufHangton = await hangtonFile.arrayBuffer();
     const wbHangton = window.XLSX.read(bufHangton, {
@@ -3915,11 +4065,11 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
     const hangtonRows = window.XLSX.utils.sheet_to_json(wsHangton, { defval: '' });
 
     // 3. Phân loại Bảng 1 & Bảng 2
-    if (onStage) onStage(3, 70, "Bước 3/4: Đang đối soát dữ liệu & phân loại...", `Đang khớp ${hangtonRows.length} dòng hàng tồn với trạng thái định vị`);
-    await sleep(300);
+    if (onStage) onStage(3, 75, "Bước 3/4: Đang đối soát dữ liệu & phân loại...", `Đang khớp ${hangtonRows.length} dòng hàng tồn với trạng thái định vị`);
+    await sleep(400);
 
-    const bang1 = [];
-    const bang2 = [];
+    const rawBang1 = [];
+    const rawBang2 = [];
 
     const getVal = (row, candidates, fallback = '') => {
         for (const c of candidates) {
@@ -3931,7 +4081,7 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
     };
 
     for (const item of hangtonRows) {
-        const maBG = String(getVal(item, ['Mã bưu gửi', 'Mã BG', 'ItemCode', 'Số hiệu'])).trim();
+        const maBG = String(getVal(item, ['Mã bưu gửi', 'Mã BG', 'ItemCode', 'Số hiệu', 'item_code', 'MaBG'])).trim();
         if (!maBG || !dinhViMap.has(maBG)) {
             continue; // Chỉ xử lý các bưu gửi có trong file định vị (INNER JOIN)
         }
@@ -3946,40 +4096,71 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
             ttcc = String(dvInfo || '').trim();
         }
 
-        const codVal = Number(getVal(item, ['COD', 'Tiền COD', 'Tien COD', 'Số tiền thu hộ'], 0)) || 0;
-        const tlVal = Number(getVal(item, ['Trọng lượng', 'Khối lượng', 'TL'], 0)) || 0;
+        const maBCHangTon = String(getVal(item, ['Mã bưu cục', 'Mã BC', 'Mã bưu cục phát', 'Mã BC phát', 'POS Code', 'pos_code', 'MaBC'])).trim();
+        const tenBCHangTon = String(getVal(item, ['Bưu cục Phát', 'Tên BC phát', 'Tên bưu cục', 'Bưu cục phát', 'POS Name', 'pos_name', 'TenBC'])).trim();
 
-        // Đổi tên trạng thái đối với trường hợp [BĐ8]Đã xác nhận đi hoặc Đã đóng chuyến thư đi có vị trí ở bc đầu 64, 67, 80
-        let trangThaiHienThi = ttcc;
-        if (isSpecialTransitStatus(ttcc) && hasTargetBcPrefix(vtcc)) {
-            trangThaiHienThi = vtcc ? `${ttcc} - ${vtcc}` : ttcc;
+        // Xác định vị trí hiệu lực
+        let effectiveLocation = vtcc;
+        if (!effectiveLocation && hasTargetBcPrefix(maBCHangTon)) {
+            effectiveLocation = tenBCHangTon ? `${maBCHangTon} - ${tenBCHangTon}` : maBCHangTon;
         }
+
+        let isExcluded = isLoctonExcludedStatus(ttcc);
+        let trangThaiLuu = ttcc;
+
+        // Xử lý 2 trường hợp đặc biệt: [BĐ8]Đã xác nhận đi hoặc Đã đóng chuyến thư đi
+        if (isSpecialTransitStatus(ttcc)) {
+            if (hasTargetBcPrefix(effectiveLocation) || hasTargetBcPrefix(vtcc)) {
+                isExcluded = false; // Bảng 1 (Hàng tồn)
+                const loc = effectiveLocation || vtcc;
+                trangThaiLuu = loc ? `${ttcc} - ${loc}` : ttcc;
+            } else {
+                isExcluded = true; // Bảng 2 (Trạng thái khác)
+                if (vtcc) {
+                    trangThaiLuu = `${ttcc} - ${vtcc}`;
+                }
+            }
+        }
+
+        const codVal = Number(getVal(item, ['COD', 'Tiền COD', 'Tien COD', 'Số tiền thu hộ', 'cod_amount'], 0)) || 0;
+        const tlVal = Number(getVal(item, ['Trọng lượng', 'Khối lượng', 'TL', 'weight', 'TL_2'], 0)) || 0;
 
         const rowData = {
             'Mã bưu gửi': maBG,
-            'Mã BC phát': String(getVal(item, ['Mã bưu cục', 'Mã BC', 'Mã bưu cục phát', 'Mã BC phát', 'POS Code'])).trim(),
-            'Tên BC phát': String(getVal(item, ['Bưu cục Phát', 'Tên BC phát', 'Tên bưu cục', 'Bưu cục phát', 'POS Name'])).trim(),
-            'Ngày đến BC phát': String(getVal(item, ['DK1', 'Ngày đến', 'Ngày đến BC', 'Ngày đến BC phát'])).trim(),
-            'Thời gian tồn': String(getVal(item, ['Thời gian tồn', 'TG tồn', 'Thời gian lưu'])).trim(),
-            'Trạng thái hiện tại': trangThaiHienThi,
-            'Trạng thái cuối cùng': trangThaiHienThi,
-            'Vị trí cuối cùng': vtcc,
-            'Thời gian cập nhật': String(getVal(item, ['Thời gian quét', 'Thời gian cập nhật', 'TG quet'])).trim(),
-            'Người ký nhận': String(getVal(item, ['Người ký nhận', 'Người nhận', 'Nguoi nhan'])).trim(),
+            'Mã BC phát': maBCHangTon,
+            'Tên BC phát': tenBCHangTon,
+            'Mã bưu cục': maBCHangTon,
+            'Bưu cục Phát': tenBCHangTon,
+            'Ngày đến BC phát': String(getVal(item, ['DK1', 'Ngày đến', 'Ngày đến BC', 'Ngày đến BC phát', 'dk1'])).trim(),
+            'DK1': String(getVal(item, ['DK1', 'Ngày đến', 'Ngày đến BC', 'Ngày đến BC phát', 'dk1'])).trim(),
+            'Thời gian tồn': String(getVal(item, ['Thời gian tồn', 'TG tồn', 'Thời gian lưu', 'loai_ton', 'PTC Category_Ngay_'])).trim(),
+            'Trạng thái hiện tại': trangThaiLuu,
+            'Trạng thái cuối cùng': trangThaiLuu,
+            'Vị trí cuối cùng': effectiveLocation || vtcc,
+            'Thời gian cập nhật': String(getVal(item, ['Thời gian quét', 'Thời gian cập nhật', 'TG quet', 'updated_at'])).trim(),
+            'Thời gian quét': String(getVal(item, ['Thời gian quét', 'Thời gian cập nhật', 'TG quet', 'updated_at'])).trim(),
+            'Người ký nhận': String(getVal(item, ['Người ký nhận', 'Người nhận', 'Nguoi nhan', 'Bưu tá', 'postman_name'])).trim(),
+            'Bưu tá': String(getVal(item, ['Bưu tá', 'Người ký nhận', 'Người nhận', 'postman_name'])).trim(),
             'Tiền COD': codVal,
-            'Khối lượng': tlVal
+            'COD': codVal,
+            'Khối lượng': tlVal,
+            'Trọng lượng': tlVal
         };
 
-        if (shouldExcludeItem(ttcc, vtcc)) {
-            bang2.push(rowData);
+        if (isExcluded) {
+            rawBang2.push(rowData);
         } else {
-            bang1.push(rowData);
+            rawBang1.push(rowData);
         }
     }
 
+    // Sắp xếp theo thứ tự: Thời gian tồn giảm dần -> Tiền COD giảm dần -> Mã bưu cục giảm dần
+    const bang1 = sortLoctonRows(rawBang1);
+    const bang2 = sortLoctonRows(rawBang2);
+
     // 4. Tổng hợp Bảng 3: Nhóm theo bưu cục từ Bảng 1
-    if (onStage) onStage(4, 90, "Bước 4/4: Đang tổng hợp báo cáo các bưu cục...", `Bảng 1: ${bang1.length} bưu gửi | Bảng 2: ${bang2.length} bưu gửi`);
-    await sleep(250);
+    if (onStage) onStage(4, 95, "Bước 4/4: Đang tổng hợp báo cáo các bưu cục...", `Bảng 1: ${bang1.length} bưu gửi | Bảng 2: ${bang2.length} bưu gửi`);
+    await sleep(350);
 
     const groups = new Map();
 
@@ -4063,7 +4244,7 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
     const bang3 = [rowTongLamDong, ...bang3List];
 
     if (onStage) onStage(4, 100, "Hoàn tất đối soát bưu gửi!", "Đang chuẩn bị hiển thị dữ liệu lên bảng");
-    await sleep(350);
+    await sleep(450);
 
     return {
         bang1,
@@ -4143,7 +4324,7 @@ async function handleLoctonProcess() {
     }
     hideLoctonAlert();
 
-    // Ẩn bảng kết quả cũ để tập trung vào animation xử lý
+    // Ẩn bảng kết quả cũ và hiển thị processing card có animation
     const kpiSec = document.getElementById("locton-kpis");
     const tblCard = document.getElementById("locton-table-card");
     const procCard = document.getElementById("locton-processing-card");
@@ -4196,18 +4377,18 @@ async function handleLoctonProcess() {
                 throw new Error(jsonResp.message || "Xử lý file thất bại");
             }
             result = {
-                bang1: jsonResp.data.bang1,
-                bang2: jsonResp.data.bang2,
+                bang1: sortLoctonRows(jsonResp.data.bang1 || []),
+                bang2: sortLoctonRows(jsonResp.data.bang2 || []),
                 bang3: jsonResp.data.bang3,
                 stats: jsonResp.stats
             };
             setLoctonProgress(100, "Hoàn tất đối soát bưu gửi!", "Đang chuẩn bị hiển thị dữ liệu", 4);
-            await sleep(300);
+            await sleep(400);
         }
 
         loctonData = {
-            bang1: result.bang1 || [],
-            bang2: result.bang2 || [],
+            bang1: sortLoctonRows(result.bang1 || []),
+            bang2: sortLoctonRows(result.bang2 || []),
             bang3: result.bang3 || []
         };
         const stats = result.stats || {};
@@ -4253,7 +4434,7 @@ async function handleLoctonProcess() {
         if (btnExp) btnExp.style.display = "inline-flex";
 
         showToast("Lọc và đối soát dữ liệu thành công!", "success");
-        setLoctonTab(3); // Default view Bảng 3
+        setLoctonTab(3); // Mặc định mở Bảng 3
     } catch (err) {
         console.error("Lỗi lọc tồn:", err);
         showLoctonAlert("Lỗi: " + err.message, "danger");
@@ -4286,6 +4467,12 @@ function setLoctonTab(tabNum) {
         }
     });
 
+    let currentSource = [];
+    if (loctonActiveTab === 1) currentSource = loctonData.bang1 || [];
+    else if (loctonActiveTab === 2) currentSource = loctonData.bang2 || [];
+    else currentSource = loctonData.bang3 || [];
+
+    populateLoctonFilters(currentSource);
     renderLoctonTable();
 }
 
@@ -4299,14 +4486,61 @@ function renderLoctonTable() {
     else if (loctonActiveTab === 2) sourceList = loctonData.bang2 || [];
     else sourceList = loctonData.bang3 || [];
 
-    // Filter by search query
-    let filtered = sourceList;
-    if (loctonSearchText) {
-        filtered = sourceList.filter(row => {
-            return Object.values(row).some(val => 
+    // Lọc theo các tiêu chí (Bưu cục phát, Thời gian tồn, Trạng thái, Tiền COD, Tìm nhanh)
+    let filtered = sourceList.filter(row => {
+        // 1. Lọc theo Bưu Cục
+        if (loctonFilterBC) {
+            const bcCode = String(row['Mã BC phát'] || row['Mã bưu cục'] || row['Mã BC'] || '').trim();
+            const bcName = String(row['Tên BC phát'] || row['Bưu cục Phát'] || row['Tên bưu cục'] || '').trim();
+            if (bcCode !== loctonFilterBC && bcName !== loctonFilterBC) {
+                if (loctonActiveTab === 3 && (bcCode.includes("TOÀN TỈNH") || bcCode === "TONG" || bcCode === "67")) {
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        // Các bộ lọc chi tiết cho Bảng 1 & Bảng 2
+        if (loctonActiveTab === 1 || loctonActiveTab === 2) {
+            // 2. Lọc theo Thời gian tồn
+            if (loctonFilterTGT) {
+                const tgt = String(row['Thời gian tồn'] || '').toLowerCase();
+                if (loctonFilterTGT === '14' && !tgt.includes('14')) return false;
+                if (loctonFilterTGT === '7' && !tgt.includes('7')) return false;
+                if (loctonFilterTGT === '5' && !tgt.includes('5')) return false;
+                if (loctonFilterTGT === '3' && !tgt.includes('3')) return false;
+            }
+
+            // 3. Lọc theo Trạng thái
+            if (loctonFilterStatus) {
+                const st = String(row['Trạng thái hiện tại'] || row['Trạng thái cuối cùng'] || '').trim();
+                if (st !== loctonFilterStatus) return false;
+            }
+
+            // 4. Lọc theo Tiền COD
+            if (loctonFilterCOD) {
+                const cod = Number(row['Tiền COD'] !== undefined ? row['Tiền COD'] : (row['COD'] || 0));
+                if (loctonFilterCOD === 'has_cod' && cod <= 0) return false;
+                if (loctonFilterCOD === 'no_cod' && cod !== 0) return false;
+                if (loctonFilterCOD === 'cod_ge_1m' && cod < 1000000) return false;
+                if (loctonFilterCOD === 'cod_ge_5m' && cod < 5000000) return false;
+            }
+        }
+
+        // 5. Tìm nhanh (full-text search)
+        if (loctonSearchText) {
+            const match = Object.values(row).some(val => 
                 String(val !== null && val !== undefined ? val : "").toLowerCase().includes(loctonSearchText)
             );
-        });
+            if (!match) return false;
+        }
+
+        return true;
+    });
+
+    // Luôn đảm bảo sắp xếp theo thứ tự: Thời gian tồn giảm dần -> Tiền COD giảm dần -> Mã BC giảm dần
+    if (loctonActiveTab === 1 || loctonActiveTab === 2) {
+        filtered = sortLoctonRows(filtered);
     }
 
     const totalRows = filtered.length;
@@ -4318,17 +4552,18 @@ function renderLoctonTable() {
     const endIdx = Math.min(startIdx + loctonPageSize, totalRows);
     const pageRows = filtered.slice(startIdx, endIdx);
 
-    // Update pagination info & buttons
+    // Cập nhật thông tin phân trang & số lượng bản ghi
     const pageInfo = document.getElementById("locton-pagination-info");
     if (pageInfo) {
-        pageInfo.textContent = `Hiển thị ${totalRows > 0 ? startIdx + 1 : 0} - ${endIdx} trong tổng số ${formatNumber(totalRows)} bản ghi`;
+        const filterNote = (totalRows !== sourceList.length) ? ` (Đã lọc từ ${formatNumber(sourceList.length)})` : '';
+        pageInfo.textContent = `Hiển thị ${totalRows > 0 ? startIdx + 1 : 0} - ${endIdx} trong tổng số ${formatNumber(totalRows)} bản ghi${filterNote}`;
     }
     const btnPrev = document.getElementById("btn-locton-prev");
     const btnNext = document.getElementById("btn-locton-next");
     if (btnPrev) btnPrev.disabled = loctonCurrentPage <= 1;
     if (btnNext) btnNext.disabled = loctonCurrentPage >= totalPages;
 
-    // Render Headers & Rows according to tab
+    // Render Headers & Rows theo Tab
     if (loctonActiveTab === 3) {
         thead.innerHTML = `
             <tr>
@@ -4349,7 +4584,7 @@ function renderLoctonTable() {
         `;
 
         if (pageRows.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="13" class="text-center text-muted" style="padding: 24px;">Không có dữ liệu</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="13" class="text-center text-muted" style="padding: 24px;">Không có dữ liệu khớp bộ lọc</td></tr>`;
             return;
         }
 
@@ -4394,7 +4629,7 @@ function renderLoctonTable() {
         `;
 
         if (pageRows.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="12" class="text-center text-muted" style="padding: 24px;">Không có dữ liệu</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="12" class="text-center text-muted" style="padding: 24px;">Không có dữ liệu khớp bộ lọc</td></tr>`;
             return;
         }
 
@@ -4409,12 +4644,12 @@ function renderLoctonTable() {
                     <td>${r["Mã BC phát"] || r["Mã bưu cục"] || ""}</td>
                     <td>${r["Tên BC phát"] || r["Bưu cục Phát"] || ""}</td>
                     <td>${r["Ngày đến BC phát"] || r["DK1"] || ""}</td>
-                    <td><span class="badge" style="background: var(--bg-secondary); font-size: 11.5px; padding: 2px 8px; border-radius: 4px;">${r["Thời gian tồn"] || ""}</span></td>
+                    <td><span class="badge" style="background: var(--bg-secondary); font-size: 11.5px; padding: 2px 8px; border-radius: 4px; font-weight: 600;">${r["Thời gian tồn"] || ""}</span></td>
                     <td><span class="badge" style="${statusBadgeClass} font-size: 11.5px; padding: 3px 8px; border-radius: 4px; font-weight: 600;">${r["Trạng thái hiện tại"] || r["Trạng thái cuối cùng"] || "Chưa có thông tin"}</span></td>
                     <td><span style="font-size: 12.5px; color: var(--text-primary); font-weight: 500;">${r["Vị trí cuối cùng"] || "-"}</span></td>
                     <td style="font-size: 12px; color: var(--text-muted);">${r["Thời gian cập nhật"] || r["Thời gian quét"] || ""}</td>
                     <td>${r["Người ký nhận"] || r["Bưu tá"] || ""}</td>
-                    <td class="text-right">${formatCurrency(r["Tiền COD"] || r["COD"] || 0)}</td>
+                    <td class="text-right" style="font-weight: 600;">${formatCurrency(r["Tiền COD"] || r["COD"] || 0)}</td>
                     <td class="text-right">${formatNumber(r["Khối lượng"] || r["Trọng lượng"] || 0)}</td>
                 </tr>
             `;
@@ -4499,6 +4734,10 @@ function resetLoctonState() {
     loctonDinhViFile = null;
     loctonData = { bang1: [], bang2: [], bang3: [] };
     loctonSearchText = "";
+    loctonFilterBC = "";
+    loctonFilterTGT = "";
+    loctonFilterStatus = "";
+    loctonFilterCOD = "";
     loctonCurrentPage = 1;
 
     const inputHangton = document.getElementById("input-locton-hangton");
@@ -4515,7 +4754,15 @@ function resetLoctonState() {
     if (labelDinhVi) labelDinhVi.textContent = "Kéo thả file vào đây hoặc bấm để chọn";
     if (badgeDinhVi) badgeDinhVi.style.display = "none";
 
+    const filterBC = document.getElementById("locton-filter-bc");
+    const filterTGT = document.getElementById("locton-filter-tgt");
+    const filterStatus = document.getElementById("locton-filter-status");
+    const filterCOD = document.getElementById("locton-filter-cod");
     const searchInput = document.getElementById("locton-search-input");
+    if (filterBC) filterBC.value = "";
+    if (filterTGT) filterTGT.value = "";
+    if (filterStatus) filterStatus.value = "";
+    if (filterCOD) filterCOD.value = "";
     if (searchInput) searchInput.value = "";
 
     hideLoctonAlert();

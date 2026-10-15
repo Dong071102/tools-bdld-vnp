@@ -14,7 +14,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Style CSS -->
-     <link rel="stylesheet" href="/static/style.css?v=3.15.0">
+    <link rel="stylesheet" href="/static/style.css?v=3.16.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -672,12 +672,65 @@
                             <button type="button" class="tab-btn" id="tab-locton-2" style="background: none; border: none; font-family: var(--font-display); font-size: 14.5px; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 6px 14px; margin-bottom: -11px;">
                                 <i class="fa-solid fa-check-double"></i> Bảng 2: Đã giao / Thu tiền (<span id="locton-count-tab2">0</span>)
                             </button>
+                    </div>
+
+                    <!-- Filter Toolbar -->
+                    <div id="locton-filter-toolbar" class="locton-filter-toolbar" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) 90px; gap: 10px; margin-bottom: 16px; padding: 12px 14px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); align-items: flex-end;">
+                        <div class="filter-item">
+                            <label for="locton-filter-bc" style="display: block; font-size: 11.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px;">
+                                <i class="fa-solid fa-building" style="color: var(--accent-emerald);"></i> Bưu cục phát
+                            </label>
+                            <select id="locton-filter-bc" class="input-field" style="width: 100%; height: 35px; font-size: 12.5px; padding: 4px 8px;">
+                                <option value="">-- Tất cả bưu cục --</option>
+                            </select>
                         </div>
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <div style="position: relative;">
-                                <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 13px;"></i>
-                                <input type="text" id="locton-search-input" class="input-field" placeholder="Tìm kiếm trong bảng..." style="padding-left: 34px; height: 36px; font-size: 13px; width: 220px;">
-                            </div>
+
+                        <div class="filter-item">
+                            <label for="locton-filter-tgt" style="display: block; font-size: 11.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px;">
+                                <i class="fa-solid fa-clock" style="color: #f59e0b;"></i> Thời gian tồn
+                            </label>
+                            <select id="locton-filter-tgt" class="input-field" style="width: 100%; height: 35px; font-size: 12.5px; padding: 4px 8px;">
+                                <option value="">-- Tất cả thời gian --</option>
+                                <option value="14">≥14 ngày</option>
+                                <option value="7">≥7 ngày</option>
+                                <option value="5">≥5 ngày</option>
+                                <option value="3">≥3 ngày</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-item">
+                            <label for="locton-filter-status" style="display: block; font-size: 11.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px;">
+                                <i class="fa-solid fa-tag" style="color: #3b82f6;"></i> Trạng thái
+                            </label>
+                            <select id="locton-filter-status" class="input-field" style="width: 100%; height: 35px; font-size: 12.5px; padding: 4px 8px;">
+                                <option value="">-- Tất cả trạng thái --</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-item">
+                            <label for="locton-filter-cod" style="display: block; font-size: 11.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px;">
+                                <i class="fa-solid fa-coins" style="color: #10b981;"></i> Tiền COD
+                            </label>
+                            <select id="locton-filter-cod" class="input-field" style="width: 100%; height: 35px; font-size: 12.5px; padding: 4px 8px;">
+                                <option value="">-- Tất cả mức COD --</option>
+                                <option value="has_cod">Có thu COD (&gt; 0 đ)</option>
+                                <option value="no_cod">Không có COD (= 0 đ)</option>
+                                <option value="cod_ge_1m">COD ≥ 1.000.000 đ</option>
+                                <option value="cod_ge_5m">COD ≥ 5.000.000 đ</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-item">
+                            <label for="locton-search-input" style="display: block; font-size: 11.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px;">
+                                <i class="fa-solid fa-magnifying-glass" style="color: var(--accent-emerald);"></i> Tìm nhanh
+                            </label>
+                            <input type="text" id="locton-search-input" class="input-field" placeholder="Mã BG, bưu tá, người nhận..." style="width: 100%; height: 35px; font-size: 12.5px;">
+                        </div>
+
+                        <div>
+                            <button type="button" id="btn-locton-reset-filters" class="btn btn-secondary" style="height: 35px; width: 100%; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 5px;" title="Xóa tất cả bộ lọc">
+                                <i class="fa-solid fa-rotate-left"></i> Đặt lại
+                            </button>
                         </div>
                     </div>
 
@@ -1346,9 +1399,9 @@
         </div>
     </div>
 
-    <!-- SheetJS (xlsx) for fast in-browser Excel parsing & export -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- SheetJS (xlsx) for fast in-browser Excel parsing & export (Local first, CDN fallback) -->
+    <script src="/static/xlsx.full.min.js?v=3.16.0" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';"></script>
     <!-- Script JS -->
-    <script src="/static/app.js?v=3.15.1"></script>
+    <script src="/static/app.js?v=3.16.0"></script>
 </body>
 </html>
