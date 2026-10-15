@@ -1,6 +1,6 @@
 # Tool BDLD VNP (Bưu điện Lâm Đồng - VNPost)
 
-Hệ thống quản lý, giám sát hàng tồn và tra cứu định vị bưu gửi chuyên biệt cho **Bưu điện tỉnh Lâm Đồng (VNPost)**. Tích hợp tự động crawl dữ liệu thời gian thực từ Power BI, hỗ trợ học tự động danh mục bưu cục, phân loại hàng tồn và định vị bưu gửi đa luồng song song qua hệ thống VNPost BCCP.
+Hệ thống quản lý, giám sát hàng tồn và tra cứu định vị bưu gửi chuyên biệt cho **Bưu điện tỉnh Lâm Đồng (VNPost)**. Tích hợp tự động crawl dữ liệu thời gian thực từ Power BI, hỗ trợ học tự động danh mục bưu cục, phân loại hàng tồn, đối soát lọc tồn bưu gửi và định vị bưu gửi đa luồng song song qua hệ thống VNPost BCCP.
 
 ---
 
@@ -12,6 +12,14 @@ Hệ thống quản lý, giám sát hàng tồn và tra cứu định vị bưu 
   - Tùy biến linh hoạt các cột thời gian tham gia tính **Tổng tồn toàn tỉnh**.
   - Đánh dấu màu nổi bật (Highlight) tự động theo ngưỡng số lượng bưu gửi tồn.
 
+- 📑 **Lọc Tồn Bưu Gửi & Đối Soát Báo Cáo (Mới):**
+  - Tải lên 2 file dữ liệu: File Hàng tồn (`hangton.xlsx`) và File Định vị (`dinh_vi.xlsx`).
+  - Tự động đối soát mã bưu gửi in-memory với hiệu năng cao, phân loại tự động thành **3 bảng dữ liệu**:
+    - **Bảng 1 (Danh sách bưu gửi tồn):** Các bưu gửi chưa phát thành công hoặc có lý do tồn đọng thực tế.
+    - **Bảng 2 (Danh sách trạng thái khác):** Các bưu gửi đã giao thành công, đã thu tiền khách hàng/bưu tá, hoặc bưu cục trung chuyển đã đóng chuyến thư chuyển tiếp.
+    - **Bảng 3 (Tổng hợp bưu cục):** Bảng tổng hợp số lượng bưu gửi và tổng tiền COD theo các mốc 3N, 5N, 7N, 14N cho từng bưu cục và dòng tổng kết Toàn tỉnh Lâm Đồng.
+  - Hỗ trợ xem trực quan trên Web (phân trang, lọc tìm kiếm nhanh theo mã/tên bưu cục) và xuất file Excel 3 sheets định dạng chuẩn chỉ với 1 click.
+
 - 🏢 **Cơ chế Tự Động Học Bưu Cục Mới (Auto-learning POS):**
   - Tự động nhận diện bưu cục mới xuất hiện khi cào dữ liệu từ Power BI và lưu vào bảng `pos_config`.
   - **Quy tắc phân loại tự động:**
@@ -19,7 +27,7 @@ Hệ thống quản lý, giám sát hàng tồn và tra cứu định vị bưu 
     - Bưu cục khai thác/trung chuyển (`BCKT...`): Tự động tắt hiển thị (`is_active = 0`).
   - **Bảo toàn cấu hình người dùng:** Hệ thống không ghi đè trạng thái bật/tắt mà người quản trị đã tùy chỉnh.
   - **Bộ lọc hiển thị toàn diện:** Dashboard, KPI tổng quan, bộ lọc dropdown và file xuất báo cáo chỉ hiển thị các bưu cục đang được kích hoạt.
-  - **Giao diện cấu hình trực quan:** Tích hợp nút thao tác nhanh `[ 🏢 Cấu hình bưu cục ]` trên Dashboard và Tab riêng trong trang Cài đặt với các chức năng tiện ích: *Chỉ chọn BCP (Bỏ BCKT)*, *Chọn tất cả*, *Bỏ chọn tất cả*, tìm kiếm nhanh theo mã/tên.
+  - **Giao diện cấu hình trực quan:** Tích hợp nút thao tác nhanh `[ 🏢 Cấu hình hiển thị bưu cục ]` trên Dashboard và Tab riêng trong trang Cài đặt.
 
 - 🔍 **Chi tiết Bưu Cục Khai Thác & Trung Chuyển (BCKT Explorer):**
   - Cung cấp cửa sổ tra cứu riêng cho các bưu cục khai thác (KTC1, BCKT, KHL, GD).
@@ -38,7 +46,6 @@ Hệ thống quản lý, giám sát hàng tồn và tra cứu định vị bưu 
   - Đăng nhập hệ thống bảo mật bằng bcrypt, không bắt buộc Captcha khi truy cập ứng dụng.
   - Quản lý tài khoản, phân quyền (Admin / Nhân viên), giới hạn số luồng tra cứu cho từng cá nhân.
   - Hỗ trợ nhập danh sách tài khoản hàng loạt trực tiếp từ phần mềm VNPost BCCP.
-  - Lưu trữ và tra cứu nhanh lịch sử các lần xuất file định vị.
 
 ---
 
@@ -60,15 +67,21 @@ tools-bdld-vnp/
 │   ├── server.js                # API Server (Express) điều phối đa luồng định vị
 │   └── Dockerfile               # Cấu hình container Node.js
 │
-├── frontend/                    # Giao diện Web SPA (Dashboard hàng tồn + Định vị + Cấu hình)
-│   ├── index.html               # Cấu trúc giao diện HTML5, modal cấu hình bưu cục, matrix
-│   ├── app.js                   # Logic JavaScript (SPA navigation, state, POS config, filters)
-│   ├── style.css                # Hệ thống CSS hiện đại (responsive, dark/light themes, badges)
+├── locton-backend/              # Node.js Backend (Đối soát & Lọc tồn bưu gửi)
+│   ├── config.json              # Danh mục trạng thái & mã bưu cục loại trừ
+│   ├── processor.js             # Logic xử lý Excel in-memory, phân loại 3 bảng, xuất file
+│   ├── index.js                 # API Server (Express) upload & xử lý file
+│   └── Dockerfile               # Cấu hình container Node.js Alpine
+│
+├── frontend/                    # Giao diện Web SPA (Dashboard hàng tồn + Định vị + Lọc tồn)
+│   ├── index.html               # Cấu trúc giao diện HTML5, modal cấu hình, matrix, lọc tồn
+│   ├── app.js                   # Logic JavaScript (SPA routing, POS config, lọc tồn, định vị)
+│   ├── style.css                # Hệ thống CSS hiện đại (responsive, themes, badges, dropzone)
 │   ├── nginx.conf               # Cấu hình Nginx reverse proxy điều phối routing API
 │   └── Dockerfile               # Cấu hình container Nginx Alpine
 │
 ├── docker-compose.yml           # File deploy Stack chuẩn cho Portainer / Production
-├── docker-compose.local.yml     # File deploy chạy local build từ source code
+├── .env.example                 # Mẫu khai báo biến môi trường bảo mật
 └── README.md                    # Tài liệu hướng dẫn sử dụng và triển khai hệ thống
 ```
 
@@ -78,13 +91,14 @@ tools-bdld-vnp/
 
 ```mermaid
 flowchart TD
-    PBI[Power BI Cloud] -->|Mỗi 10 phút| CRW[Python Crawler Backend]
+    PBI[Power BI Cloud] -->|Mỗi 10 phút| CRW[Python Crawler Backend :8000]
     CRW -->|Auto-learn pos_code| PCFG[(SQL Server: pos_config)]
     CRW -->|TRUNCATE & INSERT| STG[(SQL Server: detailed_report_staging)]
     
-    USER([Người dùng]) -->|Truy cập port 9999| NGINX[Frontend Nginx]
+    USER([Người dùng]) -->|Truy cập port 9999| NGINX[Frontend Nginx :80]
     NGINX -->|/api/pos-config, /api/summary, /api/detailed| CRW
-    NGINX -->|/api/export, /api/vnpost/*| DVI[Node.js Định Vị Backend]
+    NGINX -->|/api/export, /api/vnpost/*| DVI[Node.js Định Vị Backend :5000]
+    NGINX -->|/api/locton/*| LCT[Node.js Lọc Tồn Backend :3001]
     
     DVI -->|Đăng nhập đa luồng & Lấy định vị| BCCP[VNPost BCCP Server]
 ```
@@ -101,177 +115,95 @@ flowchart TD
      - Loại khác -> Thêm mới với `is_active = 1, pos_type = 'OTHER'`.
    - Nếu `pos_code` đã tồn tại: Giữ nguyên trạng thái `is_active` mà người dùng đã cấu hình trước đó.
 
-### B. Tra cứu định vị hàng loạt
-1. Người dùng nhập danh sách mã bưu gửi trên giao diện Web (hỗ trợ copy-paste hoặc file).
-2. Hệ thống chia nhỏ danh sách thành các lô (mặc định 50 - 500 mã/lô tùy cấu hình).
-3. Các lô được phân phối song song cho các luồng VNPost đang hoạt động.
-4. Dữ liệu phản hồi được gộp tự động thành file Excel định vị chi tiết trả về cho người dùng.
+### B. Đối soát & Lọc tồn bưu gửi
+1. Người dùng kéo thả 2 file Excel (`hangton.xlsx` và `dinh_vi.xlsx`) vào giao diện Lọc tồn.
+2. Nginx chuyển tiếp yêu cầu multipart tới `locton-backend` qua `/api/locton/process`.
+3. Bộ xử lý in-memory phân tích bảng hàng tồn, tra cứu mã bưu gửi qua map định vị, bóc tách trạng thái theo cấu hình loại trừ `config.json`.
+4. Kết quả trả về dữ liệu 3 bảng hiển thị ngay trên giao diện Web và hỗ trợ xuất ra file Excel 3 sheets.
 
 ---
 
 ## 🌐 3. Danh mục API Endpoints
 
 ### 🐍 Python Backend (FastAPI - Cổng `8000`)
-
-#### 🏢 Quản lý Bưu cục (POS Configuration)
-- `GET /api/pos-config`: Lấy danh sách tất cả bưu cục (mã, tên, trạng thái kích hoạt, phân loại, sản lượng tồn hiện tại).
-- `POST /api/pos-config`: Cập nhật trạng thái bật/tắt hiển thị (`is_active`) cho danh sách bưu cục.
-
-#### 📊 Dashboard & Thống kê
-- `GET /api/status`: Trạng thái hoạt động của crawler, thời gian crawl gần nhất, lỗi URL (nếu có).
+- `GET /api/pos-config`: Lấy danh sách bưu cục kèm sản lượng tồn và trạng thái kích hoạt.
+- `POST /api/pos-config`: Cập nhật trạng thái hiển thị (`is_active`) cho danh sách bưu cục.
+- `GET /api/status`: Trạng thái hoạt động crawler, thời gian crawl gần nhất, lỗi URL (nếu có).
 - `GET /api/check-pbi-url`: Kiểm tra trực tiếp độ sẵn sàng của URL Power BI.
 - `POST /api/trigger-crawl`: Kích hoạt cào dữ liệu Power BI thủ công.
-- `GET /api/filters`: Danh mục bộ lọc dropdown (chỉ bao gồm các bưu cục có `is_active = 1`).
-- `GET /api/summary`: KPI tổng hợp và bảng ma trận tồn đọng (đã lọc theo bưu cục active).
-- `GET /api/bckt-summary`: Thống kê tổng hợp và danh sách bưu gửi tồn ở khâu khai thác/trung chuyển.
-- `GET /api/detailed`: Danh sách chi tiết bưu gửi (hỗ trợ tìm kiếm, lọc bưu cục active, sắp xếp, phân trang).
-- `GET /api/summary/export`: Xuất dữ liệu bưu gửi tồn ra file Excel.
-- `GET /api/history`: Dữ liệu biến động lịch sử từ bảng `daily_snapshot` phục vụ vẽ biểu đồ.
-
-#### 🔐 Xác thực & Quản trị tài khoản
+- `GET /api/filters`: Danh mục bộ lọc dropdown (đã lọc theo bưu cục active).
+- `GET /api/summary`: KPI tổng quan và bảng ma trận tồn đọng (đã lọc theo bưu cục active).
+- `GET /api/bckt-summary`: Danh sách và sản lượng bưu gửi tồn ở khâu khai thác/trung chuyển.
+- `GET /api/detailed`: Danh sách chi tiết bưu gửi (tìm kiếm, sắp xếp, lọc bưu cục, phân trang).
+- `GET /api/summary/export`: Xuất danh sách bưu gửi tồn ra file Excel.
 - `POST /api/auth/login`: Đăng nhập hệ thống (xác thực mật khẩu local bcrypt).
-- `GET /api/auth/me`: Lấy thông tin tài khoản đang đăng nhập.
-- `POST /api/user/settings`: Đổi mật khẩu cá nhân hoặc cập nhật cookie VNPost.
-- `GET /api/admin/users`: Danh sách tài khoản quản trị (*Admin*).
-- `POST /api/admin/users`: Tạo tài khoản mới (*Admin*).
-- `PUT /api/admin/users/{user_id}`: Cập nhật tài khoản, quyền hạn, giới hạn luồng (*Admin*).
-- `DELETE /api/admin/users/{user_id}`: Xóa tài khoản (*Admin*).
-- `POST /api/admin/import-users`: Nhập hàng loạt tài khoản từ danh sách copy của BCCP (*Admin*).
+- `GET /api/admin/users`: Quản lý tài khoản và phân quyền (*Admin*).
 
----
-
-### 🟢 Node.js Backend (Express - Cổng `5000`)
-
-#### 🔑 Đăng nhập VNPost & Quản lý Luồng
+### 🟢 Node.js Backend Định Vị (Express - Cổng `5000`)
 - `GET /api/auth/login-captcha`: Lấy Captcha và Cookie từ máy chủ VNPost BCCP.
 - `POST /api/auth/login`: Đăng nhập tài khoản với VNPost qua Captcha để mở phiên.
 - `GET /api/vnpost/sessions`: Kiểm tra số luồng đang mở và giới hạn luồng tối đa.
-- `GET /api/vnpost/session-captcha`: Lấy mã Captcha để khởi tạo thêm luồng phụ.
-- `POST /api/vnpost/add-session`: Gửi Captcha để kích hoạt thêm luồng mới (Luồng 2 -> 5).
-- `POST /api/vnpost/reset-sessions`: Đặt lại danh sách luồng về mặc định (Luồng 1).
-- `GET /api/vnpost/sessions-status`: Kiểm tra trạng thái kết nối sống của từng luồng.
-- `POST /api/vnpost/refresh-session`: Giải captcha làm mới luồng bị hết hạn.
+- `POST /api/vnpost/add-session`: Thêm luồng tra cứu song song (Luồng 2 -> 5).
+- `POST /api/export`: Nhận danh sách mã bưu gửi, tra cứu đa luồng và tải xuống file Excel định vị.
 
-#### 📥 Tra cứu & Xuất dữ liệu định vị
-- `POST /api/export`: Nhận danh sách mã bưu gửi, xử lý đa luồng và tải xuống file Excel định vị.
+### 🟡 Node.js Backend Lọc Tồn (Express - Cổng `3001`)
+- `GET /api/locton/health`: Kiểm tra sức khỏe dịch vụ.
+- `GET /api/locton/config`: Lấy danh sách trạng thái và mã bưu cục thuộc diện loại trừ.
+- `POST /api/locton/process`: Tải lên file hàng tồn & định vị, trả về dữ liệu đối soát 3 bảng.
+- `POST /api/locton/export`: Xuất file Excel lọc tồn 3 sheets (`Loc_ton_YYYY-MM-DD.xlsx`).
 
 ---
 
 ## 🛠️ 4. Danh sách Biến Môi Trường (Environment Variables)
 
-| Biến môi trường | Dịch vụ áp dụng | Giá trị mẫu | Mô tả chi tiết |
-| :--- | :--- | :--- | :--- |
-| `DB_SERVER` | Crawler & Định vị | `10.61.200.10` | Địa chỉ IP hoặc Hostname máy chủ SQL Server |
-| `DB_PORT` | Crawler & Định vị | `1433` | Cổng dịch vụ SQL Server |
-| `DB_USER` | Crawler & Định vị | `sa` | Tên đăng nhập SQL Server |
-| `DB_PASSWORD` | Crawler & Định vị | `******` | Mật khẩu truy cập SQL Server |
-| `DB_NAME` | Crawler & Định vị | `caw_powerbi_db` | Tên cơ sở dữ liệu hệ thống |
-| `POWERBI_URL` | Crawler Backend | `https://app.powerbi.com/view?r=...` | Đường dẫn Publish to Web của báo cáo Power BI nguồn |
-| `DINHVI_BACKEND_URL` | Crawler Backend | `http://vnp-dinhvi-backend:5000` | URL kết nối nội bộ giữa 2 backend |
-| `PORT` | Crawler Backend | `8000` | Cổng HTTP của Python FastAPI |
-| `JWT_SECRET` | Định vị Backend | `vnpost-excel-exporter...` | Chuỗi khóa bí mật ký JSON Web Token |
-| `FRONTEND_PORT` | Host / Docker | `9999` | Cổng truy cập Web giao diện người dùng |
-| `TZ` | Tất cả dịch vụ | `Asia/Ho_Chi_Minh` | Múi giờ chuẩn Việt Nam |
+Các biến cấu hình được lưu tại file `.env` trên máy chủ (không lưu trữ trên Git để đảm bảo an toàn thông tin):
+
+| Biến môi trường | Dịch vụ áp dụng | Mô tả chi tiết |
+| :--- | :--- | :--- |
+| `DB_SERVER` | Crawler & Định vị | Địa chỉ IP hoặc Hostname máy chủ SQL Server |
+| `DB_PORT` | Crawler & Định vị | Cổng dịch vụ SQL Server (Mặc định: `1433`) |
+| `DB_USER` | Crawler & Định vị | Tên đăng nhập cơ sở dữ liệu SQL Server |
+| `DB_PASSWORD` | Crawler & Định vị | Mật khẩu truy cập SQL Server |
+| `DB_NAME` | Crawler & Định vị | Tên cơ sở dữ liệu hệ thống (ví dụ: `caw_powerbi_db`) |
+| `POWERBI_URL` | Crawler Backend | Đường dẫn Publish to Web của báo cáo Power BI nguồn |
+| `DINHVI_BACKEND_URL` | Crawler Backend | URL gọi nội bộ giữa các container (`http://vnp-dinhvi-backend:5000`) |
+| `JWT_SECRET` | Định vị Backend | Chuỗi khóa bí mật ký JSON Web Token cho phiên đăng nhập |
+| `LOCTON_PORT` | Lọc tồn Backend | Cổng chạy container lọc tồn (Mặc định: `3001`) |
+| `FRONTEND_PORT` | Host / Nginx | Cổng truy cập Web giao diện người dùng (Mặc định: `9999`) |
+| `TZ` | Tất cả dịch vụ | Múi giờ hệ thống (Khuyến nghị: `Asia/Ho_Chi_Minh`) |
 
 ---
 
 ## 🚀 5. Hướng dẫn Triển Khai (Deployment)
 
-### A. Triển khai qua Portainer Stack (Khuyến nghị)
+### A. Triển khai bằng Docker Compose (Khuyến nghị)
 
-1. Đăng nhập vào giao diện **Portainer**.
-2. Chọn **Stacks** -> Nhấn **Add stack**.
-3. Đặt tên cho stack (ví dụ: `tools-bdld-vnp`).
-4. Dán nội dung file [`docker-compose.yml`](file:///e:/dev/tools-bdld-vnp/tools-bdld-vnp/docker-compose.yml) vào trình soạn thảo Web editor:
+1. Sao chép file cấu hình mẫu và điền thông tin thực tế:
+   ```bash
+   cp .env.example .env
+   # Chỉnh sửa thông tin DB_SERVER, DB_PASSWORD, POWERBI_URL, JWT_SECRET trong file .env
+   ```
 
-```yaml
-version: '3.8'
-
-services:
-  vnp-crawler-backend:
-    image: ghcr.io/dong071102/tools-bdld-vnp-crawler-backend:latest
-    container_name: vnp-crawler-backend
-    restart: always
-    environment:
-      - DB_SERVER=10.61.200.10
-      - DB_PORT=1433
-      - DB_USER=sa
-      - DB_PASSWORD=YourPasswordHere
-      - DB_NAME=caw_powerbi_db
-      - PORT=8000
-      - TZ=Asia/Ho_Chi_Minh
-      - DINHVI_BACKEND_URL=http://vnp-dinhvi-backend:5000
-      - POWERBI_URL=https://app.powerbi.com/view?r=eyJrIjoiZTUwNjQ1NzgtODkzMy00ZmFjLWFiZmMtODE2OTFlZmM0MjFkIiwidCI6IjRkNmQ2N2FlLTViNTUtNDJhYy05ZGFhLTkzOTk3Yzc3YTg3YSIsImMiOjEwfQ%3D%3D
-    networks:
-      - bdld-vnp-network
-
-  vnp-dinhvi-backend:
-    image: ghcr.io/dong071102/tools-bdld-vnp-dinhvi-backend:latest
-    container_name: vnp-dinhvi-backend
-    restart: always
-    environment:
-      - DB_SERVER=10.61.200.10
-      - DB_PORT=1433
-      - DB_USER=sa
-      - DB_PASSWORD=YourPasswordHere
-      - DB_NAME=caw_powerbi_db
-      - PORT=5000
-      - TZ=Asia/Ho_Chi_Minh
-      - JWT_SECRET=vnpost-excel-exporter-jwt-secret-key-2026-dynamic-secure
-    networks:
-      - bdld-vnp-network
-
-  vnp-frontend:
-    image: ghcr.io/dong071102/tools-bdld-vnp-frontend:latest
-    container_name: vnp-frontend
-    restart: always
-    ports:
-      - "9999:80"
-    depends_on:
-      - vnp-crawler-backend
-      - vnp-dinhvi-backend
-    networks:
-      - bdld-vnp-network
-
-networks:
-  bdld-vnp-network:
-    driver: bridge
-```
-
-5. Nhấn **Deploy the stack**.
-6. Truy cập hệ thống tại: `http://<IP_SERVER>:9999` (hoặc domain cấu hình qua reverse proxy, ví dụ: `https://tools.bdld.io.vn`).
-
----
-
-### B. Triển khai bằng Docker Compose (Command Line)
-
-```bash
-# 1. Sao chép và cấu hình biến môi trường
-cp .env.example .env
-
-# 2. Khởi chạy hệ thống (tải pre-built image mới nhất từ GHCR)
-docker compose pull
-docker compose up -d
-
-# 3. Xem nhật ký hoạt động (Logs)
-docker compose logs -f
-```
-
----
-
-### C. Cập nhật phiên bản mới (Update Image)
-
-Khi có bản cập nhật mới trên GitHub (`main`), hệ thống CI/CD GitHub Actions sẽ tự động build image `:latest`. Để cập nhật dịch vụ đang chạy:
-
-1. **Trên Portainer:**
-   - Vào mục **Stacks** -> Chọn `tools-bdld-vnp`.
-   - Bấm vào service (ví dụ `vnp-crawler-backend` hoặc `vnp-frontend`).
-   - Nhấn **Recreate** -> Bật tùy chọn **Re-pull image** -> Bấm **Recreate**.
-2. **Trên Command Line:**
+2. Khởi chạy toàn bộ hệ thống bằng Docker Compose:
    ```bash
    docker compose pull
    docker compose up -d
    ```
+
+3. Kiểm tra trạng thái và logs container:
+   ```bash
+   docker compose ps
+   docker compose logs -f
+   ```
+
+### B. Triển khai qua Portainer Stack
+
+1. Vào giao diện **Portainer** -> Chọn **Stacks** -> Nhấn **Add stack**.
+2. Đặt tên cho stack (ví dụ: `tools-bdld-vnp`).
+3. Dán nội dung file [`docker-compose.yml`](file:///e:/dev/tools-bdld-vnp/tools-bdld-vnp/docker-compose.yml) vào trình soạn thảo.
+4. Trong mục **Environment variables**, thêm các khóa từ file `.env` (`DB_SERVER`, `DB_PASSWORD`, `POWERBI_URL`, `JWT_SECRET`,...).
+5. Nhấn **Deploy the stack**.
+6. Truy cập hệ thống tại: `http://<IP_SERVER>:9999`.
 
 ---
 

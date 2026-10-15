@@ -7,15 +7,15 @@ services:
     restart: always
     # Không expose port ra ngoài, chỉ giao tiếp nội bộ qua bdld-vnp-network
     environment:
-      - DB_SERVER=${DB_SERVER:-10.61.200.10}
+      - DB_SERVER=${DB_SERVER}
       - DB_PORT=${DB_PORT:-1433}
-      - DB_USER=${DB_USER:-sa}
-      - DB_PASSWORD=${DB_PASSWORD:-Sadmin123}
-      - DB_NAME=${DB_NAME:-caw_powerbi_db}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
       - PORT=${CRAWLER_PORT:-8000}
       - TZ=${TZ:-Asia/Ho_Chi_Minh}
       - DINHVI_BACKEND_URL=${DINHVI_BACKEND_URL:-http://vnp-dinhvi-backend:5000}
-      - POWERBI_URL=${POWERBI_URL:-https://app.powerbi.com/view?r=eyJrIjoiNjk5OGZhNDEtZTc3NC00ODgyLThlYjAtZGE3MTUyY2Q1ZmYzIiwidCI6IjRkNmQ2N2FlLTViNTUtNDJhYy05ZGFhLTkzOTk3Yzc3YTg3YSIsImMiOjEwfQ==}
+      - POWERBI_URL=${POWERBI_URL}
     networks:
       - bdld-vnp-network
 
@@ -26,13 +26,13 @@ services:
     # Không expose port ra ngoài, chỉ giao tiếp nội bộ qua bdld-vnp-network
     environment:
       - PORT=${DINHVI_PORT:-5000}
-      - JWT_SECRET=${JWT_SECRET:-vnpost-excel-exporter-jwt-secret-key-2026-dynamic-secure}
-      - DB_HOST=${DB_HOST:-${DB_SERVER:-10.61.200.10}}
-      - DB_SERVER=${DB_SERVER:-10.61.200.10}
+      - JWT_SECRET=${JWT_SECRET}
+      - DB_HOST=${DB_HOST:-${DB_SERVER}}
+      - DB_SERVER=${DB_SERVER}
       - DB_PORT=${DB_PORT:-1433}
-      - DB_USER=${DB_USER:-sa}
-      - DB_PASSWORD=${DB_PASSWORD:-Sadmin123}
-      - DB_NAME=${DB_NAME:-caw_powerbi_db}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
     depends_on:
       - vnp-crawler-backend
     networks:
