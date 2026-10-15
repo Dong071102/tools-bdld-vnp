@@ -14,7 +14,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Style CSS -->
-     <link rel="stylesheet" href="/static/style.css?v=3.14.0">
+     <link rel="stylesheet" href="/static/style.css?v=3.14.3">
 </head>
 <body>
     <!-- Login Screen -->
@@ -59,12 +59,16 @@
             </div>
 
             <nav class="nav-menu">
-                <a href="#" class="nav-item active" id="menu-dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
-                <a href="#" class="nav-item" id="menu-export"><i class="fa-solid fa-file-excel"></i> Xuất Excel (Định vị)</a>
+                <div class="nav-menu-top" style="display: flex; flex-direction: column; gap: 8px;">
+                    <a href="#" class="nav-item active" id="menu-dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
+                    <a href="#" class="nav-item" id="menu-export"><i class="fa-solid fa-file-excel"></i> Xuất Excel (Định vị)</a>
+                </div>
 
-                <a href="#" class="nav-item" id="menu-users" style="display: none;"><i class="fa-solid fa-gear"></i> Cài đặt</a>
-                <a href="#" class="nav-item" id="btn-trigger-crawl"><i class="fa-solid fa-rotate"></i> Đồng bộ dữ liệu</a>
-                <a href="#" class="nav-item" id="menu-logout" style="margin-top: auto; border-top: 1px solid var(--border-color); padding-top: 16px;"><i class="fa-solid fa-right-from-bracket"></i> Đăng xuất</a>
+                <div class="nav-menu-bottom" style="margin-top: auto; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                    <a href="#" class="nav-item" id="menu-users" style="display: none;"><i class="fa-solid fa-gear"></i> Cài đặt</a>
+                    <a href="#" class="nav-item nav-item-sync" id="btn-trigger-crawl"><i class="fa-solid fa-rotate"></i> Đồng bộ dữ liệu</a>
+                    <a href="#" class="nav-item nav-item-logout" id="menu-logout"><i class="fa-solid fa-right-from-bracket"></i> Đăng xuất</a>
+                </div>
             </nav>
             <div class="sidebar-footer">
                 <div class="status-indicator">
@@ -1161,6 +1165,6 @@
     </div>
 
     <!-- Script JS -->
-    <script src="/static/app.js?v=3.14.2"></script>
+    <script src="/static/app.js?v=3.14.3"></script>
 </body>
 </html>
