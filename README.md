@@ -87,7 +87,6 @@ flowchart TD
     NGINX -->|/api/export, /api/vnpost/*| DVI[Node.js Định Vị Backend]
     
     DVI -->|Đăng nhập đa luồng & Lấy định vị| BCCP[VNPost BCCP Server]
-    DVI -->|Lưu lịch sử xuất| HIST[(SQL Server: export_history)]
 ```
 
 ### A. Tiến trình Crawl & Học bưu cục tự động
@@ -155,9 +154,6 @@ flowchart TD
 
 #### 📥 Tra cứu & Xuất dữ liệu định vị
 - `POST /api/export`: Nhận danh sách mã bưu gửi, xử lý đa luồng và tải xuống file Excel định vị.
-- `GET /api/history`: Lấy danh sách các lần xuất file trong lịch sử.
-- `GET /api/history/download/{id}`: Tải lại file Excel đã xuất trong quá khứ.
-- `GET /api/history/search`: Tra cứu nhanh hành trình của một mã bưu gửi trong kho lịch sử.
 
 ---
 

@@ -14,7 +14,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Style CSS -->
-     <link rel="stylesheet" href="/static/style.css?v=3.12.0">
+     <link rel="stylesheet" href="/static/style.css?v=3.13.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -61,7 +61,6 @@
             <nav class="nav-menu">
                 <a href="#" class="nav-item active" id="menu-dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
                 <a href="#" class="nav-item" id="menu-export"><i class="fa-solid fa-file-excel"></i> Xuất Excel (Định vị)</a>
-                <a href="#" class="nav-item" id="menu-history"><i class="fa-solid fa-history"></i> Lịch sử xuất</a>
 
                 <a href="#" class="nav-item" id="menu-users" style="display: none;"><i class="fa-solid fa-gear"></i> Cài đặt</a>
                 <a href="#" class="nav-item" id="btn-trigger-crawl"><i class="fa-solid fa-rotate"></i> Đồng bộ dữ liệu</a>
@@ -528,57 +527,6 @@
                 </div>
             </div>
 
-            <!-- History View -->
-            <div id="view-history" class="content-view">
-                <header class="header">
-                    <div class="header-title">
-                        <h1>Lịch sử xuất Excel</h1>
-                        <p>Xem lại lịch sử xuất file, tra cứu chi tiết thông tin bưu gửi đã lưu</p>
-                    </div>
-                </header>
-
-                <!-- History Search Card -->
-                <div class="grid-card history-search-card padded" style="margin-bottom: 24px;">
-                    <div class="card-header" style="padding: 0 0 16px 0;">
-                        <h2><i class="fa-solid fa-magnifying-glass"></i> Tra cứu bưu gửi nhanh</h2>
-                    </div>
-                    <form id="history-search-form" class="search-form-row">
-                        <input type="text" id="history-search-input" class="input-field" placeholder="Nhập mã bưu gửi để tìm kiếm nhanh trong toàn bộ lịch sử (Ví dụ: CE991562158VN)..." required style="flex-grow: 1;">
-                        <button type="submit" class="btn btn-primary" id="btn-history-search-submit">Tìm kiếm</button>
-                    </form>
-                    <div id="search-results-container" class="search-results-list" style="display: none; margin-top: 16px;">
-                        <!-- Dynamic search results -->
-                    </div>
-                </div>
-
-                <!-- History List Table -->
-                <div class="grid-card history-table-card">
-                    <div class="card-header" style="margin-bottom: 16px;">
-                        <h2><i class="fa-solid fa-list-ul"></i> Danh sách các lần xuất</h2>
-                        <button class="btn btn-secondary" id="btn-refresh-history"><i class="fa-solid fa-arrows-rotate"></i> Làm mới</button>
-                    </div>
-                    <div class="table-container">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Thời gian xuất</th>
-                                    <th class="th-history-user" style="display: none;">Người xuất</th>
-                                    <th>Số lượng bưu gửi</th>
-                                    <th>Tên file Excel</th>
-                                    <th>Trạng thái</th>
-                                    <th class="text-right">Thao tác</th>
-                                </tr>
-                            </thead>
-                            <tbody id="history-table-tbody">
-                                <tr>
-                                    <td colspan="6" class="text-center text-muted">Đang tải lịch sử xuất...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
             <!-- Users View (Admin only) -->
             <div id="view-users" class="content-view">
                 <header class="header" style="margin-bottom: 24px;">
@@ -892,41 +840,6 @@
         </div>
     </div>
 
-    <!-- History Details Modal -->
-    <div id="history-detail-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-card modal-large">
-            <div class="modal-header">
-                <h2>Chi tiết lần xuất bưu gửi</h2>
-                <button type="button" class="modal-close-btn" id="btn-close-detail-modal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="history-detail-meta-row" style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; padding: 12px; background: var(--bg-primary); border-radius: 12px;">
-                    <div><strong>Thời gian:</strong> <span id="detail-export-time">-</span></div>
-                    <div><strong>Người xuất:</strong> <span id="detail-export-user">-</span></div>
-                    <div><strong>Số lượng bưu gửi:</strong> <span id="detail-export-qty">-</span></div>
-                    <div><strong>Tên File:</strong> <span id="detail-export-file">-</span></div>
-                </div>
-                <div class="table-container" style="margin-top: 16px; max-height: 400px; overflow-y: auto;">
-                    <table class="table" style="font-size: 13.5px;">
-                        <thead>
-                            <tr>
-                                <th>Mã bưu gửi</th>
-                                <th>Chi tiết thông tin định vị</th>
-                            </tr>
-                        </thead>
-                        <tbody id="detail-modal-table-tbody">
-                            <!-- Dynamic items -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
-                <button type="button" class="btn btn-secondary" id="btn-close-detail-modal-action">Đóng</button>
-                <button type="button" class="btn btn-success" id="btn-download-detail-file"><i class="fa-solid fa-file-arrow-down"></i> Tải xuống Excel</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Matrix Total Column Quick Config Modal -->
     <div id="matrix-total-modal" class="modal-overlay" style="display: none;">
         <div class="modal-card" style="max-width: 400px; width: 90%;">
@@ -1156,6 +1069,6 @@
     </div>
 
     <!-- Script JS -->
-    <script src="/static/app.js?v=3.12.1"></script>
+    <script src="/static/app.js?v=3.13.0"></script>
 </body>
 </html>

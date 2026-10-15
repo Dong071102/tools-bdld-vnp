@@ -1418,10 +1418,8 @@ function showApp(user) {
     const menuUsers = document.getElementById("menu-users");
     if (user.role === "admin") {
         menuUsers.style.display = "flex";
-        document.querySelectorAll(".th-history-user").forEach(el => el.style.display = "table-cell");
     } else {
         menuUsers.style.display = "none";
-        document.querySelectorAll(".th-history-user").forEach(el => el.style.display = "none");
     }
 
     // Initialize system config settings tab elements and event listeners
@@ -1444,7 +1442,7 @@ document.getElementById("menu-logout").addEventListener("click", (e) => {
 
 
 // Tab / View Switching controller
-const views = ["dashboard", "export", "history", "users"];
+const views = ["dashboard", "export", "users"];
 let activeView = "dashboard";
 
 
@@ -1490,10 +1488,6 @@ function switchView(viewName) {
         startSessionPolling();
     } else {
         stopSessionPolling();
-    }
-
-    if (viewName === "history") {
-        loadHistoryList();
     }
 
     if (viewName === "users") {
@@ -1952,187 +1946,6 @@ btnStartExport.addEventListener("click", async () => {
             menuExport.innerHTML = `<i class="fa-solid fa-file-excel"></i> Xuất Excel (Định vị)`;
         }
     }
-});
-
-
-// ==========================================
-// --- HISTORY VIEW HANDLERS ---
-// ==========================================
-
-async function loadHistoryList() {
-    const tbody = document.getElementById("history-table-tbody");
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Đang tải lịch sử xuất...</td></tr>`;
-
-    try {
-        const res = await fetch(`${API_BASE_DINHVI}/api/history`, {
-            headers: getHeaders()
-        });
-        if (!res.ok) throw new Error("Không thể tải lịch sử.");
-        const data = await res.json();
-
-        if (data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Không có lịch sử xuất file.</td></tr>`;
-            return;
-        }
-
-        tbody.innerHTML = "";
-        const user = JSON.parse(localStorage.getItem("vnpost_user") || "{}");
-        const showUser = user.role === "admin";
-
-        data.forEach(item => {
-            const tr = document.createElement("tr");
-            const time = new Date(item.export_time).toLocaleString("vi-VN");
-            const statusClass = item.status === "success" ? "badge badge-success" : "badge badge-counter";
-            const statusText = item.status === "success" ? "Thành công" : item.status;
-
-            tr.innerHTML = `
-                <td>${time}</td>
-                <td class="td-history-user" style="display: ${showUser ? 'table-cell' : 'none'};">${item.username || 'N/A'}</td>
-                <td>${item.total_codes} bưu gửi (Định vị: ${item.success_codes})</td>
-                <td style="font-family: var(--font-mono); font-size: 13px;">${item.file_name}</td>
-                <td><span class="${statusClass}">${statusText}</span></td>
-                <td class="text-right">
-                    <button class="btn btn-secondary btn-sm" onclick="viewHistoryDetail(${item.id})"><i class="fa-solid fa-eye"></i> Xem</button>
-                    <button class="btn btn-primary btn-sm" onclick="downloadHistoryFile(${item.id})"><i class="fa-solid fa-download"></i> Tải</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-red">Lỗi: ${err.message}</td></tr>`;
-    }
-}
-
-window.downloadHistoryFile = function (historyId) {
-    const token = localStorage.getItem("vnpost_token");
-    window.open(`${API_BASE_DINHVI}/api/history/${historyId}/download?authorization=Bearer ${token}`);
-};
-
-let detailHistoryId = null;
-window.viewHistoryDetail = async function (historyId) {
-    detailHistoryId = historyId;
-    const modal = document.getElementById("history-detail-modal");
-    const tbody = document.getElementById("detail-modal-table-tbody");
-    tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted">Đang tải chi tiết bưu gửi...</td></tr>`;
-
-    document.getElementById("detail-export-time").textContent = "-";
-    document.getElementById("detail-export-user").textContent = "-";
-    document.getElementById("detail-export-qty").textContent = "-";
-    document.getElementById("detail-export-file").textContent = "-";
-
-    modal.style.display = "flex";
-
-    try {
-        const res = await fetch(`${API_BASE_DINHVI}/api/history/${historyId}/items`, {
-            headers: getHeaders()
-        });
-        if (!res.ok) throw new Error("Không thể tải chi tiết.");
-        const data = await res.json();
-
-        const timeStr = data.length > 0 && data[0].export_time ? new Date(data[0].export_time).toLocaleString("vi-VN") : "-";
-        document.getElementById("detail-export-time").textContent = timeStr;
-        document.getElementById("detail-export-user").textContent = data.length > 0 ? (data[0].username || "N/A") : "-";
-        document.getElementById("detail-export-qty").textContent = `${data.length} bưu gửi`;
-        document.getElementById("detail-export-file").textContent = data.length > 0 ? (data[0].file_name || "Excel Export") : "-";
-
-        if (data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted">Không tìm thấy bưu gửi nào.</td></tr>`;
-            return;
-        }
-
-        tbody.innerHTML = "";
-        data.forEach(item => {
-            const tr = document.createElement("tr");
-            let detailsHtml = "";
-            try {
-                const info = JSON.parse(item.data_json);
-                const parts = [];
-                for (const [k, v] of Object.entries(info)) {
-                    if (v && v.toString().trim() !== "") {
-                        parts.push(`<strong>${k}:</strong> ${v}`);
-                    }
-                }
-                detailsHtml = parts.join(" | ");
-            } catch (_) {
-                detailsHtml = item.data_json;
-            }
-
-            tr.innerHTML = `
-                <td style="font-family: var(--font-mono); font-weight: 700; width: 150px;">${item.tracking_code}</td>
-                <td>${detailsHtml || '<span class="text-muted">Không có dữ liệu chi tiết</span>'}</td>
-            `;
-            tbody.appendChild(tr);
-        });
-    } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="2" class="text-center text-red">Lỗi: ${err.message}</td></tr>`;
-    }
-};
-
-document.getElementById("history-search-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const q = document.getElementById("history-search-input").value.trim();
-    if (!q) return;
-
-    const resultsContainer = document.getElementById("search-results-container");
-    resultsContainer.style.display = "block";
-    resultsContainer.innerHTML = `<div class="text-muted">Đang tìm kiếm bưu gửi ${q}...</div>`;
-
-    try {
-        const res = await fetch(`${API_BASE_DINHVI}/api/history/search?code=${q}`, {
-            headers: getHeaders()
-        });
-        if (!res.ok) throw new Error("Lỗi tìm kiếm.");
-        const data = await res.json();
-
-        if (data.length === 0) {
-            resultsContainer.innerHTML = `<div class="text-muted" style="padding: 12px; background: var(--bg-secondary); border-radius: 8px;">Không tìm thấy bưu gửi "${q}" trong lịch sử.</div>`;
-            return;
-        }
-
-        resultsContainer.innerHTML = "";
-        data.forEach(item => {
-            const div = document.createElement("div");
-            div.className = "search-item-card";
-            const time = new Date(item.export_time).toLocaleString("vi-VN");
-
-            let detailsGrid = "";
-            try {
-                const info = JSON.parse(item.data_json);
-                const props = [];
-                for (const [k, v] of Object.entries(info)) {
-                    props.push(`
-                        <div class="search-item-prop">${k}:</div>
-                        <div class="search-item-val">${v || '-'}</div>
-                    `);
-                }
-                detailsGrid = `<div class="search-item-details">${props.join("")}</div>`;
-            } catch (_) {
-                detailsGrid = `<div class="text-muted">${item.data_json}</div>`;
-            }
-
-            div.innerHTML = `
-                <div class="search-item-header">
-                    <span class="search-item-code">${item.tracking_code}</span>
-                    <span class="search-item-meta">Xuất ngày ${time} bởi ${item.username || 'nhân viên'}</span>
-                </div>
-                ${detailsGrid}
-            `;
-            resultsContainer.appendChild(div);
-        });
-    } catch (err) {
-        resultsContainer.innerHTML = `<div class="text-red">Lỗi: ${err.message}</div>`;
-    }
-});
-
-document.getElementById("btn-refresh-history").addEventListener("click", loadHistoryList);
-document.getElementById("btn-close-detail-modal").addEventListener("click", () => {
-    document.getElementById("history-detail-modal").style.display = "none";
-});
-document.getElementById("btn-close-detail-modal-action").addEventListener("click", () => {
-    document.getElementById("history-detail-modal").style.display = "none";
-});
-document.getElementById("btn-download-detail-file").addEventListener("click", () => {
-    if (detailHistoryId) downloadHistoryFile(detailHistoryId);
 });
 
 
