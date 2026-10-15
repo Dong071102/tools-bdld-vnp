@@ -3712,6 +3712,268 @@ function initLoctonView() {
     }
 }
 
+const LOCTON_EXCLUDE_STATUSES = new Set([
+    '[BĐ8]Đã tới bưu cục nhận',
+    '[BĐ8]Đã xác nhận đi',
+    'Đã đóng chuyến thư đi',
+    'Đã thu tiền khách hàng',
+    'Đã thu tiền khách hàng (QR)',
+    'Đã thu tiền bưu tá',
+    'Mất bưu gửi',
+    'Đã phát thành công',
+    'Phát thành công',
+    'Trả tiền cho người gửi',
+    'Đã trả tiền'
+]);
+
+const LOCTON_EXCLUDE_BC = new Set([
+    '640000', '641190', '641430',
+    '670000', '671040', '671640',
+    '673300', '674169', '674790'
+]);
+
+function isLoctonExcludedStatus(status) {
+    if (!status) return false;
+    const s = String(status).trim();
+    if (LOCTON_EXCLUDE_STATUSES.has(s)) return true;
+    const lower = s.toLowerCase();
+    if (lower.includes('phát thành công') && !lower.includes('không')) return true;
+    if (lower.includes('thu tiền khách hàng') || lower.includes('thu tiền bưu tá')) return true;
+    if (lower.includes('đã đóng chuyến thư đi')) return true;
+    return false;
+}
+
+// Client-side Excel Processor using SheetJS (runs 100% in browser, fast & offline-ready)
+async function processExcelLocTonInBrowser(hangtonFile, dinhViFile) {
+    if (!window.XLSX) {
+        throw new Error("Thư viện SheetJS (XLSX) chưa được tải trên trình duyệt.");
+    }
+
+    // 1. Đọc file định vị (dinh_vi.xlsx)
+    const bufDinhVi = await dinhViFile.arrayBuffer();
+    const wbDinhVi = window.XLSX.read(bufDinhVi, {
+        type: 'array',
+        cellFormula: false,
+        cellHTML: false,
+        cellNF: false,
+        cellStyles: false,
+        cellText: false
+    });
+
+    const sheetNameDV = wbDinhVi.Sheets['DanhSach'] ? 'DanhSach' : wbDinhVi.SheetNames[0];
+    const wsDinhVi = wbDinhVi.Sheets[sheetNameDV];
+    const dinhViMap = new Map();
+
+    if (wsDinhVi && wsDinhVi['!ref']) {
+        const range = window.XLSX.utils.decode_range(wsDinhVi['!ref']);
+        for (let r = 2; r <= range.e.r; r++) {
+            const cellB = wsDinhVi[window.XLSX.utils.encode_cell({ r, c: 1 })]; // Cột B
+            if (cellB && cellB.v !== undefined && cellB.v !== null) {
+                const soHieu = String(cellB.v).trim();
+                const cellY = wsDinhVi[window.XLSX.utils.encode_cell({ r, c: 24 })]; // Cột Y
+                const tt = cellY && cellY.v !== undefined && cellY.v !== null ? String(cellY.v).trim() : '';
+                dinhViMap.set(soHieu, tt);
+            }
+        }
+    }
+
+    // 2. Đọc file hàng tồn (hangton.xlsx)
+    const bufHangton = await hangtonFile.arrayBuffer();
+    const wbHangton = window.XLSX.read(bufHangton, {
+        type: 'array',
+        cellFormula: false,
+        cellHTML: false,
+        cellNF: false,
+        cellStyles: false
+    });
+    const sheetNameHT = wbHangton.SheetNames[0];
+    const wsHangton = wbHangton.Sheets[sheetNameHT];
+    const hangtonRows = window.XLSX.utils.sheet_to_json(wsHangton, { defval: '' });
+
+    // 3. Phân loại Bảng 1 & Bảng 2
+    const bang1 = [];
+    const bang2 = [];
+
+    const getVal = (row, candidates, fallback = '') => {
+        for (const c of candidates) {
+            if (row[c] !== undefined && row[c] !== null && String(row[c]).trim() !== '') {
+                return row[c];
+            }
+        }
+        return fallback;
+    };
+
+    for (const item of hangtonRows) {
+        const maBG = String(getVal(item, ['Mã bưu gửi', 'Mã BG', 'ItemCode', 'Số hiệu'])).trim();
+        if (!maBG || !dinhViMap.has(maBG)) {
+            continue; // Chỉ xử lý các bưu gửi có trong file định vị (INNER JOIN)
+        }
+
+        const ttcc = dinhViMap.get(maBG);
+        const codVal = Number(getVal(item, ['COD', 'Tiền COD', 'Tien COD', 'Số tiền thu hộ'], 0)) || 0;
+        const tlVal = Number(getVal(item, ['Trọng lượng', 'Khối lượng', 'TL'], 0)) || 0;
+
+        const rowData = {
+            'Mã bưu gửi': maBG,
+            'Mã BC phát': String(getVal(item, ['Mã bưu cục', 'Mã BC', 'Mã bưu cục phát', 'Mã BC phát', 'POS Code'])).trim(),
+            'Tên BC phát': String(getVal(item, ['Bưu cục Phát', 'Tên BC phát', 'Tên bưu cục', 'Bưu cục phát', 'POS Name'])).trim(),
+            'Ngày đến BC phát': String(getVal(item, ['DK1', 'Ngày đến', 'Ngày đến BC', 'Ngày đến BC phát'])).trim(),
+            'Thời gian tồn': String(getVal(item, ['Thời gian tồn', 'TG tồn', 'Thời gian lưu'])).trim(),
+            'Trạng thái hiện tại': ttcc,
+            'Thời gian cập nhật': String(getVal(item, ['Thời gian quét', 'Thời gian cập nhật', 'TG quet'])).trim(),
+            'Người ký nhận': String(getVal(item, ['Người ký nhận', 'Người nhận', 'Nguoi nhan'])).trim(),
+            'Tiền COD': codVal,
+            'Khối lượng': tlVal
+        };
+
+        if (isLoctonExcludedStatus(ttcc)) {
+            bang2.push(rowData);
+        } else {
+            bang1.push(rowData);
+        }
+    }
+
+    // 4. Tổng hợp Bảng 3: Nhóm theo bưu cục từ Bảng 1
+    const groups = new Map();
+
+    for (const row of bang1) {
+        const maBC = row['Mã BC phát'];
+        if (LOCTON_EXCLUDE_BC.has(maBC)) continue;
+
+        const tenBC = row['Tên BC phát'];
+        const key = `${maBC}___${tenBC}`;
+
+        if (!groups.has(key)) {
+            groups.set(key, {
+                'Mã BC': maBC,
+                'Tên bưu cục': tenBC,
+                'SL Tồn 3N': 0,
+                'Tiền COD 3N': 0,
+                'SL Tồn 5N': 0,
+                'Tiền COD 5N': 0,
+                'SL Tồn 7N': 0,
+                'Tiền COD 7N': 0,
+                'SL Tồn 14N': 0,
+                'Tiền COD 14N': 0,
+                'Tổng tồn': 0,
+                'Tổng tiền COD': 0
+            });
+        }
+
+        const g = groups.get(key);
+        const tgt = row['Thời gian tồn'];
+        const cod = row['Tiền COD'];
+
+        if (tgt === '≥3 ngày' || tgt.includes('3')) {
+            g['SL Tồn 3N'] += 1;
+            g['Tiền COD 3N'] += cod;
+        } else if (tgt === '≥5 ngày' || tgt.includes('5')) {
+            g['SL Tồn 5N'] += 1;
+            g['Tiền COD 5N'] += cod;
+        } else if (tgt === '≥7 ngày' || tgt.includes('7')) {
+            g['SL Tồn 7N'] += 1;
+            g['Tiền COD 7N'] += cod;
+        } else if (tgt === '≥14 ngày' || tgt.includes('14')) {
+            g['SL Tồn 14N'] += 1;
+            g['Tiền COD 14N'] += cod;
+        }
+
+        g['Tổng tồn'] += 1;
+        g['Tổng tiền COD'] += cod;
+    }
+
+    const bang3List = Array.from(groups.values());
+
+    // Dòng tổng toàn tỉnh Lâm Đồng
+    const rowTongLamDong = {
+        'Mã BC': '67',
+        'Tên bưu cục': 'TOÀN TỈNH LÂM ĐỒNG',
+        'SL Tồn 3N': 0,
+        'Tiền COD 3N': 0,
+        'SL Tồn 5N': 0,
+        'Tiền COD 5N': 0,
+        'SL Tồn 7N': 0,
+        'Tiền COD 7N': 0,
+        'SL Tồn 14N': 0,
+        'Tiền COD 14N': 0,
+        'Tổng tồn': 0,
+        'Tổng tiền COD': 0
+    };
+
+    for (const item of bang3List) {
+        rowTongLamDong['SL Tồn 3N'] += item['SL Tồn 3N'];
+        rowTongLamDong['Tiền COD 3N'] += item['Tiền COD 3N'];
+        rowTongLamDong['SL Tồn 5N'] += item['SL Tồn 5N'];
+        rowTongLamDong['Tiền COD 5N'] += item['Tiền COD 5N'];
+        rowTongLamDong['SL Tồn 7N'] += item['SL Tồn 7N'];
+        rowTongLamDong['Tiền COD 7N'] += item['Tiền COD 7N'];
+        rowTongLamDong['SL Tồn 14N'] += item['SL Tồn 14N'];
+        rowTongLamDong['Tiền COD 14N'] += item['Tiền COD 14N'];
+        rowTongLamDong['Tổng tồn'] += item['Tổng tồn'];
+        rowTongLamDong['Tổng tiền COD'] += item['Tổng tiền COD'];
+    }
+
+    const bang3 = [rowTongLamDong, ...bang3List];
+
+    return {
+        bang1,
+        bang2,
+        bang3,
+        stats: {
+            hangtonTotal: hangtonRows.length,
+            dinhViTotal: dinhViMap.size,
+            bang1Count: bang1.length,
+            bang2Count: bang2.length,
+            bang3Count: bang3List.length
+        }
+    };
+}
+
+// Client-side Excel Export using SheetJS
+function exportLocTonInBrowser(bang1, bang2, bang3) {
+    if (!window.XLSX) {
+        throw new Error("Thư viện SheetJS (XLSX) chưa được tải.");
+    }
+    const wb = window.XLSX.utils.book_new();
+
+    // Sheet 1: Tổng tồn các BC
+    const ws3 = window.XLSX.utils.json_to_sheet(bang3 || []);
+    window.XLSX.utils.book_append_sheet(wb, ws3, 'Tổng tồn các BC');
+
+    // Sheet 2: Danh sách bưu gửi tồn (Bảng 1)
+    const ws1 = window.XLSX.utils.json_to_sheet(bang1 || []);
+    window.XLSX.utils.book_append_sheet(wb, ws1, 'Danh sách bưu gửi tồn');
+
+    // Sheet 3: Danh sách bg trạng thái khác (Bảng 2)
+    const ws2 = window.XLSX.utils.json_to_sheet(bang2 || []);
+    window.XLSX.utils.book_append_sheet(wb, ws2, 'Danh sách bg trạng thái khác');
+
+    [ws3, ws1, ws2].forEach(ws => {
+        if (!ws['!ref']) return;
+        const range = window.XLSX.utils.decode_range(ws['!ref']);
+        const colWidths = [];
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+            colWidths.push({ wch: 18 });
+        }
+        ws['!cols'] = colWidths;
+    });
+
+    const wbout = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const filename = `Loc_ton_${dateStr}.xlsx`;
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+}
+
 async function handleLoctonProcess() {
     if (!loctonHangtonFile) {
         showLoctonAlert("Vui lòng chọn hoặc kéo thả file Hàng Tồn (hangton.xlsx)", "danger");
@@ -3731,21 +3993,45 @@ async function handleLoctonProcess() {
     hideLoctonAlert();
 
     try {
-        const formData = new FormData();
-        formData.append("hangton", loctonHangtonFile);
-        formData.append("dinh_vi", loctonDinhViFile);
+        let result = null;
 
-        const resp = await fetch("/api/locton/process", {
-            method: "POST",
-            body: formData
-        });
+        // Ưu tiên xử lý trực tiếp trên trình duyệt bằng SheetJS nếu có thư viện
+        if (typeof window.XLSX !== 'undefined') {
+            result = await processExcelLocTonInBrowser(loctonHangtonFile, loctonDinhViFile);
+        } else {
+            // Dự phòng: gọi lên backend service nếu SheetJS chưa nạp
+            const formData = new FormData();
+            formData.append("hangton", loctonHangtonFile);
+            formData.append("dinh_vi", loctonDinhViFile);
 
-        const result = await resp.json();
-        if (!result.success) {
-            throw new Error(result.message || "Xử lý file thất bại");
+            const resp = await fetch("/api/locton/process", {
+                method: "POST",
+                body: formData
+            });
+
+            const contentType = resp.headers.get("content-type") || "";
+            if (!contentType.includes("application/json")) {
+                const textErr = await resp.text();
+                throw new Error(`Máy chủ phản hồi mã ${resp.status} (${resp.statusText || 'Lỗi kết nối'}). Vui lòng kiểm tra container vnp-locton-backend đã chạy chưa.`);
+            }
+
+            const jsonResp = await resp.json();
+            if (!jsonResp.success) {
+                throw new Error(jsonResp.message || "Xử lý file thất bại");
+            }
+            result = {
+                bang1: jsonResp.data.bang1,
+                bang2: jsonResp.data.bang2,
+                bang3: jsonResp.data.bang3,
+                stats: jsonResp.stats
+            };
         }
 
-        loctonData = result.data || { bang1: [], bang2: [], bang3: [] };
+        loctonData = {
+            bang1: result.bang1 || [],
+            bang2: result.bang2 || [],
+            bang3: result.bang3 || []
+        };
         const stats = result.stats || {};
 
         // Update KPI values
@@ -3877,7 +4163,7 @@ function renderLoctonTable() {
         }
 
         tbody.innerHTML = pageRows.map((r, idx) => {
-            const isTotalRow = String(r["Mã BC"]).includes("TOÀN TỈNH") || r["Mã BC"] === "TONG";
+            const isTotalRow = String(r["Mã BC"]).includes("TOÀN TỈNH") || r["Mã BC"] === "TONG" || r["Mã BC"] === "67";
             const rowClass = isTotalRow ? 'style="font-weight: 700; background: var(--accent-emerald-light); color: var(--accent-emerald);"' : '';
             return `
                 <tr ${rowClass}>
@@ -3957,34 +4243,40 @@ async function handleLoctonExport() {
     }
 
     try {
-        const resp = await fetch("/api/locton/export", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                bang1: loctonData.bang1,
-                bang2: loctonData.bang2,
-                bang3: loctonData.bang3
-            })
-        });
+        if (typeof window.XLSX !== 'undefined') {
+            exportLocTonInBrowser(loctonData.bang1, loctonData.bang2, loctonData.bang3);
+            showToast("Đã tải xuống file Excel lọc tồn thành công!", "success");
+        } else {
+            const resp = await fetch("/api/locton/export", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    bang1: loctonData.bang1,
+                    bang2: loctonData.bang2,
+                    bang3: loctonData.bang3
+                })
+            });
 
-        if (!resp.ok) {
-            throw new Error(`HTTP ${resp.status}`);
+            if (!resp.ok) {
+                const text = await resp.text();
+                throw new Error(`HTTP ${resp.status}: ${text.slice(0, 100)}`);
+            }
+
+            const blob = await resp.blob();
+            const dateStr = new Date().toISOString().split("T")[0];
+            const filename = `Loc_ton_${dateStr}.xlsx`;
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+            showToast("Đã tải xuống file Excel lọc tồn thành công!", "success");
         }
-
-        const blob = await resp.blob();
-        const dateStr = new Date().toISOString().split("T")[0];
-        const filename = `Loc_ton_${dateStr}.xlsx`;
-
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-
-        showToast("Đã tải xuống file Excel lọc tồn thành công!", "success");
     } catch (err) {
         console.error("Lỗi xuất file lọc tồn:", err);
         showToast("Lỗi xuất file Excel: " + err.message, "error");
