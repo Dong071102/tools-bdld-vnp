@@ -307,3 +307,5 @@ export function generateExcelWorkbook(bang1, bang2, bang3) {
 
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
+
+export const processFiles = processExcelFiles;
