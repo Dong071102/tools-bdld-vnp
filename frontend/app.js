@@ -327,11 +327,12 @@ async function loadFilters() {
             });
         }
 
-        // Populate Categories into Custom Multiselect with fixed list
-        const fixedLoaiTons = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
+        // Populate Categories into Custom Multiselect with all available categories
+        const allAvailableLoaiTons = ["<1 ngày", "≥1 ngày", "≥1.5 ngày", "≥2 ngày", "≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
+        const loaiTonsToUse = (data.loai_tons && data.loai_tons.length > 0) ? data.loai_tons : allAvailableLoaiTons;
         if (multiselectCategoryList) {
             multiselectCategoryList.innerHTML = '';
-            fixedLoaiTons.forEach(cat => {
+            loaiTonsToUse.forEach(cat => {
                 const lbl = document.createElement("label");
                 lbl.innerHTML = `<input type="checkbox" class="category-checkbox" value="${cat}"> ${cat}`;
                 lbl.querySelector("input").addEventListener("change", handleCategorySelectionChange);
@@ -532,46 +533,148 @@ async function loadSummary() {
     }
 }
 
-function renderSummary(data) {
-    if (!data || !data.matrix) return;
+// All Available Categories and Themes
+const ALL_CATEGORIES = [
+    "<1 ngày",
+    "≥1 ngày",
+    "≥1.5 ngày",
+    "≥2 ngày",
+    "≥3 ngày",
+    "≥4 ngày",
+    "≥5 ngày",
+    "≥7 ngày",
+    "≥14 ngày"
+];
 
-    const categories = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
+const CATEGORY_STYLES = {
+    "<1 ngày": { bg: "rgba(59, 130, 246, 0.15)", color: "#1d4ed8", border: "#3b82f6" },
+    "≥1 ngày": { bg: "rgba(59, 130, 246, 0.15)", color: "#1d4ed8", border: "#3b82f6" },
+    "≥1.5 ngày": { bg: "rgba(14, 165, 233, 0.15)", color: "#0369a1", border: "#0ea5e9" },
+    "≥2 ngày": { bg: "rgba(20, 184, 166, 0.15)", color: "#0f766e", border: "#14b8a6" },
+    "≥3 ngày": { bg: "rgba(16, 185, 129, 0.15)", color: "#047857", border: "#10b981" },
+    "≥4 ngày": { bg: "rgba(16, 185, 129, 0.15)", color: "#047857", border: "#10b981" },
+    "≥5 ngày": { bg: "rgba(245, 158, 11, 0.15)", color: "#b45309", border: "#f59e0b" },
+    "≥7 ngày": { bg: "rgba(245, 158, 11, 0.15)", color: "#b45309", border: "#f59e0b" },
+    "≥14 ngày": { bg: "rgba(239, 68, 68, 0.15)", color: "#b91c1c", border: "#ef4444" }
+};
 
-    // Load config for Matrix Total Columns
-    const savedColsStr = localStorage.getItem("matrix_total_columns");
-    let targetCats = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"]; // Default fallback: sum all categories
-    if (savedColsStr) {
+function getVisibleCategories() {
+    const saved = localStorage.getItem("matrix_visible_columns");
+    if (saved) {
         try {
-            const parsed = JSON.parse(savedColsStr);
+            const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                targetCats = parsed;
+                const filtered = ALL_CATEGORIES.filter(c => parsed.includes(c));
+                if (filtered.length > 0) return filtered;
             }
         } catch (e) { }
     }
+    return [...ALL_CATEGORIES];
+}
 
-    // Update the "Toàn tỉnh" column header label dynamically to show selected columns
-    const headerSublabel = document.getElementById("matrix-header-sublabel");
-    if (headerSublabel) {
-        if (targetCats.length === categories.length && categories.every(c => targetCats.includes(c))) {
-            headerSublabel.textContent = "(Tất cả cột)";
-        } else {
-            headerSublabel.textContent = `(${targetCats.join(', ')})`;
-        }
+function getTotalCategories() {
+    const saved = localStorage.getItem("matrix_total_columns");
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                const filtered = ALL_CATEGORIES.filter(c => parsed.includes(c));
+                if (filtered.length > 0) return filtered;
+            }
+        } catch (e) { }
+    }
+    return ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
+}
+
+function renderMatrixThead(visibleCats, targetCats) {
+    const thead = document.getElementById("matrix-thead");
+    if (!thead) return;
+
+    let sublabel = "(Tất cả cột)";
+    if (targetCats.length < ALL_CATEGORIES.length) {
+        sublabel = `(${targetCats.join(', ')})`;
     }
 
-    let colTotals = {
-        "≥3 ngày": { qty: 0, cod: 0.0 },
-        "≥4 ngày": { qty: 0, cod: 0.0 },
-        "≥5 ngày": { qty: 0, cod: 0.0 },
-        "≥7 ngày": { qty: 0, cod: 0.0 },
-        "≥14 ngày": { qty: 0, cod: 0.0 },
-        "Total": { qty: 0, cod: 0.0 }
-    };
+    let tr1 = `
+        <tr>
+            <th rowspan="2" style="width: 50px;" class="text-center">STT</th>
+            <th rowspan="2" class="sortable-matrix ${matrixSortCol === 'pos_name' ? 'active-sort' : ''}" data-sort="pos_name">
+                Bưu cục phát <i class="fa-solid ${matrixSortCol === 'pos_name' ? (matrixSortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'}"></i>
+            </th>
+    `;
+
+    visibleCats.forEach(cat => {
+        const style = CATEGORY_STYLES[cat] || { bg: "rgba(16, 185, 129, 0.15)", color: "#047857", border: "#10b981" };
+        tr1 += `
+            <th colspan="2" class="col-group text-center" style="background: ${style.bg}; color: ${style.color}; font-weight: 700; border-bottom: 2px solid ${style.border};">
+                ${cat}
+            </th>
+        `;
+    });
+
+    tr1 += `
+            <th colspan="2" class="col-group total-group text-center" id="matrix-header-total" style="cursor: pointer; user-select: none; transition: background 0.2s;" title="Nhấp để cấu hình nhanh cột tính Tổng tồn">
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;">
+                    <span style="display: flex; align-items: center; gap: 6px; font-weight: 700;">
+                        Toàn tỉnh <i class="fa-solid fa-gear" style="font-size: 11px; color: var(--accent-emerald);"></i>
+                    </span>
+                    <span id="matrix-header-sublabel" style="font-size: 10px; font-weight: 500; opacity: 0.85; display: block; color: var(--accent-emerald);">${sublabel}</span>
+                </div>
+            </th>
+            <th rowspan="2" class="text-center" style="width: 50px;" title="Xem chi tiết"><i class="fa-solid fa-chevron-down" style="color: var(--accent-emerald);"></i></th>
+        </tr>
+    `;
+
+    let tr2 = `<tr>`;
+    visibleCats.forEach(cat => {
+        const sortQty = `qty-${cat}`;
+        const sortCod = `cod-${cat}`;
+        const isQtyActive = matrixSortCol === sortQty;
+        const isCodActive = matrixSortCol === sortCod;
+        const qtyIcon = isQtyActive ? (matrixSortDir === "asc" ? "fa-sort-up" : "fa-sort-down") : "fa-sort";
+        const codIcon = isCodActive ? (matrixSortDir === "asc" ? "fa-sort-up" : "fa-sort-down") : "fa-sort";
+
+        tr2 += `
+            <th class="sortable-matrix ${isQtyActive ? 'active-sort' : ''}" data-sort="${sortQty}">SL BG <i class="fa-solid ${qtyIcon}"></i></th>
+            <th class="sortable-matrix ${isCodActive ? 'active-sort' : ''}" data-sort="${sortCod}">COD (đ) <i class="fa-solid ${codIcon}"></i></th>
+        `;
+    });
+
+    const isTotalQtyActive = matrixSortCol === "qty-Total";
+    const isTotalCodActive = matrixSortCol === "cod-Total";
+    const totalQtyIcon = isTotalQtyActive ? (matrixSortDir === "asc" ? "fa-sort-up" : "fa-sort-down") : "fa-sort";
+    const totalCodIcon = isTotalCodActive ? (matrixSortDir === "asc" ? "fa-sort-up" : "fa-sort-down") : "fa-sort";
+
+    tr2 += `
+            <th class="total-col sortable-matrix ${isTotalQtyActive ? 'active-sort' : ''}" data-sort="qty-Total">SL BG <i class="fa-solid ${totalQtyIcon}"></i></th>
+            <th class="total-col sortable-matrix ${isTotalCodActive ? 'active-sort' : ''}" data-sort="cod-Total">COD (đ) <i class="fa-solid ${totalCodIcon}"></i></th>
+        </tr>
+    `;
+
+    thead.innerHTML = tr1 + tr2;
+}
+
+function renderSummary(data) {
+    if (!data || !data.matrix) return;
+
+    const visibleCats = getVisibleCategories();
+    const targetCats = getTotalCategories();
+
+    // Render Dynamic Table Header
+    renderMatrixThead(visibleCats, targetCats);
+
+    const totalColSpan = 3 + visibleCats.length * 2;
+
+    const colTotals = {};
+    ALL_CATEGORIES.forEach(cat => {
+        colTotals[cat] = { qty: 0, cod: 0.0 };
+    });
+    colTotals["Total"] = { qty: 0, cod: 0.0 };
 
     let posList = Object.keys(data.matrix);
 
     if (posList.length === 0) {
-        matrixTbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Không có dữ liệu tổng hợp.</td></tr>';
+        matrixTbody.innerHTML = `<tr><td colspan="${totalColSpan}" class="text-center text-muted">Không có dữ liệu tổng hợp.</td></tr>`;
         return;
     }
 
@@ -584,12 +687,12 @@ function renderSummary(data) {
         } else {
             const parts = matrixSortCol.split("-");
             const type = parts[0];
-            const cat = parts[1];
+            const cat = parts.slice(1).join("-");
 
             if (cat === "Total") {
                 let totalQtyA = 0, totalCodA = 0;
                 targetCats.forEach(c => {
-                    const cell = data.matrix[a][c] || { qty: 0, cod: 0 };
+                    const cell = (data.matrix[a] && data.matrix[a][c]) || { qty: 0, cod: 0 };
                     totalQtyA += cell.qty;
                     totalCodA += cell.cod;
                 });
@@ -597,14 +700,14 @@ function renderSummary(data) {
 
                 let totalQtyB = 0, totalCodB = 0;
                 targetCats.forEach(c => {
-                    const cell = data.matrix[b][c] || { qty: 0, cod: 0 };
+                    const cell = (data.matrix[b] && data.matrix[b][c]) || { qty: 0, cod: 0 };
                     totalQtyB += cell.qty;
                     totalCodB += cell.cod;
                 });
                 valB = type === "qty" ? totalQtyB : totalCodB;
             } else {
-                const cellA = data.matrix[a][cat] || { qty: 0, cod: 0 };
-                const cellB = data.matrix[b][cat] || { qty: 0, cod: 0 };
+                const cellA = (data.matrix[a] && data.matrix[a][cat]) || { qty: 0, cod: 0 };
+                const cellB = (data.matrix[b] && data.matrix[b][cat]) || { qty: 0, cod: 0 };
                 valA = type === "qty" ? cellA.qty : cellA.cod;
                 valB = type === "qty" ? cellB.qty : cellB.cod;
             }
@@ -615,16 +718,15 @@ function renderSummary(data) {
         return 0;
     });
 
-    // First, compute all totals across all POS offices to build the totals row
+    // Compute column totals and row totals across all POS offices
     posList.forEach(pos => {
         let rowTotalQty = 0;
         let rowTotalCod = 0;
-        categories.forEach(cat => {
-            const cell = data.matrix[pos][cat] || { qty: 0, cod: 0 };
+        ALL_CATEGORIES.forEach(cat => {
+            const cell = (data.matrix[pos] && data.matrix[pos][cat]) || { qty: 0, cod: 0 };
             colTotals[cat].qty += cell.qty;
             colTotals[cat].cod += cell.cod;
 
-            // Dynamically sum configured columns for the Total column
             if (targetCats.includes(cat)) {
                 rowTotalQty += cell.qty;
                 rowTotalCod += cell.cod;
@@ -634,13 +736,17 @@ function renderSummary(data) {
         colTotals["Total"].cod += rowTotalCod;
     });
 
+    // Update KPI Summary cards to match Total column selection
+    if (kpiQty) kpiQty.textContent = formatNumber(colTotals["Total"].qty);
+    if (kpiCod) kpiCod.textContent = formatCurrency(colTotals["Total"].cod);
+
     matrixTbody.innerHTML = "";
 
-    // 1. Render totals row AT THE TOP of the table body (categories first, Total last)
+    // 1. Render totals row AT THE TOP of the table body
     const totalTrTop = document.createElement("tr");
     totalTrTop.className = "total-row top-total-row";
     let totalRowHtml = `<td></td><td>TOÀN TỈNH</td>`;
-    categories.forEach(cat => {
+    visibleCats.forEach(cat => {
         totalRowHtml += `
             <td class="text-right qty-cell">${formatNumber(colTotals[cat].qty)}</td>
             <td class="text-right">${formatCurrency(colTotals[cat].cod)}</td>
@@ -654,7 +760,7 @@ function renderSummary(data) {
     totalTrTop.innerHTML = totalRowHtml;
     matrixTbody.appendChild(totalTrTop);
 
-    // 2. Render each POS office row (with categories first, then Total column last)
+    // 2. Render each POS office row
     posList.forEach((pos, index) => {
         const tr = document.createElement("tr");
         let rowHtml = `
@@ -664,22 +770,22 @@ function renderSummary(data) {
         let rowTotalQty = 0;
         let rowTotalCod = 0;
 
-        // Breakdown columns first
-        categories.forEach(cat => {
-            const cell = data.matrix[pos][cat] || { qty: 0, cod: 0 };
-            rowHtml += `
-                <td class="qty-cell text-right" data-cat="${cat}" data-qty="${cell.qty}">${formatNumber(cell.qty)}</td>
-                <td class="cod-cell text-right">${formatCurrency(cell.cod)}</td>
-            `;
-
-            // Dynamically sum configured columns for the Total column
+        ALL_CATEGORIES.forEach(cat => {
+            const cell = (data.matrix[pos] && data.matrix[pos][cat]) || { qty: 0, cod: 0 };
             if (targetCats.includes(cat)) {
                 rowTotalQty += cell.qty;
                 rowTotalCod += cell.cod;
             }
         });
 
-        // Total column last + Action button
+        visibleCats.forEach(cat => {
+            const cell = (data.matrix[pos] && data.matrix[pos][cat]) || { qty: 0, cod: 0 };
+            rowHtml += `
+                <td class="qty-cell text-right" data-cat="${cat}" data-qty="${cell.qty}">${formatNumber(cell.qty)}</td>
+                <td class="cod-cell text-right">${formatCurrency(cell.cod)}</td>
+            `;
+        });
+
         rowHtml += `
             <td class="qty-cell text-right text-bold total-qty-cell" data-cat="Total" data-qty="${rowTotalQty}">${formatNumber(rowTotalQty)}</td>
             <td class="cod-cell text-right text-bold">${formatCurrency(rowTotalCod)}</td>
@@ -694,7 +800,7 @@ function renderSummary(data) {
         matrixTbody.appendChild(tr);
     });
 
-    // 3. Render totals row AT THE BOTTOM of the table body for completeness
+    // 3. Render totals row AT THE BOTTOM of the table body
     const totalTrBottom = totalTrTop.cloneNode(true);
     totalTrBottom.className = "total-row bottom-total-row";
     matrixTbody.appendChild(totalTrBottom);
@@ -1153,30 +1259,34 @@ document.querySelectorAll(".sortable").forEach(header => {
     });
 });
 
-// Sorting matrix headers
-document.querySelectorAll(".sortable-matrix").forEach(header => {
-    header.addEventListener("click", () => {
-        const col = header.getAttribute("data-sort");
+// Sorting matrix headers & quick total click via event delegation on #matrix-thead
+const matrixTheadEl = document.getElementById("matrix-thead");
+if (matrixTheadEl) {
+    matrixTheadEl.addEventListener("click", (e) => {
+        const header = e.target.closest(".sortable-matrix");
+        if (header) {
+            const col = header.getAttribute("data-sort");
+            if (!col) return;
 
-        if (matrixSortCol === col) {
-            matrixSortDir = matrixSortDir === "asc" ? "desc" : "asc";
-        } else {
-            matrixSortCol = col;
-            matrixSortDir = col === "pos_name" ? "asc" : "desc";
+            if (matrixSortCol === col) {
+                matrixSortDir = matrixSortDir === "asc" ? "desc" : "asc";
+            } else {
+                matrixSortCol = col;
+                matrixSortDir = col === "pos_name" ? "asc" : "desc";
+            }
+
+            if (cachedSummaryData) {
+                renderSummary(cachedSummaryData);
+            }
+            return;
         }
 
-        document.querySelectorAll(".sortable-matrix i").forEach(icon => {
-            icon.className = "fa-solid fa-sort";
-        });
-
-        const icon = header.querySelector("i");
-        icon.className = matrixSortDir === "asc" ? "fa-solid fa-sort-up" : "fa-solid fa-sort-down";
-
-        if (cachedSummaryData) {
-            renderSummary(cachedSummaryData);
+        const totalHeader = e.target.closest("#matrix-header-total");
+        if (totalHeader) {
+            openMatrixConfigModal("total");
         }
     });
-});
+}
 
 // Drilldown click action on Matrix table row
 if (matrixTbody) {
@@ -2476,41 +2586,165 @@ async function initDashboard() {
     initMatrixTotalQuickConfig();
 }
 
+const MODAL_VIS_MAP = [
+    { id: "modal-vis-col-0", val: "<1 ngày" },
+    { id: "modal-vis-col-1", val: "≥1 ngày" },
+    { id: "modal-vis-col-1-5", val: "≥1.5 ngày" },
+    { id: "modal-vis-col-2", val: "≥2 ngày" },
+    { id: "modal-vis-col-3", val: "≥3 ngày" },
+    { id: "modal-vis-col-4", val: "≥4 ngày" },
+    { id: "modal-vis-col-5", val: "≥5 ngày" },
+    { id: "modal-vis-col-7", val: "≥7 ngày" },
+    { id: "modal-vis-col-14", val: "≥14 ngày" }
+];
+
+const MODAL_CFG_MAP = [
+    { id: "modal-cfg-col-0", val: "<1 ngày" },
+    { id: "modal-cfg-col-1", val: "≥1 ngày" },
+    { id: "modal-cfg-col-1-5", val: "≥1.5 ngày" },
+    { id: "modal-cfg-col-2", val: "≥2 ngày" },
+    { id: "modal-cfg-col-3", val: "≥3 ngày" },
+    { id: "modal-cfg-col-4", val: "≥4 ngày" },
+    { id: "modal-cfg-col-5", val: "≥5 ngày" },
+    { id: "modal-cfg-col-7", val: "≥7 ngày" },
+    { id: "modal-cfg-col-14", val: "≥14 ngày" }
+];
+
+const SETTINGS_MAP = [
+    { id: "cfg-col-0", val: "<1 ngày" },
+    { id: "cfg-col-1", val: "≥1 ngày" },
+    { id: "cfg-col-1-5", val: "≥1.5 ngày" },
+    { id: "cfg-col-2", val: "≥2 ngày" },
+    { id: "cfg-col-3", val: "≥3 ngày" },
+    { id: "cfg-col-4", val: "≥4 ngày" },
+    { id: "cfg-col-5", val: "≥5 ngày" },
+    { id: "cfg-col-7", val: "≥7 ngày" },
+    { id: "cfg-col-14", val: "≥14 ngày" }
+];
+
+function openMatrixConfigModal(initialTab = "cols") {
+    const matrixTotalModal = document.getElementById("matrix-total-modal");
+    if (!matrixTotalModal) return;
+
+    switchMatrixConfigTab(initialTab);
+
+    const visCols = getVisibleCategories();
+    MODAL_VIS_MAP.forEach(item => {
+        const el = document.getElementById(item.id);
+        if (el) el.checked = visCols.includes(item.val);
+    });
+
+    const totCols = getTotalCategories();
+    MODAL_CFG_MAP.forEach(item => {
+        const el = document.getElementById(item.id);
+        if (el) el.checked = totCols.includes(item.val);
+    });
+
+    matrixTotalModal.style.display = "flex";
+}
+
+function switchMatrixConfigTab(tabName) {
+    const tabBtnCols = document.getElementById("tab-btn-cfg-cols");
+    const tabBtnTotal = document.getElementById("tab-btn-cfg-total");
+    const panelCols = document.getElementById("panel-cfg-cols");
+    const panelTotal = document.getElementById("panel-cfg-total");
+
+    if (!tabBtnCols || !tabBtnTotal || !panelCols || !panelTotal) return;
+
+    if (tabName === "cols") {
+        tabBtnCols.classList.add("active");
+        tabBtnCols.style.background = "var(--accent-emerald)";
+        tabBtnCols.style.color = "white";
+        tabBtnCols.style.border = "none";
+
+        tabBtnTotal.classList.remove("active");
+        tabBtnTotal.style.background = "var(--bg-primary)";
+        tabBtnTotal.style.color = "var(--text-secondary)";
+        tabBtnTotal.style.border = "1px solid var(--border-color)";
+
+        panelCols.style.display = "block";
+        panelTotal.style.display = "none";
+    } else {
+        tabBtnTotal.classList.add("active");
+        tabBtnTotal.style.background = "var(--accent-emerald)";
+        tabBtnTotal.style.color = "white";
+        tabBtnTotal.style.border = "none";
+
+        tabBtnCols.classList.remove("active");
+        tabBtnCols.style.background = "var(--bg-primary)";
+        tabBtnCols.style.color = "var(--text-secondary)";
+        tabBtnCols.style.border = "1px solid var(--border-color)";
+
+        panelCols.style.display = "none";
+        panelTotal.style.display = "block";
+    }
+}
+
 function initMatrixTotalQuickConfig() {
-    const headerTotal = document.getElementById("matrix-header-total");
     const matrixTotalModal = document.getElementById("matrix-total-modal");
     const btnCloseMatrixTotalModal = document.getElementById("btn-close-matrix-total-modal");
     const btnCancelMatrixTotalModal = document.getElementById("btn-cancel-matrix-total-modal");
     const btnSaveMatrixTotalModal = document.getElementById("btn-save-matrix-total-modal");
+    const btnConfigMatrixCols = document.getElementById("btn-config-matrix-columns");
 
-    const modalCfgCol3 = document.getElementById("modal-cfg-col-3");
-    const modalCfgCol4 = document.getElementById("modal-cfg-col-4");
-    const modalCfgCol5 = document.getElementById("modal-cfg-col-5");
-    const modalCfgCol7 = document.getElementById("modal-cfg-col-7");
-    const modalCfgCol14 = document.getElementById("modal-cfg-col-14");
+    if (!matrixTotalModal) return;
 
-    if (!headerTotal || !matrixTotalModal) return;
+    // Toolbar button to open modal on Tab 1
+    if (btnConfigMatrixCols) {
+        btnConfigMatrixCols.addEventListener("click", () => {
+            openMatrixConfigModal("cols");
+        });
+    }
 
-    // Open Modal
-    headerTotal.addEventListener("click", () => {
-        const savedColsStr = localStorage.getItem("matrix_total_columns");
-        let savedCols = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
-        if (savedColsStr) {
-            try {
-                const parsed = JSON.parse(savedColsStr);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    savedCols = parsed;
-                }
-            } catch (e) { }
-        }
-        if (modalCfgCol3) modalCfgCol3.checked = savedCols.includes("≥3 ngày");
-        if (modalCfgCol4) modalCfgCol4.checked = savedCols.includes("≥4 ngày");
-        if (modalCfgCol5) modalCfgCol5.checked = savedCols.includes("≥5 ngày");
-        if (modalCfgCol7) modalCfgCol7.checked = savedCols.includes("≥7 ngày");
-        if (modalCfgCol14) modalCfgCol14.checked = savedCols.includes("≥14 ngày");
+    // Modal Tab buttons
+    const tabBtnCols = document.getElementById("tab-btn-cfg-cols");
+    const tabBtnTotal = document.getElementById("tab-btn-cfg-total");
+    if (tabBtnCols) tabBtnCols.addEventListener("click", () => switchMatrixConfigTab("cols"));
+    if (tabBtnTotal) tabBtnTotal.addEventListener("click", () => switchMatrixConfigTab("total"));
 
-        matrixTotalModal.style.display = "flex";
-    });
+    // Quick Select Buttons
+    const btnQuickColsAll = document.getElementById("btn-quick-cols-all");
+    const btnQuickColsDef = document.getElementById("btn-quick-cols-default");
+    const btnQuickTotalAll = document.getElementById("btn-quick-total-all");
+    const btnQuickTotalDef = document.getElementById("btn-quick-total-default");
+
+    if (btnQuickColsAll) {
+        btnQuickColsAll.addEventListener("click", () => {
+            MODAL_VIS_MAP.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (el) el.checked = true;
+            });
+        });
+    }
+
+    if (btnQuickColsDef) {
+        btnQuickColsDef.addEventListener("click", () => {
+            const def = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
+            MODAL_VIS_MAP.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (el) el.checked = def.includes(item.val);
+            });
+        });
+    }
+
+    if (btnQuickTotalAll) {
+        btnQuickTotalAll.addEventListener("click", () => {
+            MODAL_CFG_MAP.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (el) el.checked = true;
+            });
+        });
+    }
+
+    if (btnQuickTotalDef) {
+        btnQuickTotalDef.addEventListener("click", () => {
+            const def = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
+            MODAL_CFG_MAP.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (el) el.checked = def.includes(item.val);
+            });
+        });
+    }
 
     const closeModal = () => {
         matrixTotalModal.style.display = "none";
@@ -2519,43 +2753,49 @@ function initMatrixTotalQuickConfig() {
     if (btnCloseMatrixTotalModal) btnCloseMatrixTotalModal.addEventListener("click", closeModal);
     if (btnCancelMatrixTotalModal) btnCancelMatrixTotalModal.addEventListener("click", closeModal);
 
-    // Save Quick Config
+    // Save Config
     if (btnSaveMatrixTotalModal) {
         btnSaveMatrixTotalModal.addEventListener("click", () => {
-            const selectedCols = [];
-            if (modalCfgCol3 && modalCfgCol3.checked) selectedCols.push("≥3 ngày");
-            if (modalCfgCol4 && modalCfgCol4.checked) selectedCols.push("≥4 ngày");
-            if (modalCfgCol5 && modalCfgCol5.checked) selectedCols.push("≥5 ngày");
-            if (modalCfgCol7 && modalCfgCol7.checked) selectedCols.push("≥7 ngày");
-            if (modalCfgCol14 && modalCfgCol14.checked) selectedCols.push("≥14 ngày");
+            const selectedVis = [];
+            MODAL_VIS_MAP.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (el && el.checked) selectedVis.push(item.val);
+            });
 
-            if (selectedCols.length === 0) {
-                showToast("Phải chọn ít nhất một cột để tính tổng tồn.", "warning");
+            if (selectedVis.length === 0) {
+                showToast("Phải chọn ít nhất một cột để hiển thị trên ma trận.", "warning");
+                switchMatrixConfigTab("cols");
                 return;
             }
 
-            localStorage.setItem("matrix_total_columns", JSON.stringify(selectedCols));
+            const selectedTot = [];
+            MODAL_CFG_MAP.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (el && el.checked) selectedTot.push(item.val);
+            });
 
-            // Sync with system settings checkboxes if visible
-            const cfgCol3 = document.getElementById("cfg-col-3");
-            const cfgCol4 = document.getElementById("cfg-col-4");
-            const cfgCol5 = document.getElementById("cfg-col-5");
-            const cfgCol7 = document.getElementById("cfg-col-7");
-            const cfgCol14 = document.getElementById("cfg-col-14");
-            if (cfgCol3) cfgCol3.checked = selectedCols.includes("≥3 ngày");
-            if (cfgCol4) cfgCol4.checked = selectedCols.includes("≥4 ngày");
-            if (cfgCol5) cfgCol5.checked = selectedCols.includes("≥5 ngày");
-            if (cfgCol7) cfgCol7.checked = selectedCols.includes("≥7 ngày");
-            if (cfgCol14) cfgCol14.checked = selectedCols.includes("≥14 ngày");
+            if (selectedTot.length === 0) {
+                showToast("Phải chọn ít nhất một cột để tính tổng tồn.", "warning");
+                switchMatrixConfigTab("total");
+                return;
+            }
+
+            localStorage.setItem("matrix_visible_columns", JSON.stringify(selectedVis));
+            localStorage.setItem("matrix_total_columns", JSON.stringify(selectedTot));
+
+            // Sync with Settings view
+            SETTINGS_MAP.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (el) el.checked = selectedTot.includes(item.val);
+            });
 
             closeModal();
 
-            // Re-render Pivot Matrix instantly
             if (cachedSummaryData) {
                 renderSummary(cachedSummaryData);
             }
 
-            showToast("Cập nhật cột tính tổng tồn thành công.", "success");
+            showToast("Đã lưu cấu hình cột ma trận và tổng tồn.", "success");
         });
     }
 }
@@ -2607,11 +2847,6 @@ function initSettingsView() {
     if (cfgThreshTotal) cfgThreshTotal.value = localStorage.getItem("default_thresh_total") || "";
 
     // Load Matrix total columns config
-    const cfgCol3 = document.getElementById("cfg-col-3");
-    const cfgCol4 = document.getElementById("cfg-col-4");
-    const cfgCol5 = document.getElementById("cfg-col-5");
-    const cfgCol7 = document.getElementById("cfg-col-7");
-    const cfgCol14 = document.getElementById("cfg-col-14");
     const savedColsStr = localStorage.getItem("matrix_total_columns");
     let savedCols = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
     if (savedColsStr) {
@@ -2622,11 +2857,10 @@ function initSettingsView() {
             }
         } catch (e) { }
     }
-    if (cfgCol3) cfgCol3.checked = savedCols.includes("≥3 ngày");
-    if (cfgCol4) cfgCol4.checked = savedCols.includes("≥4 ngày");
-    if (cfgCol5) cfgCol5.checked = savedCols.includes("≥5 ngày");
-    if (cfgCol7) cfgCol7.checked = savedCols.includes("≥7 ngày");
-    if (cfgCol14) cfgCol14.checked = savedCols.includes("≥14 ngày");
+    SETTINGS_MAP.forEach(item => {
+        const el = document.getElementById(item.id);
+        if (el) el.checked = savedCols.includes(item.val);
+    });
 
     // Reset view to tab-users active by default
     const activateTab = (tabName) => {
@@ -2687,11 +2921,10 @@ function initSettingsView() {
 
             // Save Matrix total columns config
             const selectedCols = [];
-            if (cfgCol3 && cfgCol3.checked) selectedCols.push("≥3 ngày");
-            if (cfgCol4 && cfgCol4.checked) selectedCols.push("≥4 ngày");
-            if (cfgCol5 && cfgCol5.checked) selectedCols.push("≥5 ngày");
-            if (cfgCol7 && cfgCol7.checked) selectedCols.push("≥7 ngày");
-            if (cfgCol14 && cfgCol14.checked) selectedCols.push("≥14 ngày");
+            SETTINGS_MAP.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (el && el.checked) selectedCols.push(item.val);
+            });
 
             if (selectedCols.length === 0) {
                 showToast("Phải chọn ít nhất một cột để tính tổng tồn.", "warning");

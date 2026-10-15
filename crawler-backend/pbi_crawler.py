@@ -313,26 +313,7 @@ def crawl_lamdong_data():
                                                 }
                                             }
                                         },
-                                        # Filter 6: PTC Category_Ngay Not In (<1 day etc)
-                                        {
-                                            "Condition": {
-                                                "Not": {
-                                                    "Expression": {
-                                                        "In": {
-                                                            "Expressions": [
-                                                                {"Column": {"Expression": {"SourceRef": {"Source": "i"}}, "Property": "PTC Category_Ngay_"}}
-                                                            ],
-                                                            "Values": [
-                                                                [{"Literal": {"Value": "'<1 ngày'"}}],
-                                                                [{"Literal": {"Value": "'≥1 ngày'"}}],
-                                                                [{"Literal": {"Value": "'≥1.5 ngày'"}}],
-                                                                [{"Literal": {"Value": "'≥2 ngày'"}}]
-                                                            ]
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        },
+
                                         # Custom filter added to target ONLY 'BĐT Lâm Đồng'
                                         {
                                             "Condition": {
