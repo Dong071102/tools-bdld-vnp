@@ -174,8 +174,11 @@
                             <div class="matrix-header-top" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                                 <h2 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">- Tổng số lượng tồn -</h2>
                                 <div style="display: flex; align-items: center; gap: 8px;">
+                                    <button type="button" id="btn-config-matrix-columns" class="btn btn-secondary btn-sm" style="padding: 5px 14px; font-size: 12.5px; border-radius: 20px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); cursor: pointer; transition: var(--transition-spring);" title="Cấu hình danh sách mốc thời gian tồn hiển thị trên ma trận">
+                                        <i class="fa-solid fa-calendar-days" style="color: var(--accent-emerald);"></i> Cấu hình hiển thị thời gian tồn
+                                    </button>
                                     <button type="button" id="btn-open-pos-config-modal" class="btn btn-secondary btn-sm" style="padding: 5px 14px; font-size: 12.5px; border-radius: 20px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); cursor: pointer; transition: var(--transition-spring);" title="Cấu hình danh sách bưu cục hiển thị trên hệ thống">
-                                        <i class="fa-solid fa-building" style="color: var(--accent-emerald);"></i> Cấu hình bưu cục
+                                        <i class="fa-solid fa-building" style="color: var(--accent-emerald);"></i> Cấu hình hiển thị bưu cục
                                     </button>
                                     <button type="button" id="btn-open-data-note-modal" onclick="openDataNoteModal()" title="Xem ghi chú phạm vi dữ liệu API so với bảng phát lẻ" style="padding: 5px 14px; font-size: 12.5px; border-radius: 20px; border: 1px solid var(--accent-emerald); color: var(--accent-emerald); background: var(--accent-emerald-light); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: var(--transition-spring);">
                                         <i class="fa-solid fa-circle-info"></i> Ghi chú dữ liệu API
@@ -219,7 +222,6 @@
                                         <option value="KH Trọng điểm">KH Trọng điểm</option>
                                     </select>
                                 </div>
-                                <button class="btn btn-secondary" id="btn-config-matrix-columns" style="padding: 6px 12px; font-size: 12.5px; border-radius: 8px;"><i class="fa-solid fa-sliders"></i> Cấu hình cột</button>
                                 <button class="btn btn-secondary" id="btn-reset-filters" style="padding: 6px 12px; font-size: 12.5px; border-radius: 8px;"><i class="fa-solid fa-arrow-rotate-left"></i> Reset bộ lọc</button>
                             </div>
                         </div>
@@ -858,7 +860,7 @@
         <div class="modal-card" style="max-width: 520px; width: 95%; max-height: 90vh; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25);">
             <div class="modal-header" style="background: var(--accent-emerald-light); border-bottom: 1px solid rgba(16, 185, 129, 0.2); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;">
                 <h2 style="color: var(--accent-emerald); font-size: 16px; margin: 0; display: flex; align-items: center; gap: 8px;">
-                    <i class="fa-solid fa-sliders"></i> Cấu hình Cột & Tính Tổng Ma trận
+                    <i class="fa-solid fa-calendar-days"></i> Cấu hình hiển thị thời gian tồn
                 </h2>
                 <button type="button" class="modal-close-btn" id="btn-close-matrix-total-modal" style="color: var(--text-muted);">&times;</button>
             </div>
@@ -1159,6 +1161,6 @@
     </div>
 
     <!-- Script JS -->
-    <script src="/static/app.js?v=3.14.1"></script>
+    <script src="/static/app.js?v=3.14.2"></script>
 </body>
 </html>
