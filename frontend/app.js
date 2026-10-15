@@ -3949,13 +3949,20 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
         const codVal = Number(getVal(item, ['COD', 'Tiền COD', 'Tien COD', 'Số tiền thu hộ'], 0)) || 0;
         const tlVal = Number(getVal(item, ['Trọng lượng', 'Khối lượng', 'TL'], 0)) || 0;
 
+        // Đổi tên trạng thái đối với trường hợp [BĐ8]Đã xác nhận đi hoặc Đã đóng chuyến thư đi có vị trí ở bc đầu 64, 67, 80
+        let trangThaiHienThi = ttcc;
+        if (isSpecialTransitStatus(ttcc) && hasTargetBcPrefix(vtcc)) {
+            trangThaiHienThi = vtcc ? `${ttcc} - ${vtcc}` : ttcc;
+        }
+
         const rowData = {
             'Mã bưu gửi': maBG,
             'Mã BC phát': String(getVal(item, ['Mã bưu cục', 'Mã BC', 'Mã bưu cục phát', 'Mã BC phát', 'POS Code'])).trim(),
             'Tên BC phát': String(getVal(item, ['Bưu cục Phát', 'Tên BC phát', 'Tên bưu cục', 'Bưu cục phát', 'POS Name'])).trim(),
             'Ngày đến BC phát': String(getVal(item, ['DK1', 'Ngày đến', 'Ngày đến BC', 'Ngày đến BC phát'])).trim(),
             'Thời gian tồn': String(getVal(item, ['Thời gian tồn', 'TG tồn', 'Thời gian lưu'])).trim(),
-            'Trạng thái hiện tại': ttcc,
+            'Trạng thái hiện tại': trangThaiHienThi,
+            'Trạng thái cuối cùng': trangThaiHienThi,
             'Vị trí cuối cùng': vtcc,
             'Thời gian cập nhật': String(getVal(item, ['Thời gian quét', 'Thời gian cập nhật', 'TG quet'])).trim(),
             'Người ký nhận': String(getVal(item, ['Người ký nhận', 'Người nhận', 'Nguoi nhan'])).trim(),

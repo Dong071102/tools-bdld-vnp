@@ -260,13 +260,19 @@ export function processExcelFiles(hangtonBuffer, dinhViBufferOrData) {
     const codVal = Number(getVal(item, ['COD', 'cod_amount', 'Tiền COD', 'CODAmount'], 0)) || 0;
     const trongLuongVal = Number(getVal(item, ['Trọng lượng', 'weight', 'TL', 'TL_2'], 0)) || 0;
 
+    // Đổi tên trạng thái đối với trường hợp [BĐ8]Đã xác nhận đi hoặc Đã đóng chuyến thư đi có vị trí ở bc đầu 64, 67, 80
+    let trangThaiLuu = ttcc;
+    if (isSpecialTransitStatus(ttcc) && hasTargetBcPrefix(vtcc)) {
+      trangThaiLuu = vtcc ? `${ttcc} - ${vtcc}` : ttcc;
+    }
+
     const rowData = {
       'Mã bưu gửi': maBG,
       'Mã bưu cục': String(getVal(item, ['Mã bưu cục', 'POSCode', 'pos_code', 'MaBC'], '')).trim(),
       'Bưu cục Phát': String(getVal(item, ['Bưu cục Phát', 'POSName', 'pos_name', 'TenBC'], '')).trim(),
       'DK1': String(getVal(item, ['DK1', 'dk1'], '')).trim(),
       'Thời gian tồn': String(getVal(item, ['Thời gian tồn', 'loai_ton', 'PTC Category_Ngay_'], '')).trim(),
-      'Trạng thái cuối cùng': ttcc,
+      'Trạng thái cuối cùng': trangThaiLuu,
       'Vị trí cuối cùng': vtcc,
       'Nhóm KH': String(getVal(item, ['Nhóm KH', 'nhom_kh', 'Nhóm_KH'], '')).trim(),
       'Bưu tá': String(getVal(item, ['Bưu tá', 'postman_name', 'PostManName'], '')).trim(),
