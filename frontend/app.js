@@ -2745,8 +2745,10 @@ setInterval(async () => {
 function initSettingsView() {
     const tabBtnUsers = document.getElementById("tab-btn-users");
     const tabBtnDinhvi = document.getElementById("tab-btn-dinhvi");
+    const tabBtnPosConfig = document.getElementById("tab-btn-pos-config");
     const panelUsers = document.getElementById("panel-settings-users");
     const panelDinhvi = document.getElementById("panel-settings-dinhvi");
+    const panelPosConfig = document.getElementById("panel-settings-pos-config");
     const usersHeaderActions = document.getElementById("users-header-actions");
     const frmDinhviConfig = document.getElementById("frm-dinhvi-config");
     const cfgBatchSize = document.getElementById("cfg-batch-size");
@@ -2793,45 +2795,44 @@ function initSettingsView() {
     if (cfgCol14) cfgCol14.checked = savedCols.includes("≥14 ngày");
 
     // Reset view to tab-users active by default
-    tabBtnUsers.classList.add("active");
-    tabBtnDinhvi.classList.remove("active");
-    tabBtnUsers.style.color = "var(--accent-emerald)";
-    tabBtnUsers.style.borderBottom = "3px solid var(--accent-emerald)";
-    tabBtnDinhvi.style.color = "var(--text-muted)";
-    tabBtnDinhvi.style.borderBottom = "none";
-    if (panelUsers) panelUsers.style.display = "block";
-    if (panelDinhvi) panelDinhvi.style.display = "none";
-    if (usersHeaderActions) usersHeaderActions.style.display = "block";
+    const activateTab = (tabName) => {
+        const tabs = [
+            { btn: tabBtnUsers, panel: panelUsers, name: "users" },
+            { btn: tabBtnDinhvi, panel: panelDinhvi, name: "dinhvi" },
+            { btn: tabBtnPosConfig, panel: panelPosConfig, name: "pos" }
+        ];
 
-    tabBtnUsers.addEventListener("click", () => {
-        // Toggle tabs
-        tabBtnUsers.classList.add("active");
-        tabBtnDinhvi.classList.remove("active");
-        tabBtnUsers.style.color = "var(--accent-emerald)";
-        tabBtnUsers.style.borderBottom = "3px solid var(--accent-emerald)";
-        tabBtnDinhvi.style.color = "var(--text-muted)";
-        tabBtnDinhvi.style.borderBottom = "none";
+        tabs.forEach(t => {
+            if (!t.btn || !t.panel) return;
+            if (t.name === tabName) {
+                t.btn.classList.add("active");
+                t.btn.style.color = "var(--accent-emerald)";
+                t.btn.style.borderBottom = "3px solid var(--accent-emerald)";
+                t.panel.style.display = "block";
+            } else {
+                t.btn.classList.remove("active");
+                t.btn.style.color = "var(--text-muted)";
+                t.btn.style.borderBottom = "none";
+                t.panel.style.display = "none";
+            }
+        });
 
-        // Toggle panels
-        if (panelUsers) panelUsers.style.display = "block";
-        if (panelDinhvi) panelDinhvi.style.display = "none";
-        if (usersHeaderActions) usersHeaderActions.style.display = "block";
-    });
+        if (usersHeaderActions) {
+            usersHeaderActions.style.display = tabName === "users" ? "flex" : "none";
+        }
+    };
 
-    tabBtnDinhvi.addEventListener("click", () => {
-        // Toggle tabs
-        tabBtnDinhvi.classList.add("active");
-        tabBtnUsers.classList.remove("active");
-        tabBtnDinhvi.style.color = "var(--accent-emerald)";
-        tabBtnDinhvi.style.borderBottom = "3px solid var(--accent-emerald)";
-        tabBtnUsers.style.color = "var(--text-muted)";
-        tabBtnUsers.style.borderBottom = "none";
+    activateTab("users");
 
-        // Toggle panels
-        if (panelUsers) panelUsers.style.display = "none";
-        if (panelDinhvi) panelDinhvi.style.display = "block";
-        if (usersHeaderActions) usersHeaderActions.style.display = "none";
-    });
+    tabBtnUsers.addEventListener("click", () => activateTab("users"));
+    tabBtnDinhvi.addEventListener("click", () => activateTab("dinhvi"));
+    if (tabBtnPosConfig) {
+        tabBtnPosConfig.addEventListener("click", async () => {
+            activateTab("pos");
+            await loadPosConfigData();
+            renderPosConfigPanel();
+        });
+    }
 
     // Handle config submit
     if (frmDinhviConfig) {
@@ -3166,26 +3167,319 @@ function initUrlErrorOverlay() {
             if (overlay) overlay.style.display = "none";
             switchView("export");
             if (stickyBanner) stickyBanner.style.display = "flex";
-            if (viewExport) viewExport.classList.remove("view-locked");
+// ==========================================
+// --- POS OFFICES CONFIGURATION MODULE ---
+// ==========================================
+
+let currentPosConfigs = [];
+
+async function loadPosConfigData() {
+    try {
+        const res = await fetch("/api/pos-config");
+        if (!res.ok) throw new Error("Không thể tải cấu hình bưu cục.");
+        currentPosConfigs = await res.json();
+        return currentPosConfigs;
+    } catch (e) {
+        showToast("Lỗi tải danh sách bưu cục: " + e.message, "error");
+        return [];
+    }
+}
+
+function updatePosConfigStats() {
+    const total = currentPosConfigs.length;
+    const activeList = currentPosConfigs.filter(c => c.is_active);
+    const activeCount = activeList.length;
+    const activeItems = activeList.reduce((sum, c) => sum + (c.item_count || 0), 0);
+
+    const badgeText = `Hiển thị: ${activeCount}/${total} bưu cục (${formatNumber(activeItems)} đơn)`;
+    
+    // Update badge in settings panel
+    const panelBadge = document.getElementById("pos-cfg-stats-badge");
+    if (panelBadge) panelBadge.textContent = badgeText;
+
+    // Update badge in modal
+    const modalBadge = document.getElementById("modal-pos-cfg-badge");
+    if (modalBadge) modalBadge.textContent = `${activeCount}/${total} bưu cục`;
+
+    const modalSummary = document.getElementById("modal-pos-cfg-summary-text");
+    if (modalSummary) modalSummary.textContent = `Đang kích hoạt ${activeCount}/${total} bưu cục (Tổng tồn: ${formatNumber(activeItems)} đơn)`;
+}
+
+function renderPosConfigRows(tbodyEl, configs, isModal = false) {
+    if (!tbodyEl) return;
+    if (!configs || configs.length === 0) {
+        tbodyEl.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 24px;">Không tìm thấy bưu cục nào phù hợp.</td></tr>`;
+        return;
+    }
+
+    tbodyEl.innerHTML = "";
+    configs.forEach((item, idx) => {
+        const tr = document.createElement("tr");
+        if (!item.is_active) {
+            tr.style.opacity = "0.6";
+            tr.style.background = "rgba(0, 0, 0, 0.02)";
+        }
+
+        let typeBadge = '';
+        if (item.pos_type === 'BCP') {
+            typeBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #047857; font-weight: 700; font-size: 11.5px; padding: 3px 8px; border-radius: 6px;">BCP (Phát)</span>`;
+        } else if (item.pos_type === 'BCKT') {
+            typeBadge = `<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #b45309; font-weight: 700; font-size: 11.5px; padding: 3px 8px; border-radius: 6px;">BCKT (Khai thác)</span>`;
+        } else {
+            typeBadge = `<span class="badge" style="background: rgba(100, 116, 139, 0.15); color: #475569; font-weight: 700; font-size: 11.5px; padding: 3px 8px; border-radius: 6px;">${item.pos_type || 'Khác'}</span>`;
+        }
+
+        const checkboxId = `${isModal ? 'modal' : 'panel'}-pos-check-${item.pos_code}`;
+
+        tr.innerHTML = `
+            <td class="text-center" style="font-weight: 500; color: var(--text-muted);">${idx + 1}</td>
+            <td class="text-center">
+                <input type="checkbox" id="${checkboxId}" data-code="${item.pos_code}" ${item.is_active ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: var(--accent-emerald); cursor: pointer;">
+            </td>
+            <td><code style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-emerald); font-size: 13.5px;">${item.pos_code}</code></td>
+            <td style="font-weight: 600; color: var(--text-primary);">${item.pos_name}</td>
+            <td class="text-center">${typeBadge}</td>
+            <td class="text-right" style="font-family: var(--font-mono); font-weight: 600; color: ${item.item_count > 0 ? 'var(--text-primary)' : 'var(--text-muted)'};">${formatNumber(item.item_count || 0)}</td>
+        `;
+
+        const cb = tr.querySelector(`#${checkboxId}`);
+        cb.addEventListener("change", (e) => {
+            const checked = e.target.checked;
+            const target = currentPosConfigs.find(c => c.pos_code === item.pos_code);
+            if (target) {
+                target.is_active = checked;
+            }
+            if (!checked) {
+                tr.style.opacity = "0.6";
+                tr.style.background = "rgba(0, 0, 0, 0.02)";
+            } else {
+                tr.style.opacity = "1";
+                tr.style.background = "";
+            }
+            updatePosConfigStats();
+        });
+
+        tbodyEl.appendChild(tr);
+    });
+}
+
+function getFilteredPosConfigs(searchText, typeFilter) {
+    let list = [...currentPosConfigs];
+    if (searchText) {
+        const query = searchText.toLowerCase().trim();
+        list = list.filter(c => (c.pos_code && c.pos_code.toLowerCase().includes(query)) || (c.pos_name && c.pos_name.toLowerCase().includes(query)));
+    }
+    if (typeFilter) {
+        list = list.filter(c => c.pos_type === typeFilter);
+    }
+    return list;
+}
+
+function renderPosConfigPanel() {
+    const tbody = document.getElementById("pos-cfg-table-tbody");
+    const searchInput = document.getElementById("pos-cfg-search-input");
+    const typeSelect = document.getElementById("pos-cfg-filter-type");
+
+    const searchVal = searchInput ? searchInput.value : "";
+    const typeVal = typeSelect ? typeSelect.value : "";
+
+    const filtered = getFilteredPosConfigs(searchVal, typeVal);
+    renderPosConfigRows(tbody, filtered, false);
+    updatePosConfigStats();
+}
+
+function renderPosConfigModal() {
+    const tbody = document.getElementById("modal-pos-cfg-tbody");
+    const searchInput = document.getElementById("modal-pos-cfg-search");
+
+    const searchVal = searchInput ? searchInput.value : "";
+    const filtered = getFilteredPosConfigs(searchVal, "");
+    renderPosConfigRows(tbody, filtered, true);
+    updatePosConfigStats();
+}
+
+function applyOnlyBcpFilter() {
+    currentPosConfigs.forEach(c => {
+        const nameUpper = (c.pos_name || "").toUpperCase().trim();
+        if (nameUpper.startsWith("BCKT") || c.pos_type === "BCKT") {
+            c.is_active = false;
+        } else if (nameUpper.startsWith("BCP") || c.pos_type === "BCP") {
+            c.is_active = true;
+        } else {
+            // Keep others or active
+            c.is_active = true;
+        }
+    });
+}
+
+function setAllPosActive(isActive) {
+    currentPosConfigs.forEach(c => {
+        c.is_active = isActive;
+    });
+}
+
+async function savePosConfigChanges() {
+    if (!currentPosConfigs || currentPosConfigs.length === 0) return;
+
+    try {
+        const payload = {
+            configs: currentPosConfigs.map(c => ({
+                pos_code: c.pos_code,
+                is_active: Boolean(c.is_active)
+            }))
+        };
+
+        const res = await fetch("/api/pos-config", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                ...getHeaders()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Không thể lưu cấu hình.");
+
+        showToast("Đã lưu cấu hình danh sách bưu cục hiển thị!", "success");
+
+        // Close modal if open
+        const modal = document.getElementById("pos-config-modal");
+        if (modal) modal.style.display = "none";
+
+        // Refresh all dashboard metrics & filters with new active POS list
+        await loadSummary();
+        await loadFilters();
+        await loadDetailed();
+
+    } catch (err) {
+        showToast("Lỗi lưu cấu hình bưu cục: " + err.message, "error");
+    }
+}
+
+function initPosConfig() {
+    // 1. Dashboard Modal Open / Close triggers
+    const btnOpenModal = document.getElementById("btn-open-pos-config-modal");
+    const modalEl = document.getElementById("pos-config-modal");
+    const btnCloseModal = document.getElementById("btn-close-pos-config-modal");
+    const btnCancelModal = document.getElementById("modal-btn-close-pos-config");
+    const btnSaveModal = document.getElementById("modal-btn-save-pos-config");
+
+    const openModal = async () => {
+        if (!modalEl) return;
+        modalEl.style.display = "flex";
+        modalEl.style.zIndex = "99999";
+        await loadPosConfigData();
+        renderPosConfigModal();
+    };
+
+    if (btnOpenModal) {
+        btnOpenModal.addEventListener("click", (e) => {
+            e.preventDefault();
+            openModal();
         });
     }
 
-    if (btnExpand) {
-        btnExpand.addEventListener("click", () => {
-            isErrorBannerMinimized = false;
-            const overlay = document.getElementById("dashboard-url-error-overlay");
-            const stickyBanner = document.getElementById("sticky-pbi-error-banner");
-            const viewExport = document.getElementById("view-export");
+    // Global document-level click delegation for open pos config modal button
+    document.addEventListener("click", (e) => {
+        const target = e.target.closest("#btn-open-pos-config-modal");
+        if (target) {
+            e.preventDefault();
+            openModal();
+        }
+    });
 
-            if (overlay) overlay.style.display = "flex";
-            if (stickyBanner) stickyBanner.style.display = "none";
-            if (viewExport) viewExport.classList.add("view-locked");
+    const closeModal = () => {
+        if (modalEl) modalEl.style.display = "none";
+    };
+
+    if (btnCloseModal) btnCloseModal.addEventListener("click", closeModal);
+    if (btnCancelModal) btnCancelModal.addEventListener("click", closeModal);
+    if (modalEl) {
+        modalEl.addEventListener("click", (e) => {
+            if (e.target === modalEl) closeModal();
         });
+    }
+
+    if (btnSaveModal) btnSaveModal.addEventListener("click", savePosConfigChanges);
+
+    // Modal quick action buttons
+    const modalBtnOnlyBcp = document.getElementById("modal-btn-pos-cfg-only-bcp");
+    const modalBtnSelectAll = document.getElementById("modal-btn-pos-cfg-select-all");
+    const modalBtnClearAll = document.getElementById("modal-btn-pos-cfg-clear-all");
+    const modalSearchInput = document.getElementById("modal-pos-cfg-search");
+
+    if (modalBtnOnlyBcp) {
+        modalBtnOnlyBcp.addEventListener("click", () => {
+            applyOnlyBcpFilter();
+            renderPosConfigModal();
+            showToast("Đã chọn các bưu cục BCP và tắt các bưu cục BCKT.", "info");
+        });
+    }
+
+    if (modalBtnSelectAll) {
+        modalBtnSelectAll.addEventListener("click", () => {
+            setAllPosActive(true);
+            renderPosConfigModal();
+        });
+    }
+
+    if (modalBtnClearAll) {
+        modalBtnClearAll.addEventListener("click", () => {
+            setAllPosActive(false);
+            renderPosConfigModal();
+        });
+    }
+
+    if (modalSearchInput) {
+        modalSearchInput.addEventListener("input", renderPosConfigModal);
+    }
+
+    // 2. Settings View Panel triggers
+    const panelBtnSave = document.getElementById("btn-pos-cfg-save");
+    const panelBtnOnlyBcp = document.getElementById("btn-pos-cfg-only-bcp");
+    const panelBtnSelectAll = document.getElementById("btn-pos-cfg-select-all");
+    const panelBtnClearAll = document.getElementById("btn-pos-cfg-clear-all");
+    const panelSearchInput = document.getElementById("pos-cfg-search-input");
+    const panelTypeSelect = document.getElementById("pos-cfg-filter-type");
+
+    if (panelBtnSave) panelBtnSave.addEventListener("click", savePosConfigChanges);
+
+    if (panelBtnOnlyBcp) {
+        panelBtnOnlyBcp.addEventListener("click", () => {
+            applyOnlyBcpFilter();
+            renderPosConfigPanel();
+            showToast("Đã chọn các bưu cục BCP và tắt các bưu cục BCKT.", "info");
+        });
+    }
+
+    if (panelBtnSelectAll) {
+        panelBtnSelectAll.addEventListener("click", () => {
+            setAllPosActive(true);
+            renderPosConfigPanel();
+        });
+    }
+
+    if (panelBtnClearAll) {
+        panelBtnClearAll.addEventListener("click", () => {
+            setAllPosActive(false);
+            renderPosConfigPanel();
+        });
+    }
+
+    if (panelSearchInput) {
+        panelSearchInput.addEventListener("input", renderPosConfigPanel);
+    }
+
+    if (panelTypeSelect) {
+        panelTypeSelect.addEventListener("change", renderPosConfigPanel);
     }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
     initDataNoteModal();
     initUrlErrorOverlay();
+    initPosConfig();
     init();
 });
+

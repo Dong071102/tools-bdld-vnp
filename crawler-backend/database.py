@@ -199,6 +199,47 @@ def init_db():
                     )
                 END
             """)
+
+            # pos_config table: stores list of POS with active display toggle and auto-learned type
+            cursor.execute("""
+                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'pos_config')
+                BEGIN
+                    CREATE TABLE pos_config (
+                        pos_code VARCHAR(50) PRIMARY KEY,
+                        pos_name NVARCHAR(200) NOT NULL,
+                        is_active BIT DEFAULT 1,
+                        pos_type VARCHAR(50) DEFAULT 'BCP',
+                        updated_at DATETIME DEFAULT GETDATE()
+                    )
+                END
+            """)
+
+            # Seed pos_config from staging if pos_config is currently empty
+            try:
+                cursor.execute("""
+                    IF NOT EXISTS (SELECT 1 FROM pos_config)
+                    BEGIN
+                        INSERT INTO pos_config (pos_code, pos_name, is_active, pos_type, updated_at)
+                        SELECT DISTINCT 
+                            d.pos_code, 
+                            d.pos_name,
+                            CASE 
+                                WHEN UPPER(LTRIM(RTRIM(d.pos_name))) LIKE 'BCKT%' THEN 0
+                                WHEN UPPER(LTRIM(RTRIM(d.pos_name))) LIKE 'BCP%' THEN 1
+                                ELSE 1
+                            END as is_active,
+                            CASE 
+                                WHEN UPPER(LTRIM(RTRIM(d.pos_name))) LIKE 'BCKT%' THEN 'BCKT'
+                                WHEN UPPER(LTRIM(RTRIM(d.pos_name))) LIKE 'BCP%' THEN 'BCP'
+                                ELSE 'OTHER'
+                            END as pos_type,
+                            GETDATE()
+                        FROM detailed_report_staging d
+                        WHERE d.pos_code IS NOT NULL AND d.pos_name IS NOT NULL
+                    END
+                """)
+            except Exception as pe:
+                logger.warning(f"Could not seed pos_config initially: {pe}")
             
             # Index on snapshot_date
             try:
@@ -323,6 +364,38 @@ def save_detailed_data(rows):
                     status_name, loai_ton, nhom_kh, cod_amount, weight, color_code, postman_name
                 FROM #detailed_report_staging_temp
             """)
+
+            # Step 4: Auto-learn new post offices into pos_config
+            # Rule: If pos_code is new, insert with:
+            # - is_active = 1 if pos_name starts with BCP
+            # - is_active = 0 if pos_name starts with BCKT
+            # - otherwise is_active = 1
+            cursor.execute("""
+                INSERT INTO pos_config (pos_code, pos_name, is_active, pos_type, updated_at)
+                SELECT DISTINCT 
+                    t.pos_code, 
+                    t.pos_name,
+                    CASE 
+                        WHEN UPPER(LTRIM(RTRIM(t.pos_name))) LIKE 'BCKT%' THEN 0
+                        WHEN UPPER(LTRIM(RTRIM(t.pos_name))) LIKE 'BCP%' THEN 1
+                        ELSE 1
+                    END as is_active,
+                    CASE 
+                        WHEN UPPER(LTRIM(RTRIM(t.pos_name))) LIKE 'BCKT%' THEN 'BCKT'
+                        WHEN UPPER(LTRIM(RTRIM(t.pos_name))) LIKE 'BCP%' THEN 'BCP'
+                        ELSE 'OTHER'
+                    END as pos_type,
+                    GETDATE()
+                FROM #detailed_report_staging_temp t
+                WHERE t.pos_code IS NOT NULL 
+                  AND t.pos_name IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM pos_config c WHERE c.pos_code = t.pos_code
+                  )
+            """)
+            learned_count = cursor.rowcount
+            if learned_count > 0:
+                logger.info(f"Auto-learned {learned_count} new post office(s) into pos_config.")
             
         conn.commit()
                 

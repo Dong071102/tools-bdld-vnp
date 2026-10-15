@@ -200,17 +200,90 @@ def trigger_crawl(background_tasks: BackgroundTasks):
     background_tasks.add_task(run_crawler_task)
     return {"status": "triggered", "message": "Crawl triggered successfully"}
 
-@app.get("/api/filters")
-def get_filters():
-    """Get unique filters list for dropdowns (POSNames, Statuses, Category ages)."""
+# --- POS CONFIGURATION MODELS & ENDPOINTS ---
+class PosConfigItem(BaseModel):
+    pos_code: str
+    is_active: bool
+
+class PosConfigRequest(BaseModel):
+    configs: list[PosConfigItem]
+
+@app.get("/api/pos-config")
+def get_pos_configs():
+    """Get list of all post offices with active status, type, and current item count."""
     conn = get_connection(with_db=True)
     try:
         with conn.cursor() as cursor:
-            # POS Names list
+            cursor.execute("""
+                SELECT 
+                    c.pos_code, 
+                    c.pos_name, 
+                    c.is_active, 
+                    c.pos_type, 
+                    c.updated_at,
+                    COUNT(d.item_code) as item_count
+                FROM pos_config c
+                LEFT JOIN detailed_report_staging d ON c.pos_code = d.pos_code AND d.province_ton = N'BĐT Lâm Đồng'
+                GROUP BY c.pos_code, c.pos_name, c.is_active, c.pos_type, c.updated_at
+                ORDER BY c.is_active DESC, c.pos_name ASC
+            """)
+            rows = cursor.fetchall()
+            results = []
+            for r in rows:
+                results.append({
+                    "pos_code": r[0],
+                    "pos_name": r[1],
+                    "is_active": bool(r[2]),
+                    "pos_type": r[3] or "OTHER",
+                    "updated_at": r[4].strftime("%Y-%m-%d %H:%M:%S") if r[4] else None,
+                    "item_count": r[5] or 0
+                })
+            return results
+    except Exception as e:
+        logger.error(f"Error fetching pos config: {e}")
+        return []
+    finally:
+        conn.close()
+
+@app.post("/api/pos-config")
+def update_pos_configs(req: PosConfigRequest):
+    """Batch update is_active status for post offices."""
+    if not req.configs:
+        return {"status": "ok", "updated": 0}
+    conn = get_connection(with_db=True, autocommit=False)
+    try:
+        with conn.cursor() as cursor:
+            for item in req.configs:
+                cursor.execute("""
+                    UPDATE pos_config 
+                    SET is_active = %s, updated_at = GETDATE()
+                    WHERE pos_code = %s
+                """, (1 if item.is_active else 0, item.pos_code.strip()))
+        conn.commit()
+        return {"status": "ok", "updated": len(req.configs)}
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error updating pos config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+@app.get("/api/filters")
+def get_filters():
+    """Get unique filters list for dropdowns (POSNames, Statuses, Category ages). Filtered by active POS."""
+    conn = get_connection(with_db=True)
+    try:
+        with conn.cursor() as cursor:
+            # POS Names list (only active post offices)
             cursor.execute("""
                 SELECT DISTINCT pos_name 
                 FROM detailed_report_staging 
-                WHERE province_ton = N'BĐT Lâm Đồng' AND pos_name IS NOT NULL
+                WHERE province_ton = N'BĐT Lâm Đồng' 
+                  AND pos_name IS NOT NULL
+                  AND (
+                      NOT EXISTS (SELECT 1 FROM pos_config WHERE is_active = 1)
+                      OR pos_code IN (SELECT pos_code FROM pos_config WHERE is_active = 1)
+                  )
                 ORDER BY pos_name
             """)
             pos_names = [r[0] for r in cursor.fetchall() if r[0]]
@@ -264,7 +337,7 @@ def get_filters():
 
 @app.get("/api/summary")
 def get_summary(nhom_kh: str = ""):
-    """Get KPI summary cards and the pivot matrix data by POS office."""
+    """Get KPI summary cards and the pivot matrix data by POS office, filtered by active POS."""
     conn = get_connection(with_db=True)
     try:
         with conn.cursor() as cursor:
@@ -279,7 +352,7 @@ def get_summary(nhom_kh: str = ""):
                     params1 = list(nhoms)
                     params2 = list(nhoms)
 
-            # 1. Total Metrics
+            # 1. Total Metrics (Filtered by active POS)
             cursor.execute(f"""
                 SELECT 
                     COUNT(*) as total_qty,
@@ -287,6 +360,10 @@ def get_summary(nhom_kh: str = ""):
                     SUM(weight) as total_weight
                 FROM detailed_report_staging
                 WHERE province_ton = N'BĐT Lâm Đồng'
+                  AND (
+                      NOT EXISTS (SELECT 1 FROM pos_config WHERE is_active = 1)
+                      OR pos_code IN (SELECT pos_code FROM pos_config WHERE is_active = 1)
+                  )
                 {nhom_filter_sql}
             """, tuple(params1))
             kpis = cursor.fetchone()
@@ -294,7 +371,7 @@ def get_summary(nhom_kh: str = ""):
             total_cod = float(kpis[1]) if kpis and kpis[1] is not None else 0.0
             total_weight = float(kpis[2]) if kpis and kpis[2] is not None else 0.0
             
-            # 2. Pivot Matrix Data (Rows: POSName, Columns: loai_ton, Metrics: Count & COD)
+            # 2. Pivot Matrix Data (Rows: POSName, Columns: loai_ton, Metrics: Count & COD, Filtered by active POS)
             cursor.execute(f"""
                 SELECT 
                     pos_name,
@@ -303,6 +380,10 @@ def get_summary(nhom_kh: str = ""):
                     SUM(cod_amount) as cod
                 FROM detailed_report_staging
                 WHERE province_ton = N'BĐT Lâm Đồng' AND pos_name IS NOT NULL AND loai_ton IS NOT NULL
+                  AND (
+                      NOT EXISTS (SELECT 1 FROM pos_config WHERE is_active = 1)
+                      OR pos_code IN (SELECT pos_code FROM pos_config WHERE is_active = 1)
+                  )
                 {nhom_filter_sql}
                 GROUP BY pos_name, loai_ton
                 ORDER BY pos_name
@@ -435,8 +516,11 @@ def get_detailed(
     """Get detailed report data with server-side pagination, searching, sorting, and filtering."""
     conn = get_connection(with_db=True)
     try:
-        # Build query filters
-        where_clauses = ["province_ton = N'BĐT Lâm Đồng'"]
+        # Build query filters (filtered by active POS)
+        where_clauses = [
+            "province_ton = N'BĐT Lâm Đồng'",
+            "(NOT EXISTS (SELECT 1 FROM pos_config WHERE is_active = 1) OR pos_code IN (SELECT pos_code FROM pos_config WHERE is_active = 1))"
+        ]
         params = []
         
         if search:
@@ -558,7 +642,10 @@ def get_export(
     """
     conn = get_connection(with_db=True)
     try:
-        where_clauses = ["province_ton = N'BĐT Lâm Đồng'"]
+        where_clauses = [
+            "province_ton = N'BĐT Lâm Đồng'",
+            "(NOT EXISTS (SELECT 1 FROM pos_config WHERE is_active = 1) OR pos_code IN (SELECT pos_code FROM pos_config WHERE is_active = 1))"
+        ]
         params = []
         
         if search:

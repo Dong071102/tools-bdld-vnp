@@ -14,7 +14,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Style CSS -->
-     <link rel="stylesheet" href="/static/style.css?v=3.10.1">
+     <link rel="stylesheet" href="/static/style.css?v=3.12.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -174,9 +174,14 @@
                         <div class="card-header matrix-header" style="display: flex; flex-direction: column; gap: 12px; align-items: stretch; padding: 16px 20px;">
                             <div class="matrix-header-top" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                                 <h2 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">- Tổng số lượng tồn -</h2>
-                                <button type="button" id="btn-open-data-note-modal" onclick="openDataNoteModal()" title="Xem ghi chú phạm vi dữ liệu API so với bảng phát lẻ" style="padding: 5px 14px; font-size: 12.5px; border-radius: 20px; border: 1px solid var(--accent-emerald); color: var(--accent-emerald); background: var(--accent-emerald-light); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: var(--transition-spring);">
-                                    <i class="fa-solid fa-circle-info"></i> Ghi chú dữ liệu API
-                                </button>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <button type="button" id="btn-open-pos-config-modal" class="btn btn-secondary btn-sm" style="padding: 5px 14px; font-size: 12.5px; border-radius: 20px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); cursor: pointer; transition: var(--transition-spring);" title="Cấu hình danh sách bưu cục hiển thị trên hệ thống">
+                                        <i class="fa-solid fa-building" style="color: var(--accent-emerald);"></i> Cấu hình bưu cục
+                                    </button>
+                                    <button type="button" id="btn-open-data-note-modal" onclick="openDataNoteModal()" title="Xem ghi chú phạm vi dữ liệu API so với bảng phát lẻ" style="padding: 5px 14px; font-size: 12.5px; border-radius: 20px; border: 1px solid var(--accent-emerald); color: var(--accent-emerald); background: var(--accent-emerald-light); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: var(--transition-spring);">
+                                        <i class="fa-solid fa-circle-info"></i> Ghi chú dữ liệu API
+                                    </button>
+                                </div>
                             </div>
                             <div class="threshold-inputs" style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%;">
                                 <span class="threshold-label"><i class="fa-solid fa-highlighter"></i> Highlight tồn ≥</span>
@@ -595,6 +600,9 @@
                     <button class="tab-btn" id="tab-btn-dinhvi" style="background: none; border: none; font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 6px 12px; margin-bottom: -11px; transition: all 0.3s ease;">
                         <i class="fa-solid fa-sliders"></i> Cấu hình hệ thống
                     </button>
+                    <button class="tab-btn" id="tab-btn-pos-config" style="background: none; border: none; font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 6px 12px; margin-bottom: -11px; transition: all 0.3s ease;">
+                        <i class="fa-solid fa-building"></i> Cấu hình bưu cục
+                    </button>
                 </div>
 
                 <!-- Tab 1: Account Management Panel -->
@@ -697,6 +705,70 @@
                         <!-- Submit Button -->
                         <button type="submit" class="btn btn-primary" style="padding: 14px 24px; font-weight: 600; border-radius: 8px; width: 100%; box-shadow: var(--shadow-sm);"><i class="fa-solid fa-floppy-disk"></i> Lưu tất cả cấu hình</button>
                     </form>
+                </div>
+
+                <!-- Tab 3: POS Offices Display Configuration Panel -->
+                <div id="panel-settings-pos-config" style="display: none;">
+                    <div class="grid-card padded" style="margin-bottom: 24px;">
+                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                            <div>
+                                <h2><i class="fa-solid fa-building" style="color: var(--accent-emerald);"></i> Cấu hình danh sách bưu cục hiển thị</h2>
+                                <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                                    Chỉ những bưu cục được bật (Kích hoạt) mới xuất hiện trên Dashboard và bộ lọc bưu gửi. Hệ thống tự động học bưu cục mới khi cào dữ liệu từ Power BI.
+                                </p>
+                            </div>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button type="button" class="btn btn-secondary btn-sm" id="btn-pos-cfg-only-bcp" style="border: 1px solid var(--accent-emerald); color: var(--accent-emerald); font-weight: 600;">
+                                    <i class="fa-solid fa-star"></i> Chỉ chọn BCP (Bỏ BCKT)
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" id="btn-pos-cfg-select-all">
+                                    <i class="fa-solid fa-check-double"></i> Chọn tất cả
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" id="btn-pos-cfg-clear-all">
+                                    <i class="fa-solid fa-xmark"></i> Bỏ chọn tất cả
+                                </button>
+                                <button type="button" class="btn btn-primary btn-sm" id="btn-pos-cfg-save" style="padding: 6px 16px; font-weight: 600; background: var(--accent-emerald); border-color: var(--accent-emerald);">
+                                    <i class="fa-solid fa-floppy-disk"></i> Lưu cấu hình
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap;">
+                            <div style="position: relative; flex: 1; min-width: 260px;">
+                                <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+                                <input type="text" id="pos-cfg-search-input" class="input-field" placeholder="Tìm theo mã hoặc tên bưu cục..." style="padding-left: 36px; width: 100%; height: 38px;">
+                            </div>
+                            <select id="pos-cfg-filter-type" class="input-field" style="width: 170px; height: 38px;">
+                                <option value="">-- Tất cả loại --</option>
+                                <option value="BCP">Chỉ BCP (Phát)</option>
+                                <option value="BCKT">Chỉ BCKT (Khai thác)</option>
+                                <option value="OTHER">Loại khác</option>
+                            </select>
+                            <div id="pos-cfg-stats-badge" style="font-size: 13px; font-weight: 600; color: var(--accent-emerald); background: var(--accent-emerald-light); padding: 6px 14px; border-radius: 20px;">
+                                Đang tải danh sách bưu cục...
+                            </div>
+                        </div>
+
+                        <div class="table-container" style="max-height: 520px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px;">
+                            <table class="table" style="width: 100%;">
+                                <thead style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 2;">
+                                    <tr>
+                                        <th style="width: 50px;" class="text-center">STT</th>
+                                        <th style="width: 110px;" class="text-center">Hiển thị</th>
+                                        <th style="width: 130px;">Mã bưu cục</th>
+                                        <th>Tên bưu cục</th>
+                                        <th style="width: 130px;" class="text-center">Phân loại</th>
+                                        <th style="width: 140px;" class="text-right">Sản lượng tồn</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pos-cfg-table-tbody">
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted" style="padding: 24px;">Đang tải danh sách bưu cục...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -1009,7 +1081,81 @@
         </div>
     </div>
 
+    <!-- POS Configuration Quick Modal (Accessible from Dashboard Matrix Toolbar) -->
+    <div id="pos-config-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card" style="max-width: 840px; width: 95%; max-height: 90vh; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25);">
+            <div class="modal-header" style="background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: var(--accent-emerald-light); color: var(--accent-emerald); display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                        <i class="fa-solid fa-building"></i>
+                    </div>
+                    <div>
+                        <h2 style="font-size: 16px; margin: 0; font-weight: 700; color: var(--text-primary);">Cấu hình Bưu cục hiển thị</h2>
+                        <span style="font-size: 12.5px; color: var(--text-muted);">Bật/tắt các bưu cục hiển thị trên Dashboard & Báo cáo bưu gửi</span>
+                    </div>
+                </div>
+                <button type="button" class="modal-close-btn" id="btn-close-pos-config-modal" style="font-size: 20px; color: var(--text-muted); cursor: pointer; border: none; background: none;">&times;</button>
+            </div>
+            
+            <div class="modal-body" style="padding: 16px 20px; overflow-y: auto; flex: 1;">
+                <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 13px;">
+                    <div>
+                        <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--accent-emerald);"></i>
+                        <strong>Tự động học:</strong> Khi có bưu cục mới từ Power BI, hệ thống tự động thêm (mặc định BCP bật, BCKT tắt).
+                    </div>
+                    <div id="modal-pos-cfg-badge" style="font-weight: 700; color: var(--accent-emerald);">Đang tải...</div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-bottom: 14px; align-items: center; flex-wrap: wrap;">
+                    <div style="position: relative; flex: 1; min-width: 220px;">
+                        <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 13px;"></i>
+                        <input type="text" id="modal-pos-cfg-search" class="input-field" placeholder="Tìm theo mã hoặc tên bưu cục..." style="padding-left: 32px; height: 34px; font-size: 13px; width: 100%;">
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="modal-btn-pos-cfg-only-bcp" style="border: 1px solid var(--accent-emerald); color: var(--accent-emerald); font-weight: 600; padding: 6px 12px; font-size: 12.5px;">
+                        <i class="fa-solid fa-star"></i> Chỉ chọn BCP (Bỏ BCKT)
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="modal-btn-pos-cfg-select-all" style="padding: 6px 10px; font-size: 12.5px;">
+                        Chọn tất cả
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="modal-btn-pos-cfg-clear-all" style="padding: 6px 10px; font-size: 12.5px;">
+                        Bỏ chọn
+                    </button>
+                </div>
+
+                <div class="table-container" style="max-height: 420px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px;">
+                    <table class="table" style="width: 100%; font-size: 13px;">
+                        <thead style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 2;">
+                            <tr>
+                                <th style="width: 45px;" class="text-center">STT</th>
+                                <th style="width: 90px;" class="text-center">Hiển thị</th>
+                                <th style="width: 110px;">Mã BC</th>
+                                <th>Tên bưu cục</th>
+                                <th style="width: 90px;" class="text-center">Loại</th>
+                                <th style="width: 110px;" class="text-right">Tồn hiện tại</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-pos-cfg-tbody">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted" style="padding: 20px;">Đang tải danh sách bưu cục...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer" style="padding: 12px 20px; background: var(--bg-secondary); border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <span id="modal-pos-cfg-summary-text" style="font-size: 13px; color: var(--text-muted);">Đang tải...</span>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn btn-secondary" id="modal-btn-close-pos-config">Hủy</button>
+                    <button type="button" class="btn btn-primary" id="modal-btn-save-pos-config" style="background: var(--accent-emerald); border-color: var(--accent-emerald); font-weight: 600;">
+                        <i class="fa-solid fa-floppy-disk"></i> Lưu cấu hình & Áp dụng
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Script JS -->
-    <script src="/static/app.js?v=3.11.0"></script>
+    <script src="/static/app.js?v=3.12.0"></script>
 </body>
 </html>
