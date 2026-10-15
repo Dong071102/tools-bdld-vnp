@@ -2573,17 +2573,21 @@ async function initDashboard() {
     // Set visual filter-active classes
     document.querySelectorAll(".threshold-inputs input").forEach(el => checkFilterActive(el));
 
-    await updateStatus();
-    await loadFilters();
-    await loadSummary();
-    await loadMatrixConfig();
+    // Initialize UI configs & Matrix Quick Config Popover Modal immediately
+    initMatrixTotalQuickConfig();
     loadColumnConfig();
     renderColumnConfigUI();
     renderDetailedHeader();
-    await loadDetailed();
 
-    // Initialize Matrix Quick Config Popover Modal
-    initMatrixTotalQuickConfig();
+    // Fetch live data from backend
+    try {
+        await updateStatus();
+        await loadFilters();
+        await loadSummary();
+        await loadDetailed();
+    } catch (e) {
+        console.error("Error loading dashboard data:", e);
+    }
 }
 
 const MODAL_VIS_MAP = [
