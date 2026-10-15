@@ -19,9 +19,7 @@ import {
   cookieMapToString
 } from './vnpost-client.js';
 import { 
-  mergeExcelBuffers, 
-  parseExcelData, 
-  looksLikeZip 
+  mergeExcelBuffers 
 } from './excel-helper.js';
 
 dotenv.config();
@@ -732,35 +730,15 @@ app.post('/api/export', authenticateToken, async (req, res) => {
     const timestamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15);
     const fileName = `DanhSachBuuGui_Gop_${timestamp}.${merged.extension}`;
 
-    console.log(`[Export] Đang lưu lịch sử vào SQL Server...`);
-    // 3. Save to export_history
     const fileBuffer = Buffer.from(merged.buffer);
-    const historyResult = await run(
-      `INSERT INTO export_history (user_id, total_codes, success_codes, file_name, file_data_blob, status) VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, cleanCodes.length, successCount, fileName, fileBuffer, 'success']
-    );
+    const mime = merged.extension === 'xlsx'
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : 'application/vnd.ms-excel;charset=utf-8';
 
-    const historyId = historyResult.id;
-
-    console.log(`[Export] Gửi phản hồi cho client. Đang phân tích lưu chi tiết chạy ngầm...`);
-    // 4. Parse spreadsheet content and save into exported_items in background (non-blocking)
-    parseExcelData(merged.buffer, merged.extension === 'xlsx')
-      .then(parsedItems => {
-        // Run bulk insert asynchronously
-        return saveExportedItemsToDb(historyId, parsedItems);
-      })
-      .catch(parseErr => {
-        console.error('Lỗi phân tích hoặc lưu dữ liệu bưu gửi:', parseErr);
-      });
-
-    res.json({
-      success: true,
-      historyId,
-      fileName,
-      totalCodes: cleanCodes.length,
-      successCodes: successCount,
-      message: `Đã xử lý xong. Xuất thành công ${successCount}/${cleanCodes.length} mã.`
-    });
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    return res.send(fileBuffer);
 
   } catch (err) {
     console.error(err);
@@ -805,10 +783,9 @@ app.post('/api/export-batch', authenticateToken, async (req, res) => {
   }
 });
 
-// Endpoint gộp các lô Excel và lưu lịch sử
+// Endpoint gộp các lô Excel (Tải trực tiếp file, không lưu lịch sử vào DB)
 app.post('/api/merge-and-save', authenticateToken, async (req, res) => {
-  const { buffers, totalCodes } = req.body;
-  const userId = req.user.id;
+  const { buffers } = req.body;
 
   if (!buffers || !Array.isArray(buffers) || buffers.length === 0) {
     return res.status(400).json({ error: 'Không có dữ liệu lô Excel nào để gộp.' });
@@ -824,164 +801,18 @@ app.post('/api/merge-and-save', authenticateToken, async (req, res) => {
 
     const timestamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15);
     const fileName = `DanhSachBuuGui_Gop_${timestamp}.${merged.extension}`;
-
-    // Lưu vào lịch sử
     const fileBuffer = Buffer.from(merged.buffer);
-    const historyResult = await run(
-      `INSERT INTO export_history (user_id, total_codes, success_codes, file_name, file_data_blob, status) VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, totalCodes, totalCodes, fileName, fileBuffer, 'success']
-    );
+    const mime = merged.extension === 'xlsx'
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : 'application/vnd.ms-excel;charset=utf-8';
 
-    const historyId = historyResult.id;
-
-    // Lưu chi tiết bưu gửi chạy ngầm dưới nền
-    parseExcelData(merged.buffer, merged.extension === 'xlsx')
-      .then(parsedItems => {
-        return saveExportedItemsToDb(historyId, parsedItems);
-      })
-      .catch(parseErr => {
-        console.error('[Merge] Lỗi phân tích lưu chi tiết chạy ngầm:', parseErr);
-      });
-
-    res.json({
-      success: true,
-      historyId,
-      fileName
-    });
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    return res.send(fileBuffer);
   } catch (err) {
     console.error('[Merge Error]:', err.message);
     res.status(500).json({ error: err.message || 'Lỗi gộp dữ liệu Excel.' });
-  }
-});
-
-// --- HISTORY & QUERY ENDPOINTS ---
-
-// Get export history
-app.get('/api/history', authenticateToken, async (req, res) => {
-  const userId = req.user.id;
-  const isAdmin = req.user.role === 'admin';
-
-  try {
-    let list;
-    if (isAdmin) {
-      list = await all(`
-        SELECT h.id, h.export_time, h.total_codes, h.success_codes, h.file_name, h.status, u.username 
-        FROM export_history h
-        JOIN users u ON h.user_id = u.id
-        ORDER BY h.export_time DESC
-      `);
-    } else {
-      list = await all(`
-        SELECT id, export_time, total_codes, success_codes, file_name, status 
-        FROM export_history 
-        WHERE user_id = ?
-        ORDER BY export_time DESC
-      `, [userId]);
-    }
-    res.json(list);
-  } catch (err) {
-    res.status(500).json({ error: 'Lỗi tải lịch sử.' });
-  }
-});
-
-// Download past Excel
-app.get('/api/history/:id/download', authenticateToken, async (req, res) => {
-  const { id } = req.params;
-  const userId = req.user.id;
-  const isAdmin = req.user.role === 'admin';
-
-  try {
-    const history = await get(`SELECT * FROM export_history WHERE id = ?`, [id]);
-    if (!history) return res.status(404).json({ error: 'Không tìm thấy bản ghi lịch sử.' });
-
-    // Validate ownership
-    if (!isAdmin && history.user_id !== userId) {
-      return res.status(403).json({ error: 'Từ chối truy cập.' });
-    }
-
-    if (!history.file_data_blob) {
-      return res.status(404).json({ error: 'Không tìm thấy tệp đính kèm trong database.' });
-    }
-
-    const fileBuffer = history.file_data_blob;
-    const isZip = looksLikeZip(fileBuffer);
-    const mime = isZip ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "application/vnd.ms-excel;charset=utf-8";
-
-    res.setHeader('Content-Type', mime);
-    res.setHeader('Content-Disposition', `attachment; filename="${history.file_name}"`);
-    res.send(fileBuffer);
-  } catch (err) {
-    res.status(500).json({ error: 'Lỗi tải tệp.' });
-  }
-});
-
-// Search detail items in history
-app.get('/api/history/search', authenticateToken, async (req, res) => {
-  const { q } = req.query;
-  const userId = req.user.id;
-  const isAdmin = req.user.role === 'admin';
-
-  if (!q) return res.json([]);
-
-  try {
-    let items;
-    if (isAdmin) {
-      items = await all(`
-        SELECT i.tracking_code, i.data_json, h.export_time, h.file_name, u.username
-        FROM exported_items i
-        JOIN export_history h ON i.history_id = h.id
-        JOIN users u ON h.user_id = u.id
-        WHERE i.tracking_code LIKE ?
-        ORDER BY h.export_time DESC
-        LIMIT 100
-      `, [`%${q.trim().toUpperCase()}%`]);
-    } else {
-      items = await all(`
-        SELECT i.tracking_code, i.data_json, h.export_time, h.file_name
-        FROM exported_items i
-        JOIN export_history h ON i.history_id = h.id
-        WHERE h.user_id = ? AND i.tracking_code LIKE ?
-        ORDER BY h.export_time DESC
-        LIMIT 100
-      `, [userId, `%${q.trim().toUpperCase()}%`]);
-    }
-
-    // Map JSON strings back to objects
-    const result = items.map(item => ({
-      ...item,
-      data: JSON.parse(item.data_json)
-    }));
-
-    res.json(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Lỗi tìm kiếm bưu gửi.' });
-  }
-});
-
-// Detail items for a single export history
-app.get('/api/history/:id/items', authenticateToken, async (req, res) => {
-  const { id } = req.params;
-  const userId = req.user.id;
-  const isAdmin = req.user.role === 'admin';
-
-  try {
-    const history = await get(`SELECT user_id FROM export_history WHERE id = ?`, [id]);
-    if (!history) return res.status(404).json({ error: 'Không tìm thấy bản ghi lịch sử.' });
-
-    if (!isAdmin && history.user_id !== userId) {
-      return res.status(403).json({ error: 'Từ chối truy cập.' });
-    }
-
-    const items = await all(`SELECT tracking_code, data_json FROM exported_items WHERE history_id = ?`, [id]);
-    const result = items.map(item => ({
-      trackingCode: item.tracking_code,
-      data: JSON.parse(item.data_json)
-    }));
-
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: 'Lỗi tải chi tiết.' });
   }
 });
 
@@ -1049,29 +880,6 @@ async function keepSessionsAlive() {
 // Chạy Keep-Alive định kỳ mỗi 5 phút (300,000 ms) để đảm bảo không bị timeout
 setInterval(keepSessionsAlive, 5 * 60 * 1000);
 
-// Hỗ trợ lưu chi tiết bưu gửi hàng loạt theo lô (Bulk Insert) lên SQL Server để tránh nghẽn mạng
-async function saveExportedItemsToDb(historyId, parsedItems) {
-  const BATCH_INSERT_SIZE = 400;
-  for (let i = 0; i < parsedItems.length; i += BATCH_INSERT_SIZE) {
-    const chunk = parsedItems.slice(i, i + BATCH_INSERT_SIZE);
-    
-    const valuePlaceholders = [];
-    const params = [];
-    
-    for (const item of chunk) {
-      valuePlaceholders.push('(?, ?, ?)');
-      params.push(historyId, item.trackingCode, JSON.stringify(item.data));
-    }
-    
-    const sql = `INSERT INTO exported_items (history_id, tracking_code, data_json) VALUES ${valuePlaceholders.join(', ')}`;
-    try {
-      await run(sql, params);
-    } catch (err) {
-      console.error('[Database] Lỗi chèn dữ liệu bưu gửi chi tiết:', err);
-    }
-  }
-  console.log(`[Database] Đã lưu thành công ${parsedItems.length} bưu gửi chi tiết.`);
-}
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

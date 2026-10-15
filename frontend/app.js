@@ -1913,24 +1913,45 @@ btnStartExport.addEventListener("click", async () => {
             })
         });
 
-        const mergeData = await mergeRes.json();
         if (mergeRes.ok) {
-            progressBar.style.width = "100%";
-            progressText.textContent = "100%";
-            addExportLog(`Hoàn tất! Xuất thành công ${successCount}/${codes.length} bưu gửi.`, "success");
+            const blob = await mergeRes.blob();
+            let fileName = `DanhSachBuuGui_Gop_${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}.xlsx`;
+            const disposition = mergeRes.headers.get("content-disposition");
+            if (disposition && disposition.indexOf("filename=") !== -1) {
+                const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+                if (matches != null && matches[1]) {
+                    fileName = matches[1].replace(/['"]/g, '');
+                }
+            }
 
-            const token = localStorage.getItem("vnpost_token");
-            const downloadUrl = `${API_BASE_DINHVI}/api/history/${mergeData.historyId}/download?authorization=Bearer ${token}`;
-
+            const downloadUrl = window.URL.createObjectURL(blob);
             const downloadBtn = document.getElementById("btn-download-export-file");
-            downloadBtn.href = downloadUrl;
+            if (downloadBtn) {
+                downloadBtn.href = downloadUrl;
+                downloadBtn.download = fileName;
+            }
             document.getElementById("export-download-wrapper").style.display = "block";
 
-            window.open(downloadUrl);
+            // Tự động tải xuống file Excel
+            const a = document.createElement("a");
+            a.href = downloadUrl;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+
+            progressBar.style.width = "100%";
+            progressText.textContent = "100%";
+            addExportLog(`Hoàn tất! Xuất thành công ${successCount}/${codes.length} bưu gửi. Đang tải file...`, "success");
         } else {
+            let errorMsg = "Lỗi gộp dữ liệu Excel.";
+            try {
+                const errData = await mergeRes.json();
+                if (errData && errData.error) errorMsg = errData.error;
+            } catch (e) {}
             progressBar.style.width = "0%";
             progressText.textContent = "0%";
-            addExportLog(`Lỗi gộp dữ liệu Excel: ${mergeData.error}`, "error");
+            addExportLog(`Lỗi: ${errorMsg}`, "error");
         }
     } catch (err) {
         progressBar.style.width = "0%";
