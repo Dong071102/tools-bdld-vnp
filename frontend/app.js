@@ -1552,7 +1552,7 @@ document.getElementById("menu-logout").addEventListener("click", (e) => {
 
 
 // Tab / View Switching controller
-const views = ["dashboard", "export", "users"];
+const views = ["dashboard", "export", "locton", "users"];
 let activeView = "dashboard";
 
 
@@ -1598,6 +1598,10 @@ function switchView(viewName) {
         startSessionPolling();
     } else {
         stopSessionPolling();
+    }
+
+    if (viewName === "locton") {
+        initLoctonView();
     }
 
     if (viewName === "users") {
@@ -3565,10 +3569,485 @@ function initPosConfig() {
     }
 }
 
+// ==========================================
+// --- MODULE: LỌC TỒN BƯU GỬI (LOCTON) ---
+// ==========================================
+
+let loctonHangtonFile = null;
+let loctonDinhViFile = null;
+let loctonData = { bang1: [], bang2: [], bang3: [] };
+let loctonActiveTab = 3; // 3: Tổng hợp BC, 1: Chưa phát, 2: Đã giao/thu tiền
+let loctonSearchText = "";
+let loctonCurrentPage = 1;
+let loctonPageSize = 50;
+let isLoctonInitialized = false;
+
+function initLoctonView() {
+    if (isLoctonInitialized) return;
+    isLoctonInitialized = true;
+
+    // Dropzone Hàng Tồn
+    const dropzoneHangton = document.getElementById("dropzone-hangton");
+    const inputHangton = document.getElementById("input-locton-hangton");
+    const labelHangton = document.getElementById("label-locton-hangton");
+    const badgeHangton = document.getElementById("badge-locton-hangton");
+
+    // Dropzone Định Vị
+    const dropzoneDinhVi = document.getElementById("dropzone-dinhvi");
+    const inputDinhVi = document.getElementById("input-locton-dinhvi");
+    const labelDinhVi = document.getElementById("label-locton-dinhvi");
+    const badgeDinhVi = document.getElementById("badge-locton-dinhvi");
+
+    function setupDropzone(dropzone, input, onFileSelected) {
+        if (!dropzone || !input) return;
+        dropzone.addEventListener("click", () => input.click());
+        input.addEventListener("change", (e) => {
+            if (e.target.files && e.target.files[0]) {
+                onFileSelected(e.target.files[0]);
+            }
+        });
+        ["dragenter", "dragover"].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.style.borderColor = "var(--accent-emerald)";
+                dropzone.style.background = "var(--accent-emerald-light)";
+            });
+        });
+        ["dragleave", "drop"].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.style.borderColor = "var(--border-color)";
+                dropzone.style.background = "var(--bg-primary)";
+            });
+        });
+        dropzone.addEventListener("drop", (e) => {
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+                onFileSelected(e.dataTransfer.files[0]);
+            }
+        });
+    }
+
+    setupDropzone(dropzoneHangton, inputHangton, (file) => {
+        loctonHangtonFile = file;
+        labelHangton.textContent = file.name;
+        badgeHangton.textContent = `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+        badgeHangton.style.display = "inline-block";
+        hideLoctonAlert();
+    });
+
+    setupDropzone(dropzoneDinhVi, inputDinhVi, (file) => {
+        loctonDinhViFile = file;
+        labelDinhVi.textContent = file.name;
+        badgeDinhVi.textContent = `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+        badgeDinhVi.style.display = "inline-block";
+        hideLoctonAlert();
+    });
+
+    // Button Bắt đầu Lọc Tồn
+    const btnProcess = document.getElementById("btn-locton-process");
+    if (btnProcess) {
+        btnProcess.addEventListener("click", handleLoctonProcess);
+    }
+
+    // Button Reset
+    const btnReset = document.getElementById("btn-locton-reset");
+    if (btnReset) {
+        btnReset.addEventListener("click", resetLoctonState);
+    }
+
+    // Button Export Excel
+    const btnExport = document.getElementById("btn-locton-export-excel");
+    if (btnExport) {
+        btnExport.addEventListener("click", handleLoctonExport);
+    }
+
+    // Tab buttons
+    [1, 2, 3].forEach(tabNum => {
+        const tabBtn = document.getElementById(`tab-locton-${tabNum}`);
+        if (tabBtn) {
+            tabBtn.addEventListener("click", () => {
+                setLoctonTab(tabNum);
+            });
+        }
+    });
+
+    // Search input
+    const searchInput = document.getElementById("locton-search-input");
+    if (searchInput) {
+        searchInput.addEventListener("input", (e) => {
+            loctonSearchText = (e.target.value || "").trim().toLowerCase();
+            loctonCurrentPage = 1;
+            renderLoctonTable();
+        });
+    }
+
+    // Page size selector
+    const pageSizeSelect = document.getElementById("locton-page-size");
+    if (pageSizeSelect) {
+        pageSizeSelect.addEventListener("change", (e) => {
+            loctonPageSize = parseInt(e.target.value, 10) || 50;
+            loctonCurrentPage = 1;
+            renderLoctonTable();
+        });
+    }
+
+    // Prev / Next pagination buttons
+    const btnPrev = document.getElementById("btn-locton-prev");
+    const btnNext = document.getElementById("btn-locton-next");
+    if (btnPrev) {
+        btnPrev.addEventListener("click", () => {
+            if (loctonCurrentPage > 1) {
+                loctonCurrentPage--;
+                renderLoctonTable();
+            }
+        });
+    }
+    if (btnNext) {
+        btnNext.addEventListener("click", () => {
+            loctonCurrentPage++;
+            renderLoctonTable();
+        });
+    }
+}
+
+async function handleLoctonProcess() {
+    if (!loctonHangtonFile) {
+        showLoctonAlert("Vui lòng chọn hoặc kéo thả file Hàng Tồn (hangton.xlsx)", "danger");
+        return;
+    }
+    if (!loctonDinhViFile) {
+        showLoctonAlert("Vui lòng chọn hoặc kéo thả file Định Vị (dinh_vi.xlsx)", "danger");
+        return;
+    }
+
+    const btnProcess = document.getElementById("btn-locton-process");
+    const originalHtml = btnProcess ? btnProcess.innerHTML : "";
+    if (btnProcess) {
+        btnProcess.disabled = true;
+        btnProcess.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang xử lý đối soát bưu gửi...`;
+    }
+    hideLoctonAlert();
+
+    try {
+        const formData = new FormData();
+        formData.append("hangton", loctonHangtonFile);
+        formData.append("dinh_vi", loctonDinhViFile);
+
+        const resp = await fetch("/api/locton/process", {
+            method: "POST",
+            body: formData
+        });
+
+        const result = await resp.json();
+        if (!result.success) {
+            throw new Error(result.message || "Xử lý file thất bại");
+        }
+
+        loctonData = result.data || { bang1: [], bang2: [], bang3: [] };
+        const stats = result.stats || {};
+
+        // Update KPI values
+        const kpiTotal = document.getElementById("locton-kpi-total");
+        const kpiB1 = document.getElementById("locton-kpi-bang1");
+        const kpiB2 = document.getElementById("locton-kpi-bang2");
+        const kpiB3 = document.getElementById("locton-kpi-bang3");
+
+        if (kpiTotal) kpiTotal.textContent = formatNumber(stats.hangtonTotal || 0);
+        if (kpiB1) kpiB1.textContent = formatNumber(stats.bang1Count || 0);
+        if (kpiB2) kpiB2.textContent = formatNumber(stats.bang2Count || 0);
+        if (kpiB3) kpiB3.textContent = formatNumber(stats.bang3Count || 0);
+
+        // Update tab badges
+        const countTab1 = document.getElementById("locton-count-tab1");
+        const countTab2 = document.getElementById("locton-count-tab2");
+        const countTab3 = document.getElementById("locton-count-tab3");
+
+        if (countTab1) countTab1.textContent = formatNumber(loctonData.bang1.length);
+        if (countTab2) countTab2.textContent = formatNumber(loctonData.bang2.length);
+        if (countTab3) countTab3.textContent = formatNumber(loctonData.bang3.length);
+
+        // Show KPI, table card and export button
+        const kpiSec = document.getElementById("locton-kpis");
+        const tblCard = document.getElementById("locton-table-card");
+        const btnExp = document.getElementById("btn-locton-export-excel");
+
+        if (kpiSec) kpiSec.style.display = "grid";
+        if (tblCard) tblCard.style.display = "block";
+        if (btnExp) btnExp.style.display = "inline-flex";
+
+        showToast("Lọc và đối soát dữ liệu thành công!", "success");
+        setLoctonTab(3); // Default view Bảng 3
+    } catch (err) {
+        console.error("Lỗi lọc tồn:", err);
+        showLoctonAlert("Lỗi: " + err.message, "danger");
+    } finally {
+        if (btnProcess) {
+            btnProcess.disabled = false;
+            btnProcess.innerHTML = originalHtml;
+        }
+    }
+}
+
+function setLoctonTab(tabNum) {
+    loctonActiveTab = tabNum;
+    loctonCurrentPage = 1;
+
+    [1, 2, 3].forEach(n => {
+        const btn = document.getElementById(`tab-locton-${n}`);
+        if (btn) {
+            if (n === tabNum) {
+                btn.classList.add("active");
+                btn.style.color = "var(--accent-emerald)";
+                btn.style.borderBottom = "3px solid var(--accent-emerald)";
+            } else {
+                btn.classList.remove("active");
+                btn.style.color = "var(--text-muted)";
+                btn.style.borderBottom = "none";
+            }
+        }
+    });
+
+    renderLoctonTable();
+}
+
+function renderLoctonTable() {
+    const thead = document.getElementById("locton-thead");
+    const tbody = document.getElementById("locton-tbody");
+    if (!thead || !tbody) return;
+
+    let sourceList = [];
+    if (loctonActiveTab === 1) sourceList = loctonData.bang1 || [];
+    else if (loctonActiveTab === 2) sourceList = loctonData.bang2 || [];
+    else sourceList = loctonData.bang3 || [];
+
+    // Filter by search query
+    let filtered = sourceList;
+    if (loctonSearchText) {
+        filtered = sourceList.filter(row => {
+            return Object.values(row).some(val => 
+                String(val !== null && val !== undefined ? val : "").toLowerCase().includes(loctonSearchText)
+            );
+        });
+    }
+
+    const totalRows = filtered.length;
+    const totalPages = Math.ceil(totalRows / loctonPageSize) || 1;
+    if (loctonCurrentPage > totalPages) loctonCurrentPage = totalPages;
+    if (loctonCurrentPage < 1) loctonCurrentPage = 1;
+
+    const startIdx = (loctonCurrentPage - 1) * loctonPageSize;
+    const endIdx = Math.min(startIdx + loctonPageSize, totalRows);
+    const pageRows = filtered.slice(startIdx, endIdx);
+
+    // Update pagination info & buttons
+    const pageInfo = document.getElementById("locton-pagination-info");
+    if (pageInfo) {
+        pageInfo.textContent = `Hiển thị ${totalRows > 0 ? startIdx + 1 : 0} - ${endIdx} trong tổng số ${formatNumber(totalRows)} bản ghi`;
+    }
+    const btnPrev = document.getElementById("btn-locton-prev");
+    const btnNext = document.getElementById("btn-locton-next");
+    if (btnPrev) btnPrev.disabled = loctonCurrentPage <= 1;
+    if (btnNext) btnNext.disabled = loctonCurrentPage >= totalPages;
+
+    // Render Headers & Rows according to tab
+    if (loctonActiveTab === 3) {
+        thead.innerHTML = `
+            <tr>
+                <th style="width: 50px;" class="text-center">STT</th>
+                <th style="width: 100px;">Mã BC</th>
+                <th>Tên bưu cục</th>
+                <th class="text-right">SL 3N</th>
+                <th class="text-right">Tiền COD 3N</th>
+                <th class="text-right">SL 5N</th>
+                <th class="text-right">Tiền COD 5N</th>
+                <th class="text-right">SL 7N</th>
+                <th class="text-right">Tiền COD 7N</th>
+                <th class="text-right">SL 14N</th>
+                <th class="text-right">Tiền COD 14N</th>
+                <th class="text-right" style="color: var(--accent-emerald); font-weight: 700;">Tổng tồn</th>
+                <th class="text-right" style="color: var(--accent-emerald); font-weight: 700;">Tổng COD</th>
+            </tr>
+        `;
+
+        if (pageRows.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="13" class="text-center text-muted" style="padding: 24px;">Không có dữ liệu</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = pageRows.map((r, idx) => {
+            const isTotalRow = String(r["Mã BC"]).includes("TOÀN TỈNH") || r["Mã BC"] === "TONG";
+            const rowClass = isTotalRow ? 'style="font-weight: 700; background: var(--accent-emerald-light); color: var(--accent-emerald);"' : '';
+            return `
+                <tr ${rowClass}>
+                    <td class="text-center">${isTotalRow ? "★" : startIdx + idx + 1}</td>
+                    <td><strong>${r["Mã BC"] || ""}</strong></td>
+                    <td>${r["Tên bưu cục"] || ""}</td>
+                    <td class="text-right">${formatNumber(r["SL Tồn 3N"] || 0)}</td>
+                    <td class="text-right">${formatCurrency(r["Tiền COD 3N"] || 0)}</td>
+                    <td class="text-right">${formatNumber(r["SL Tồn 5N"] || 0)}</td>
+                    <td class="text-right">${formatCurrency(r["Tiền COD 5N"] || 0)}</td>
+                    <td class="text-right">${formatNumber(r["SL Tồn 7N"] || 0)}</td>
+                    <td class="text-right">${formatCurrency(r["Tiền COD 7N"] || 0)}</td>
+                    <td class="text-right">${formatNumber(r["SL Tồn 14N"] || 0)}</td>
+                    <td class="text-right">${formatCurrency(r["Tiền COD 14N"] || 0)}</td>
+                    <td class="text-right" style="font-weight: 700; color: var(--accent-emerald);">${formatNumber(r["Tổng tồn"] || 0)}</td>
+                    <td class="text-right" style="font-weight: 700; color: var(--accent-emerald);">${formatCurrency(r["Tổng tiền COD"] || 0)}</td>
+                </tr>
+            `;
+        }).join("");
+    } else {
+        // Bảng 1 hoặc Bảng 2
+        thead.innerHTML = `
+            <tr>
+                <th style="width: 50px;" class="text-center">STT</th>
+                <th style="width: 140px;">Mã bưu gửi</th>
+                <th style="width: 90px;">Mã BC</th>
+                <th>Tên bưu cục phát</th>
+                <th style="width: 110px;">Ngày đến BC</th>
+                <th style="width: 100px;">TG tồn</th>
+                <th>Trạng thái định vị</th>
+                <th style="width: 140px;">TG cập nhật</th>
+                <th>Người nhận</th>
+                <th class="text-right" style="width: 110px;">Tiền COD</th>
+                <th class="text-right" style="width: 90px;">TL (g)</th>
+            </tr>
+        `;
+
+        if (pageRows.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted" style="padding: 24px;">Không có dữ liệu</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = pageRows.map((r, idx) => {
+            const statusBadgeClass = loctonActiveTab === 2 
+                ? "background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald);" 
+                : "background: rgba(245, 158, 11, 0.15); color: #d97706;";
+            return `
+                <tr>
+                    <td class="text-center">${startIdx + idx + 1}</td>
+                    <td><strong>${r["Mã bưu gửi"] || ""}</strong></td>
+                    <td>${r["Mã BC phát"] || ""}</td>
+                    <td>${r["Tên BC phát"] || ""}</td>
+                    <td>${r["Ngày đến BC phát"] || ""}</td>
+                    <td><span class="badge" style="background: var(--bg-secondary); font-size: 11.5px; padding: 2px 8px; border-radius: 4px;">${r["Thời gian tồn"] || ""}</span></td>
+                    <td><span class="badge" style="${statusBadgeClass} font-size: 11.5px; padding: 3px 8px; border-radius: 4px; font-weight: 600;">${r["Trạng thái hiện tại"] || "Chưa có thông tin"}</span></td>
+                    <td style="font-size: 12px; color: var(--text-muted);">${r["Thời gian cập nhật"] || ""}</td>
+                    <td>${r["Người ký nhận"] || ""}</td>
+                    <td class="text-right">${formatCurrency(r["Tiền COD"] || 0)}</td>
+                    <td class="text-right">${formatNumber(r["Khối lượng"] || 0)}</td>
+                </tr>
+            `;
+        }).join("");
+    }
+}
+
+async function handleLoctonExport() {
+    if (!loctonData.bang1 || !loctonData.bang2 || !loctonData.bang3) {
+        showToast("Không có dữ liệu để xuất file", "warning");
+        return;
+    }
+
+    const btnExport = document.getElementById("btn-locton-export-excel");
+    const origHtml = btnExport ? btnExport.innerHTML : "";
+    if (btnExport) {
+        btnExport.disabled = true;
+        btnExport.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang tạo file Excel...`;
+    }
+
+    try {
+        const resp = await fetch("/api/locton/export", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                bang1: loctonData.bang1,
+                bang2: loctonData.bang2,
+                bang3: loctonData.bang3
+            })
+        });
+
+        if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}`);
+        }
+
+        const blob = await resp.blob();
+        const dateStr = new Date().toISOString().split("T")[0];
+        const filename = `Loc_ton_${dateStr}.xlsx`;
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        showToast("Đã tải xuống file Excel lọc tồn thành công!", "success");
+    } catch (err) {
+        console.error("Lỗi xuất file lọc tồn:", err);
+        showToast("Lỗi xuất file Excel: " + err.message, "error");
+    } finally {
+        if (btnExport) {
+            btnExport.disabled = false;
+            btnExport.innerHTML = origHtml;
+        }
+    }
+}
+
+function showLoctonAlert(msg, type = "info") {
+    const el = document.getElementById("locton-alert");
+    if (!el) return;
+    el.className = `alert alert-${type}`;
+    el.style.display = "block";
+    el.textContent = msg;
+}
+
+function hideLoctonAlert() {
+    const el = document.getElementById("locton-alert");
+    if (el) el.style.display = "none";
+}
+
+function resetLoctonState() {
+    loctonHangtonFile = null;
+    loctonDinhViFile = null;
+    loctonData = { bang1: [], bang2: [], bang3: [] };
+    loctonSearchText = "";
+    loctonCurrentPage = 1;
+
+    const inputHangton = document.getElementById("input-locton-hangton");
+    const labelHangton = document.getElementById("label-locton-hangton");
+    const badgeHangton = document.getElementById("badge-locton-hangton");
+    if (inputHangton) inputHangton.value = "";
+    if (labelHangton) labelHangton.textContent = "Kéo thả file vào đây hoặc bấm để chọn";
+    if (badgeHangton) badgeHangton.style.display = "none";
+
+    const inputDinhVi = document.getElementById("input-locton-dinhvi");
+    const labelDinhVi = document.getElementById("label-locton-dinhvi");
+    const badgeDinhVi = document.getElementById("badge-locton-dinhvi");
+    if (inputDinhVi) inputDinhVi.value = "";
+    if (labelDinhVi) labelDinhVi.textContent = "Kéo thả file vào đây hoặc bấm để chọn";
+    if (badgeDinhVi) badgeDinhVi.style.display = "none";
+
+    const searchInput = document.getElementById("locton-search-input");
+    if (searchInput) searchInput.value = "";
+
+    hideLoctonAlert();
+    const kpiSec = document.getElementById("locton-kpis");
+    const tblCard = document.getElementById("locton-table-card");
+    const btnExp = document.getElementById("btn-locton-export-excel");
+
+    if (kpiSec) kpiSec.style.display = "none";
+    if (tblCard) tblCard.style.display = "none";
+    if (btnExp) btnExp.style.display = "none";
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     initDataNoteModal();
     initUrlErrorOverlay();
     initPosConfig();
+    initLoctonView();
     init();
 });
 

@@ -58,3 +58,11 @@ jobs:
           context: ./frontend
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/tools-bdld-vnp-frontend:latest
+
+      # 4. Build and Push Locton Backend
+      - name: Build and push Locton Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./locton-backend
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/tools-bdld-vnp-locton-backend:latest

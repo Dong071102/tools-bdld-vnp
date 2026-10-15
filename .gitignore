@@ -100,3 +100,6 @@ env/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Agent skills & configs
+.agents/

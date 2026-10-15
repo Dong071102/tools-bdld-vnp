@@ -14,7 +14,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Style CSS -->
-     <link rel="stylesheet" href="/static/style.css?v=3.14.3">
+     <link rel="stylesheet" href="/static/style.css?v=3.15.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -62,6 +62,7 @@
                 <div class="nav-menu-top" style="display: flex; flex-direction: column; gap: 8px;">
                     <a href="#" class="nav-item active" id="menu-dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
                     <a href="#" class="nav-item" id="menu-export"><i class="fa-solid fa-file-excel"></i> Xuất Excel (Định vị)</a>
+                    <a href="#" class="nav-item" id="menu-locton"><i class="fa-solid fa-filter-circle-dollar"></i> Lọc tồn bưu gửi</a>
                 </div>
 
                 <div class="nav-menu-bottom" style="margin-top: auto; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 16px;">
@@ -529,6 +530,148 @@
                             <div class="console-log" id="export-console-logs">
                                 <div class="log-row info">Sẵn sàng. Vui lòng nhập mã bưu gửi và bấm xuất.</div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Locton View (Lọc tồn bưu gửi) -->
+            <div id="view-locton" class="content-view">
+                <header class="header" style="margin-bottom: 24px;">
+                    <div class="header-title">
+                        <h1><i class="fa-solid fa-filter-circle-dollar"></i> Lọc tồn bưu gửi</h1>
+                        <p>Đối soát bưu gửi giữa danh sách Hàng tồn và Định vị, phân loại 3 bảng và xuất Excel chi tiết</p>
+                    </div>
+                    <div class="header-actions">
+                        <button type="button" class="btn btn-primary" id="btn-locton-export-excel" style="display: none;">
+                            <i class="fa-solid fa-file-excel"></i> Xuất File Excel (3 Sheets)
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Upload Section -->
+                <div class="grid-card padded" style="margin-bottom: 24px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+                        <!-- Box 1: File Hàng Tồn -->
+                        <div class="file-drop-zone" id="dropzone-hangton" style="border: 2px dashed var(--border-color); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; background: var(--bg-primary); transition: all 0.25s ease;">
+                            <input type="file" id="input-locton-hangton" accept=".xlsx,.xls,.csv" style="display: none;">
+                            <i class="fa-solid fa-box-archive" style="font-size: 38px; color: var(--accent-emerald); margin-bottom: 12px; display: block;"></i>
+                            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">1. File Hàng Tồn (hangton.xlsx)</h3>
+                            <p id="label-locton-hangton" style="font-size: 13px; color: var(--text-muted); margin: 0;">Kéo thả file vào đây hoặc bấm để chọn</p>
+                            <span id="badge-locton-hangton" class="badge" style="display: none; margin-top: 10px; background: var(--accent-emerald-light); color: var(--accent-emerald); padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;"></span>
+                        </div>
+
+                        <!-- Box 2: File Định Vị -->
+                        <div class="file-drop-zone" id="dropzone-dinhvi" style="border: 2px dashed var(--border-color); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; background: var(--bg-primary); transition: all 0.25s ease;">
+                            <input type="file" id="input-locton-dinhvi" accept=".xlsx,.xls,.csv" style="display: none;">
+                            <i class="fa-solid fa-location-crosshairs" style="font-size: 38px; color: #3b82f6; margin-bottom: 12px; display: block;"></i>
+                            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">2. File Định Vị (dinh_vi.xlsx)</h3>
+                            <p id="label-locton-dinhvi" style="font-size: 13px; color: var(--text-muted); margin: 0;">Kéo thả file vào đây hoặc bấm để chọn</p>
+                            <span id="badge-locton-dinhvi" class="badge" style="display: none; margin-top: 10px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;"></span>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 14px; margin-top: 20px;">
+                        <button type="button" class="btn btn-primary" id="btn-locton-process" style="padding: 10px 32px; font-size: 15px; font-weight: 700; border-radius: 10px; display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-bolt"></i> Bắt đầu Lọc Tồn
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="btn-locton-reset" style="padding: 10px 20px; font-size: 14px; border-radius: 10px;">
+                            <i class="fa-solid fa-rotate-left"></i> Làm mới
+                        </button>
+                    </div>
+
+                    <div id="locton-alert" class="alert" style="display: none; margin-top: 16px; padding: 12px 16px; border-radius: 8px;"></div>
+                </div>
+
+                <!-- KPI Result Cards -->
+                <section class="kpi-grid" id="locton-kpis" style="display: none; margin-bottom: 24px;">
+                    <div class="kpi-card">
+                        <div class="kpi-icon color-blue"><i class="fa-solid fa-boxes-stacked"></i></div>
+                        <div class="kpi-info">
+                            <h3>Tổng bưu gửi</h3>
+                            <p class="kpi-value" id="locton-kpi-total">0</p>
+                            <span class="kpi-sub">Số bưu gửi trong file tồn</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon color-yellow"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                        <div class="kpi-info">
+                            <h3>Bảng 1: Chưa phát</h3>
+                            <p class="kpi-value" id="locton-kpi-bang1">0</p>
+                            <span class="kpi-sub">Bưu gửi chưa phát thành công</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon color-green"><i class="fa-solid fa-circle-check"></i></div>
+                        <div class="kpi-info">
+                            <h3>Bảng 2: Đã giao/thu tiền</h3>
+                            <p class="kpi-value" id="locton-kpi-bang2">0</p>
+                            <span class="kpi-sub">Đã phát/thu tiền/chuyển tiếp</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon color-blue"><i class="fa-solid fa-building"></i></div>
+                        <div class="kpi-info">
+                            <h3>Bảng 3: Số bưu cục</h3>
+                            <p class="kpi-value" id="locton-kpi-bang3">0</p>
+                            <span class="kpi-sub">Bưu cục có bưu gửi tồn</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Data Tables & Tabs -->
+                <div class="grid-card" id="locton-table-card" style="display: none; padding: 20px;">
+                    <!-- Tabs -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                        <div style="display: flex; gap: 8px;" id="locton-tab-buttons">
+                            <button type="button" class="tab-btn active" id="tab-locton-3" style="background: none; border: none; font-family: var(--font-display); font-size: 14.5px; font-weight: 700; color: var(--accent-emerald); cursor: pointer; padding: 6px 14px; border-bottom: 3px solid var(--accent-emerald); margin-bottom: -11px;">
+                                <i class="fa-solid fa-table-list"></i> Bảng 3: Tổng hợp Bưu cục (<span id="locton-count-tab3">0</span>)
+                            </button>
+                            <button type="button" class="tab-btn" id="tab-locton-1" style="background: none; border: none; font-family: var(--font-display); font-size: 14.5px; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 6px 14px; margin-bottom: -11px;">
+                                <i class="fa-solid fa-clock"></i> Bảng 1: Chưa phát thành công (<span id="locton-count-tab1">0</span>)
+                            </button>
+                            <button type="button" class="tab-btn" id="tab-locton-2" style="background: none; border: none; font-family: var(--font-display); font-size: 14.5px; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 6px 14px; margin-bottom: -11px;">
+                                <i class="fa-solid fa-check-double"></i> Bảng 2: Đã giao / Thu tiền (<span id="locton-count-tab2">0</span>)
+                            </button>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div style="position: relative;">
+                                <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 13px;"></i>
+                                <input type="text" id="locton-search-input" class="input-field" placeholder="Tìm kiếm trong bảng..." style="padding-left: 34px; height: 36px; font-size: 13px; width: 220px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Table Container -->
+                    <div class="table-container" style="max-height: 560px; overflow-y: auto;">
+                        <table class="table" id="locton-table" style="width: 100%;">
+                            <thead id="locton-thead">
+                                <!-- Dynamic headers -->
+                            </thead>
+                            <tbody id="locton-tbody">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div class="pagination-container" style="margin-top: 16px;">
+                        <div class="pagination-left">
+                            <div class="pagination-info" id="locton-pagination-info">Hiển thị 0 - 0 trong tổng số 0 bản ghi</div>
+                            <div class="page-size-selector">
+                                <label for="locton-page-size">Hiển thị:</label>
+                                <select id="locton-page-size">
+                                    <option value="20">20 dòng</option>
+                                    <option value="50" selected>50 dòng</option>
+                                    <option value="100">100 dòng</option>
+                                    <option value="200">200 dòng</option>
+                                    <option value="500">500 dòng</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="pagination-buttons" id="locton-pagination-buttons">
+                            <button class="btn btn-secondary" id="btn-locton-prev" disabled><i class="fa-solid fa-chevron-left"></i> Trước</button>
+                            <button class="btn btn-secondary" id="btn-locton-next" disabled>Sau <i class="fa-solid fa-chevron-right"></i></button>
                         </div>
                     </div>
                 </div>
@@ -1165,6 +1308,6 @@
     </div>
 
     <!-- Script JS -->
-    <script src="/static/app.js?v=3.14.3"></script>
+    <script src="/static/app.js?v=3.15.0"></script>
 </body>
 </html>

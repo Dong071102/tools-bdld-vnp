@@ -1,0 +1,26 @@
+{
+  "excludeStatuses": [
+    "[BĐ8]Đã tới bưu cục nhận",
+    "[BĐ8]Đã xác nhận đi",
+    "Phát thành công",
+    "Đã phát thành công",
+    "Đã đóng chuyến thư đi",
+    "Đã thu tiền khách hàng (QR)",
+    "Đã thu tiền khách hàng",
+    "Đã thu tiền bưu tá",
+    "Mất bưu gửi",
+    "Trả tiền cho người gửi",
+    "Đã trả tiền"
+  ],
+  "excludeBC": [
+    "640000",
+    "641190",
+    "641430",
+    "670000",
+    "671040",
+    "671640",
+    "673300",
+    "674169",
+    "674790"
+  ]
+}

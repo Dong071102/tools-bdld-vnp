@@ -38,6 +38,15 @@ services:
     networks:
       - bdld-vnp-network
 
+  vnp-locton-backend:
+    image: ghcr.io/dong071102/tools-bdld-vnp-locton-backend:latest
+    container_name: vnp-locton-backend
+    restart: always
+    environment:
+      - PORT=${LOCTON_PORT:-3001}
+    networks:
+      - bdld-vnp-network
+
   tools-bdld-vnp-frontend:
     image: ghcr.io/dong071102/tools-bdld-vnp-frontend:latest
     container_name: tools-bdld-vnp-frontend
@@ -46,6 +55,7 @@ services:
       - "${FRONTEND_PORT:-9999}:80" # Mở duy nhất cổng cho giao diện gộp chính (mặc định: 9999)
     depends_on:
       - vnp-dinhvi-backend
+      - vnp-locton-backend
     networks:
       - bdld-vnp-network
 
