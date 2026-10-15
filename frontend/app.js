@@ -3732,6 +3732,42 @@ const LOCTON_EXCLUDE_BC = new Set([
     '673300', '674169', '674790'
 ]);
 
+function hasTargetBcPrefix(vt) {
+    if (!vt) return false;
+    const s = String(vt).trim();
+    // 1. Bắt đầu bằng 64, 67 hoặc 80 (vd: "670000", "641190 - Gia Nghĩa", "800000")
+    if (/^(64|67|80)/.test(s)) return true;
+    // 2. Chứa mã bưu cục (2-6 chữ số) có tiền tố 64, 67, 80 sau ký tự phân cách (vd: "BCKT (670000)", "Bưu điện 641190")
+    if (/(?:^|[^\d])(64|67|80)(?:\d{4}|\d{2}|[^\d]|$)/.test(s)) return true;
+    return false;
+}
+
+function isSpecialTransitStatus(status) {
+    if (!status) return false;
+    const s = String(status).trim();
+    const lower = s.toLowerCase();
+    if (s.includes('[BĐ8]Đã xác nhận đi') || s.includes('Đã xác nhận đi') || lower.includes('đã xác nhận đi') || lower.includes('da xac nhan di')) {
+        return true;
+    }
+    if (s.includes('Đã đóng chuyến thư đi') || lower.includes('đã đóng chuyến thư đi') || lower.includes('da dong chuyen thu di')) {
+        return true;
+    }
+    return false;
+}
+
+function shouldExcludeItem(status, location) {
+    if (isSpecialTransitStatus(status)) {
+        // Đối với "[BĐ8]Đã xác nhận đi" hoặc "Đã đóng chuyến thư đi":
+        // Vị trí cuối cùng ở bc có đầu 2 số 64, 67, 80 -> Bảng 1 (Hàng tồn)
+        if (hasTargetBcPrefix(location)) {
+            return false; // Hàng tồn -> Bảng 1
+        }
+        // Nếu không có -> Bảng 2 (Trạng thái khác)
+        return true; // Trạng thái khác -> Bảng 2
+    }
+    return isLoctonExcludedStatus(status);
+}
+
 function isLoctonExcludedStatus(status) {
     if (!status) return false;
     const s = String(status).trim();
@@ -3739,7 +3775,6 @@ function isLoctonExcludedStatus(status) {
     const lower = s.toLowerCase();
     if (lower.includes('phát thành công') && !lower.includes('không')) return true;
     if (lower.includes('thu tiền khách hàng') || lower.includes('thu tiền bưu tá')) return true;
-    if (lower.includes('đã đóng chuyến thư đi')) return true;
     return false;
 }
 
@@ -3797,7 +3832,7 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
     }
 
     // 1. Đọc file định vị (dinh_vi.xlsx)
-    if (onStage) onStage(1, 15, "Bước 1/4: Đọc file Định vị (dinh_vi.xlsx)...", "Đang trích xuất mã số hiệu và trạng thái cuối cùng");
+    if (onStage) onStage(1, 15, "Bước 1/4: Đọc file Định vị (dinh_vi.xlsx)...", "Đang trích xuất mã số hiệu, trạng thái và vị trí cuối cùng");
     await sleep(250);
 
     const bufDinhVi = await dinhViFile.arrayBuffer();
@@ -3816,13 +3851,49 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
 
     if (wsDinhVi && wsDinhVi['!ref']) {
         const range = window.XLSX.utils.decode_range(wsDinhVi['!ref']);
-        for (let r = 2; r <= range.e.r; r++) {
-            const cellB = wsDinhVi[window.XLSX.utils.encode_cell({ r, c: 1 })]; // Cột B
+        
+        let colSoHieu = 1;      // Cột B
+        let colTrangThai = 24;  // Cột Y
+        let colViTri = 23;      // Cột X
+        let dataStartRow = 2;   // Dòng 3
+
+        // Quét tự động header từ dòng 0 đến dòng 4
+        for (let r = range.s.r; r <= Math.min(range.s.r + 4, range.e.r); r++) {
+            for (let c = range.s.c; c <= range.e.c; c++) {
+                const cell = wsDinhVi[window.XLSX.utils.encode_cell({ r, c })];
+                if (cell && cell.v !== undefined && cell.v !== null) {
+                    const val = String(cell.v).trim().toLowerCase();
+                    if (val.includes('trạng thái cuối cùng') || val.includes('trang thai cuoi cung')) {
+                        colTrangThai = c;
+                        dataStartRow = Math.max(dataStartRow, r + 1);
+                    } else if (
+                        val.includes('vị trí cuối cùng') || val.includes('vi tri cuoi cung') ||
+                        val.includes('bưu cục phát hiện tại') || val.includes('đơn vị cuối cùng') ||
+                        val.startsWith('vị trí') || val.startsWith('vi tri')
+                    ) {
+                        colViTri = c;
+                        dataStartRow = Math.max(dataStartRow, r + 1);
+                    } else if ((val === 'số hiệu' || val === 'so hieu' || val.includes('mã bưu gửi') || val.includes('itemcode') || val === 'số hiệu bưu gửi') && !val.includes('khách hàng')) {
+                        colSoHieu = c;
+                        dataStartRow = Math.max(dataStartRow, r + 1);
+                    }
+                }
+            }
+        }
+
+        for (let r = dataStartRow; r <= range.e.r; r++) {
+            const cellB = wsDinhVi[window.XLSX.utils.encode_cell({ r, c: colSoHieu })];
             if (cellB && cellB.v !== undefined && cellB.v !== null) {
                 const soHieu = String(cellB.v).trim();
-                const cellY = wsDinhVi[window.XLSX.utils.encode_cell({ r, c: 24 })]; // Cột Y
-                const tt = cellY && cellY.v !== undefined && cellY.v !== null ? String(cellY.v).trim() : '';
-                dinhViMap.set(soHieu, tt);
+                if (!soHieu) continue;
+
+                const cellTT = wsDinhVi[window.XLSX.utils.encode_cell({ r, c: colTrangThai })];
+                const tt = cellTT && cellTT.v !== undefined && cellTT.v !== null ? String(cellTT.v).trim() : '';
+
+                const cellVT = wsDinhVi[window.XLSX.utils.encode_cell({ r, c: colViTri })];
+                const vt = cellVT && cellVT.v !== undefined && cellVT.v !== null ? String(cellVT.v).trim() : '';
+
+                dinhViMap.set(soHieu, { tt, vt });
             }
         }
     }
@@ -3865,7 +3936,16 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
             continue; // Chỉ xử lý các bưu gửi có trong file định vị (INNER JOIN)
         }
 
-        const ttcc = dinhViMap.get(maBG);
+        const dvInfo = dinhViMap.get(maBG);
+        let ttcc = '';
+        let vtcc = '';
+        if (typeof dvInfo === 'object' && dvInfo !== null) {
+            ttcc = dvInfo.tt || dvInfo.trangThai || '';
+            vtcc = dvInfo.vt || dvInfo.viTri || '';
+        } else {
+            ttcc = String(dvInfo || '').trim();
+        }
+
         const codVal = Number(getVal(item, ['COD', 'Tiền COD', 'Tien COD', 'Số tiền thu hộ'], 0)) || 0;
         const tlVal = Number(getVal(item, ['Trọng lượng', 'Khối lượng', 'TL'], 0)) || 0;
 
@@ -3876,13 +3956,14 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
             'Ngày đến BC phát': String(getVal(item, ['DK1', 'Ngày đến', 'Ngày đến BC', 'Ngày đến BC phát'])).trim(),
             'Thời gian tồn': String(getVal(item, ['Thời gian tồn', 'TG tồn', 'Thời gian lưu'])).trim(),
             'Trạng thái hiện tại': ttcc,
+            'Vị trí cuối cùng': vtcc,
             'Thời gian cập nhật': String(getVal(item, ['Thời gian quét', 'Thời gian cập nhật', 'TG quet'])).trim(),
             'Người ký nhận': String(getVal(item, ['Người ký nhận', 'Người nhận', 'Nguoi nhan'])).trim(),
             'Tiền COD': codVal,
             'Khối lượng': tlVal
         };
 
-        if (isLoctonExcludedStatus(ttcc)) {
+        if (shouldExcludeItem(ttcc, vtcc)) {
             bang2.push(rowData);
         } else {
             bang1.push(rowData);
@@ -4297,6 +4378,7 @@ function renderLoctonTable() {
                 <th style="width: 110px;">Ngày đến BC</th>
                 <th style="width: 100px;">TG tồn</th>
                 <th>Trạng thái định vị</th>
+                <th>Vị trí cuối cùng</th>
                 <th style="width: 140px;">TG cập nhật</th>
                 <th>Người nhận</th>
                 <th class="text-right" style="width: 110px;">Tiền COD</th>
@@ -4305,7 +4387,7 @@ function renderLoctonTable() {
         `;
 
         if (pageRows.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted" style="padding: 24px;">Không có dữ liệu</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="12" class="text-center text-muted" style="padding: 24px;">Không có dữ liệu</td></tr>`;
             return;
         }
 
@@ -4317,15 +4399,16 @@ function renderLoctonTable() {
                 <tr>
                     <td class="text-center">${startIdx + idx + 1}</td>
                     <td><strong>${r["Mã bưu gửi"] || ""}</strong></td>
-                    <td>${r["Mã BC phát"] || ""}</td>
-                    <td>${r["Tên BC phát"] || ""}</td>
-                    <td>${r["Ngày đến BC phát"] || ""}</td>
+                    <td>${r["Mã BC phát"] || r["Mã bưu cục"] || ""}</td>
+                    <td>${r["Tên BC phát"] || r["Bưu cục Phát"] || ""}</td>
+                    <td>${r["Ngày đến BC phát"] || r["DK1"] || ""}</td>
                     <td><span class="badge" style="background: var(--bg-secondary); font-size: 11.5px; padding: 2px 8px; border-radius: 4px;">${r["Thời gian tồn"] || ""}</span></td>
-                    <td><span class="badge" style="${statusBadgeClass} font-size: 11.5px; padding: 3px 8px; border-radius: 4px; font-weight: 600;">${r["Trạng thái hiện tại"] || "Chưa có thông tin"}</span></td>
-                    <td style="font-size: 12px; color: var(--text-muted);">${r["Thời gian cập nhật"] || ""}</td>
-                    <td>${r["Người ký nhận"] || ""}</td>
-                    <td class="text-right">${formatCurrency(r["Tiền COD"] || 0)}</td>
-                    <td class="text-right">${formatNumber(r["Khối lượng"] || 0)}</td>
+                    <td><span class="badge" style="${statusBadgeClass} font-size: 11.5px; padding: 3px 8px; border-radius: 4px; font-weight: 600;">${r["Trạng thái hiện tại"] || r["Trạng thái cuối cùng"] || "Chưa có thông tin"}</span></td>
+                    <td><span style="font-size: 12.5px; color: var(--text-primary); font-weight: 500;">${r["Vị trí cuối cùng"] || "-"}</span></td>
+                    <td style="font-size: 12px; color: var(--text-muted);">${r["Thời gian cập nhật"] || r["Thời gian quét"] || ""}</td>
+                    <td>${r["Người ký nhận"] || r["Bưu tá"] || ""}</td>
+                    <td class="text-right">${formatCurrency(r["Tiền COD"] || r["COD"] || 0)}</td>
+                    <td class="text-right">${formatNumber(r["Khối lượng"] || r["Trọng lượng"] || 0)}</td>
                 </tr>
             `;
         }).join("");
