@@ -3991,8 +3991,17 @@ function populateLoctonFilters(sourceList) {
                         : [...(loctonData.bang1 || []), ...(loctonData.bang2 || [])];
 
     statusSources.forEach(row => {
-        const st = String(row['Trạng thái hiện tại'] || row['Trạng thái cuối cùng'] || '').trim();
+        let st = String(row['Trạng thái hiện tại'] || row['Trạng thái cuối cùng'] || '').trim();
         if (st && st !== 'Chưa có thông tin') {
+            // Đối với các trạng thái chuyển tiếp đặc biệt, gom lại thành tên gốc (không chia theo bưu cục)
+            if (isSpecialTransitStatus(st)) {
+                const lower = st.toLowerCase();
+                if (lower.includes('xác nhận đi') || lower.includes('xac nhan di')) {
+                    st = '[BĐ8]Đã xác nhận đi';
+                } else if (lower.includes('đóng chuyến thư') || lower.includes('dong chuyen thu')) {
+                    st = 'Đã đóng chuyến thư đi';
+                }
+            }
             statusSet.add(st);
         }
     });
@@ -4660,7 +4669,15 @@ function renderLoctonTable() {
             // 3. Lọc theo Trạng thái
             if (loctonFilterStatus) {
                 const st = String(row['Trạng thái hiện tại'] || row['Trạng thái cuối cùng'] || '').trim();
-                if (st !== loctonFilterStatus) return false;
+                if (loctonFilterStatus === '[BĐ8]Đã xác nhận đi') {
+                    const lower = st.toLowerCase();
+                    if (!lower.includes('xác nhận đi') && !lower.includes('xac nhan di')) return false;
+                } else if (loctonFilterStatus === 'Đã đóng chuyến thư đi') {
+                    const lower = st.toLowerCase();
+                    if (!lower.includes('đóng chuyến thư') && !lower.includes('dong chuyen thu')) return false;
+                } else {
+                    if (st !== loctonFilterStatus) return false;
+                }
             }
 
             // 4. Lọc theo Tiền COD
