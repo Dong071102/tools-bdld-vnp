@@ -2,6 +2,8 @@
 
 Hệ thống quản lý, giám sát hàng tồn và tra cứu định vị bưu gửi chuyên biệt cho **Bưu điện tỉnh Lâm Đồng (VNPost)**. Tích hợp tự động crawl dữ liệu thời gian thực từ Power BI, hỗ trợ học tự động danh mục bưu cục, phân loại hàng tồn, đối soát lọc tồn bưu gửi và định vị bưu gửi đa luồng song song qua hệ thống VNPost BCCP.
 
+👉 **[Xem Tài Liệu Hướng Dẫn Sử Dụng Người Dùng Cuối Chi Tiết (Có Ảnh Chụp & Khoanh Vùng Minh Họa)](HUONG_DAN_SU_DUNG.md)**
+
 ---
 
 ## 🚀 Các tính năng nổi bật

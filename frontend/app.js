@@ -1185,22 +1185,59 @@ if (btnLocateExcel) {
         btnLocateExcel.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang lấy mã...`;
 
         try {
-            // Fetch all records with current filters (without pagination limit)
-            const queryParams = new URLSearchParams({
-                page: 1,
-                page_size: 100000,
-                search: filters.search,
-                pos_name: filters.pos_name,
-                loai_ton: filters.loai_ton,
-                status_name: filters.status_name,
-                nhom_kh: filters.nhom_kh
-            });
+            let codes = [];
 
-            const res = await fetch(`/api/detailed?${queryParams.toString()}`);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            // 1. Thử lấy danh sách mã siêu nhẹ dạng codes_only=true (nhanh, <100KB, không lỗi Content-Length)
+            try {
+                const queryParams = new URLSearchParams({
+                    codes_only: "true",
+                    search: filters.search || "",
+                    pos_name: filters.pos_name || "",
+                    loai_ton: filters.loai_ton || "",
+                    status_name: filters.status_name || "",
+                    nhom_kh: filters.nhom_kh || ""
+                });
 
-            const data = await res.json();
-            const codes = data.rows.map(r => r.item_code).filter(Boolean);
+                const res = await fetch(`/api/detailed?${queryParams.toString()}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && Array.isArray(data.codes)) {
+                        codes = data.codes;
+                    } else if (data && Array.isArray(data.rows)) {
+                        codes = data.rows.map(r => r.item_code).filter(Boolean);
+                    }
+                }
+            } catch (fastErr) {
+                console.warn("Lấy mã nhanh thất bại, thử phân trang an toàn:", fastErr);
+            }
+
+            // 2. Dự phòng an toàn: Phân trang nhỏ (1.000 dòng/lần) nếu cách 1 chưa có dữ liệu hoặc lỗi proxy
+            if (!codes || codes.length === 0) {
+                const pageSize = 1000;
+                let page = 1;
+                let hasMore = true;
+                while (hasMore) {
+                    const queryParams = new URLSearchParams({
+                        page: page,
+                        page_size: pageSize,
+                        search: filters.search || "",
+                        pos_name: filters.pos_name || "",
+                        loai_ton: filters.loai_ton || "",
+                        status_name: filters.status_name || "",
+                        nhom_kh: filters.nhom_kh || ""
+                    });
+                    const res = await fetch(`/api/detailed?${queryParams.toString()}`);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const data = await res.json();
+                    const pageCodes = (data.rows || []).map(r => r.item_code).filter(Boolean);
+                    codes.push(...pageCodes);
+                    if (pageCodes.length < pageSize || codes.length >= (data.total || 0) || page > 50) {
+                        hasMore = false;
+                    } else {
+                        page++;
+                    }
+                }
+            }
 
             if (codes.length === 0) {
                 showToast("Không tìm thấy bưu gửi nào khớp bộ lọc hiện tại để định vị.", "warning");
@@ -2002,75 +2039,176 @@ btnStartExport.addEventListener("click", async () => {
     progressBar.style.width = "90%";
     progressText.textContent = "90%";
 
-    try {
-        const arrayBufferToBase64 = (buffer) => {
-            let binary = "";
-            const bytes = new Uint8Array(buffer);
-            const len = bytes.byteLength;
-            for (let i = 0; i < len; i++) {
-                binary += String.fromCharCode(bytes[i]);
-            }
-            return window.btoa(binary);
-        };
+    // Hàm gộp file Excel trực tiếp trong trình duyệt qua SheetJS (không phụ thuộc vào mạng, không lỗi Failed to fetch)
+    const mergeExcelBuffersInBrowser = (buffers) => {
+        if (!window.XLSX) {
+            throw new Error("Thư viện SheetJS (XLSX) chưa được tải.");
+        }
+        if (buffers.length === 1) {
+            return new Blob([buffers[0]], { 
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
+            });
+        }
 
-        const base64Buffers = validBuffers.map(buf => arrayBufferToBase64(buf));
+        const mergedRows = [];
+        let headerRow = null;
 
-        const mergeRes = await fetch(`${API_BASE_DINHVI}/api/merge-and-save`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                ...getHeaders()
-            },
-            body: JSON.stringify({
-                buffers: base64Buffers,
-                totalCodes: codes.length
-            })
-        });
-
-        if (mergeRes.ok) {
-            const blob = await mergeRes.blob();
-            let fileName = `DanhSachBuuGui_Gop_${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}.xlsx`;
-            const disposition = mergeRes.headers.get("content-disposition");
-            if (disposition && disposition.indexOf("filename=") !== -1) {
-                const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
-                if (matches != null && matches[1]) {
-                    fileName = matches[1].replace(/['"]/g, '');
-                }
-            }
-
-            const downloadUrl = window.URL.createObjectURL(blob);
-            const downloadBtn = document.getElementById("btn-download-export-file");
-            if (downloadBtn) {
-                downloadBtn.href = downloadUrl;
-                downloadBtn.download = fileName;
-            }
-            document.getElementById("export-download-wrapper").style.display = "block";
-
-            // Tự động tải xuống file Excel
-            const a = document.createElement("a");
-            a.href = downloadUrl;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-
-            progressBar.style.width = "100%";
-            progressText.textContent = "100%";
-            addExportLog(`Hoàn tất! Xuất thành công ${successCount}/${codes.length} bưu gửi. Đang tải file...`, "success");
-        } else {
-            let errorMsg = "Lỗi gộp dữ liệu Excel.";
+        for (let i = 0; i < buffers.length; i++) {
             try {
-                const errData = await mergeRes.json();
-                if (errData && errData.error) errorMsg = errData.error;
-            } catch (e) {}
+                const wb = window.XLSX.read(buffers[i], { type: "array" });
+                const sheetName = wb.SheetNames[0];
+                if (!sheetName) continue;
+                const ws = wb.Sheets[sheetName];
+                const rows = window.XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+                if (!rows || rows.length === 0) continue;
+
+                if (!headerRow) {
+                    headerRow = rows[0];
+                    mergedRows.push(headerRow);
+                }
+
+                // Lấy các dòng dữ liệu, bỏ qua header từ lô thứ 2 trở đi
+                for (let r = 1; r < rows.length; r++) {
+                    const row = rows[r];
+                    if (row && row.some(cell => String(cell).trim() !== "")) {
+                        mergedRows.push(row);
+                    }
+                }
+            } catch (err) {
+                console.warn(`Lỗi đọc lô ${i + 1} bằng SheetJS:`, err);
+            }
+        }
+
+        if (mergedRows.length === 0) {
+            throw new Error("Không có hàng dữ liệu nào được trích xuất từ các lô.");
+        }
+
+        const newWb = window.XLSX.utils.book_new();
+        const newWs = window.XLSX.utils.aoa_to_sheet(mergedRows);
+        window.XLSX.utils.book_append_sheet(newWb, newWs, "DanhSachBuuGui");
+        const outBytes = window.XLSX.write(newWb, { bookType: "xlsx", type: "array" });
+        return new Blob([outBytes], { 
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
+        });
+    };
+
+    try {
+        let blob = null;
+        let fileName = `DanhSachBuuGui_Gop_${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}.xlsx`;
+
+        // 1. Ưu tiên: Gộp trực tiếp trong trình duyệt qua SheetJS (Cực nhanh, 100% tin cậy, không gửi base64 qua mạng)
+        if (window.XLSX && validBuffers.length > 0) {
+            try {
+                blob = mergeExcelBuffersInBrowser(validBuffers);
+                addExportLog(`Gộp thành công ${validBuffers.length} lô dữ liệu trực tiếp trong trình duyệt.`, "success");
+            } catch (clientMergeErr) {
+                console.warn("Gộp trình duyệt thất bại, thử chuyển sang máy chủ:", clientMergeErr);
+                blob = null;
+            }
+        }
+
+        // 2. Dự phòng: Gộp trên máy chủ nếu trình duyệt chưa có SheetJS
+        if (!blob) {
+            const arrayBufferToBase64 = (buffer) => {
+                let binary = "";
+                const bytes = new Uint8Array(buffer);
+                const len = bytes.byteLength;
+                const chunkSize = 0x8000;
+                for (let i = 0; i < len; i += chunkSize) {
+                    binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + chunkSize, len)));
+                }
+                return window.btoa(binary);
+            };
+
+            const base64Buffers = validBuffers.map(buf => arrayBufferToBase64(buf));
+
+            const mergeRes = await fetch(`${API_BASE_DINHVI}/api/merge-and-save`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...getHeaders()
+                },
+                body: JSON.stringify({
+                    buffers: base64Buffers,
+                    totalCodes: codes.length
+                })
+            });
+
+            if (mergeRes.ok) {
+                blob = await mergeRes.blob();
+                const disposition = mergeRes.headers.get("content-disposition");
+                if (disposition && disposition.indexOf("filename=") !== -1) {
+                    const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+                    if (matches != null && matches[1]) {
+                        fileName = matches[1].replace(/['"]/g, '');
+                    }
+                }
+            } else {
+                let errorMsg = "Lỗi gộp dữ liệu Excel.";
+                try {
+                    const errData = await mergeRes.json();
+                    if (errData && errData.error) errorMsg = errData.error;
+                } catch (e) {}
+                throw new Error(errorMsg);
+            }
+        }
+
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const downloadBtn = document.getElementById("btn-download-export-file");
+        if (downloadBtn) {
+            downloadBtn.href = downloadUrl;
+            downloadBtn.download = fileName;
+        }
+        document.getElementById("export-download-wrapper").style.display = "block";
+
+        // Tự động tải xuống file Excel
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        progressBar.style.width = "100%";
+        progressText.textContent = "100%";
+        addExportLog(`Hoàn tất! Xuất thành công ${successCount}/${codes.length} bưu gửi. Đang tải file...`, "success");
+
+    } catch (err) {
+        // Cứu cánh cuối cùng: nếu kết nối mạng thất bại, thử ép gộp bằng SheetJS lần nữa
+        let recovered = false;
+        if (window.XLSX && validBuffers.length > 0) {
+            try {
+                const blob = mergeExcelBuffersInBrowser(validBuffers);
+                const fileName = `DanhSachBuuGui_Gop_${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}.xlsx`;
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const downloadBtn = document.getElementById("btn-download-export-file");
+                if (downloadBtn) {
+                    downloadBtn.href = downloadUrl;
+                    downloadBtn.download = fileName;
+                }
+                document.getElementById("export-download-wrapper").style.display = "block";
+
+                const a = document.createElement("a");
+                a.href = downloadUrl;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+
+                progressBar.style.width = "100%";
+                progressText.textContent = "100%";
+                addExportLog(`Đã khôi phục và gộp thành công ${validBuffers.length} lô qua SheetJS! Đang tải file...`, "success");
+                recovered = true;
+            } catch (recoveryErr) {
+                console.error("Khôi phục gộp file thất bại:", recoveryErr);
+            }
+        }
+
+        if (!recovered) {
             progressBar.style.width = "0%";
             progressText.textContent = "0%";
-            addExportLog(`Lỗi: ${errorMsg}`, "error");
+            addExportLog(`Lỗi kết nối gộp dữ liệu: ${err.message}`, "error");
         }
-    } catch (err) {
-        progressBar.style.width = "0%";
-        progressText.textContent = "0%";
-        addExportLog(`Lỗi kết nối gộp dữ liệu: ${err.message}`, "error");
     } finally {
         exportLoading = false;
         btnStartExport.disabled = false;

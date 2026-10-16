@@ -172,14 +172,28 @@ function decodeExcelBytes(buffer) {
 function extractHtmlRows(html) {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const rows = Array.from(doc.getElementsByTagName("tr"));
-  return rows.map((row) => ({
-    cells: Array.from(row.querySelectorAll("th,td")).map((cell, index) => ({
-      col: colName(index + 1),
-      style: "",
-      type: "inlineStr",
-      value: cell.textContent.replace(/\s+/g, " ").trim(),
-    })),
-  }));
+  return rows.map((row) => {
+    const cellNodes = [];
+    if (row.childNodes) {
+      for (let i = 0; i < row.childNodes.length; i++) {
+        const node = row.childNodes[i];
+        if (node.nodeType === 1) { // ELEMENT_NODE
+          const tag = (node.nodeName || "").toLowerCase();
+          if (tag === "td" || tag === "th") {
+            cellNodes.push(node);
+          }
+        }
+      }
+    }
+    return {
+      cells: cellNodes.map((cell, index) => ({
+        col: colName(index + 1),
+        style: "",
+        type: "inlineStr",
+        value: (cell.textContent || "").replace(/\s+/g, " ").trim(),
+      })),
+    };
+  });
 }
 
 function buildHtmlWorkbook(rows) {

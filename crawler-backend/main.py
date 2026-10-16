@@ -515,7 +515,8 @@ def get_detailed(
     status_name: str = "",
     nhom_kh: str = "",
     sort_col: str = "item_code",
-    sort_dir: str = "asc"
+    sort_dir: str = "asc",
+    codes_only: bool = False
 ):
     """Get detailed report data with server-side pagination, searching, sorting, and filtering."""
     conn = get_connection(with_db=True)
@@ -561,6 +562,19 @@ def get_detailed(
                 params.extend(nhom_list)
             
         where_str = " AND ".join(where_clauses)
+        
+        # Fast path: If only codes are requested, return lightweight distinct list
+        if codes_only:
+            codes_sql = f"SELECT DISTINCT item_code FROM detailed_report_staging WHERE {where_str}"
+            with conn.cursor() as cursor:
+                cursor.execute(codes_sql, tuple(params))
+                rows = cursor.fetchall()
+                codes = [r[0] for r in rows if r[0]]
+            return {
+                "total": len(codes),
+                "codes": codes,
+                "rows": [{"item_code": c} for c in codes]
+            }
         
         # Validation of sort column to prevent SQL injection
         allowed_sort_cols = ["item_code", "pos_code", "pos_name", "dk1", "status_name", "loai_ton", "cod_amount", "weight", "updated_at", "postman_name", "nhom_kh"]
