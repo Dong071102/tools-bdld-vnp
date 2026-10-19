@@ -90,10 +90,12 @@ def scheduler_thread():
     """
     Background scheduler to:
     1. Probe URL health immediately on startup.
-    2. Run crawl every 10 minutes.
-    3. Run daily snapshot at 00:00 midnight.
+    2. Run initial crawl on startup.
+    3. Run fixed scheduled crawl at 5:00 AM, 12:00 PM (noon), and 18:00 PM (6:00 PM).
+    4. Run daily snapshot at 00:00 midnight.
     """
-    logger.info("Background scheduler thread started.")
+    SCHEDULED_HOURS = [5, 12, 18]  # 5h sáng, 12h trưa, 6h tối (18h)
+    logger.info(f"Background scheduler thread started. Fixed crawl schedule: {SCHEDULED_HOURS}.")
     global last_crawl_url_error, last_crawl_error_detail, last_crawl_http_status, last_crawl_status
 
     # 1. Quick probe on startup
@@ -114,24 +116,26 @@ def scheduler_thread():
     time.sleep(5)
     run_crawler_task()
     
-    last_crawl_run = datetime.now()
+    last_crawl_slot = None  # Tracks (date, hour)
     last_snapshot_date = datetime.now().date() - timedelta(days=1)  # force run today if not done
     
     while True:
         try:
             now = datetime.now()
+            today = now.date()
+            current_hour = now.hour
             
             # 1. Check for midnight snapshot (00:00)
-            if now.hour == 0 and now.date() > last_snapshot_date:
-                logger.info(f"Midnight reached. Creating daily snapshot for date {now.date()}...")
+            if current_hour == 0 and today > last_snapshot_date:
+                logger.info(f"Midnight reached. Creating daily snapshot for date {today}...")
                 create_daily_snapshot()
-                last_snapshot_date = now.date()
+                last_snapshot_date = today
                 
-            # 2. Run crawl every 10 minutes
-            if (now - last_crawl_run).total_seconds() >= 600: # 10 minutes
-                logger.info("10 minutes elapsed. Running scheduled crawl...")
+            # 2. Run crawl at fixed hours: 5:00 AM, 12:00 PM, 18:00 PM (6:00 PM)
+            if current_hour in SCHEDULED_HOURS and (today, current_hour) != last_crawl_slot:
+                logger.info(f"Fixed schedule reached ({current_hour:02d}:00). Running scheduled crawl...")
+                last_crawl_slot = (today, current_hour)
                 run_crawler_task()
-                last_crawl_run = now
                 
         except Exception as e:
             logger.error(f"Error in scheduler loop: {e}")

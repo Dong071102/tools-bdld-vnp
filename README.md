@@ -9,7 +9,7 @@ Hệ thống quản lý, giám sát hàng tồn và tra cứu định vị bưu 
 ## 🚀 Các tính năng nổi bật
 
 - 📊 **Dashboard Giám sát Hàng Tồn Thời Gian Thực:**
-  - Tự động đồng bộ dữ liệu snapshot từ Power BI của Tổng công ty mỗi **10 phút**.
+  - Tự động đồng bộ dữ liệu snapshot từ Power BI của Tổng công ty vào **5h sáng, 12h trưa và 18h tối** (hoặc đồng bộ thủ công bất cứ lúc nào).
   - Tự động bóc tách và phân loại theo các khoảng thời gian tồn: `≥3 ngày`, `≥4 ngày`, `≥5 ngày`, `≥7 ngày`, `≥14 ngày`.
   - Tùy biến linh hoạt các cột thời gian tham gia tính **Tổng tồn toàn tỉnh**.
   - Đánh dấu màu nổi bật (Highlight) tự động theo ngưỡng số lượng bưu gửi tồn.
@@ -93,7 +93,7 @@ tools-bdld-vnp/
 
 ```mermaid
 flowchart TD
-    PBI[Power BI Cloud] -->|Mỗi 10 phút| CRW[Python Crawler Backend :8000]
+    PBI[Power BI Cloud] -->|5h, 12h, 18h| CRW[Python Crawler Backend :8000]
     CRW -->|Auto-learn pos_code| PCFG[(SQL Server: pos_config)]
     CRW -->|TRUNCATE & INSERT| STG[(SQL Server: detailed_report_staging)]
     
@@ -106,7 +106,7 @@ flowchart TD
 ```
 
 ### A. Tiến trình Crawl & Học bưu cục tự động
-1. **Lịch trình:** Định kỳ 10 phút, tiến trình ngầm kiểm tra kết nối URL Power BI và cào dữ liệu báo cáo mới nhất.
+1. **Lịch trình:** Tự động chạy định kỳ vào **5h sáng, 12h trưa và 18h tối** mỗi ngày (hoặc người dùng bấm nút "Đồng bộ" để chạy ngay lập tức).
 2. **Khám phá Model động:** Gọi API `modelsAndExploration` của Power BI để lấy `modelId` mới nhất thời gian thực.
 3. **Cập nhật Staging:** Dữ liệu mới được nạp vào bảng tạm `#detailed_report_staging_temp` và chuyển sang `detailed_report_staging`.
 4. **Tự động học Bưu cục mới:**
