@@ -90,35 +90,6 @@ export async function initDatabase() {
     END
   `);
 
-  await pool.request().query(`
-    IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[export_history]') AND type in (N'U'))
-    BEGIN
-      CREATE TABLE [dbo].[export_history] (
-        id INT IDENTITY(1,1) PRIMARY KEY,
-        user_id INT NOT NULL,
-        export_time DATETIME DEFAULT GETDATE(),
-        total_codes INT NOT NULL,
-        success_codes INT NOT NULL,
-        file_name VARCHAR(255) NOT NULL,
-        file_data_blob VARBINARY(MAX),
-        status VARCHAR(50) NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES [dbo].[users](id) ON DELETE CASCADE
-      );
-    END
-  `);
-
-  await pool.request().query(`
-    IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[exported_items]') AND type in (N'U'))
-    BEGIN
-      CREATE TABLE [dbo].[exported_items] (
-        id INT IDENTITY(1,1) PRIMARY KEY,
-        history_id INT NOT NULL,
-        tracking_code VARCHAR(100) NOT NULL,
-        data_json NVARCHAR(MAX) NOT NULL,
-        FOREIGN KEY (history_id) REFERENCES [dbo].[export_history](id) ON DELETE CASCADE
-      );
-    END
-  `);
 
   console.log(`[Database] Đồng bộ các bảng SQL Server thành công.`);
 }

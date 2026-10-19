@@ -168,37 +168,6 @@ def init_db():
                 END
             """)
             
-            # export_history table
-            cursor.execute("""
-                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'export_history')
-                BEGIN
-                    CREATE TABLE export_history (
-                        id INT IDENTITY(1,1) PRIMARY KEY,
-                        user_id INT NOT NULL,
-                        export_time DATETIME DEFAULT GETDATE(),
-                        total_codes INT NOT NULL,
-                        success_codes INT NOT NULL,
-                        file_name VARCHAR(255) NOT NULL,
-                        file_data_blob VARBINARY(MAX),
-                        status VARCHAR(50) NOT NULL,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                    )
-                END
-            """)
-
-            # exported_items table
-            cursor.execute("""
-                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'exported_items')
-                BEGIN
-                    CREATE TABLE exported_items (
-                        id INT IDENTITY(1,1) PRIMARY KEY,
-                        history_id INT NOT NULL,
-                        tracking_code VARCHAR(100) NOT NULL,
-                        data_json NVARCHAR(MAX) NOT NULL,
-                        FOREIGN KEY (history_id) REFERENCES export_history(id) ON DELETE CASCADE
-                    )
-                END
-            """)
 
             # pos_config table: stores list of POS with active display toggle and auto-learned type
             cursor.execute("""
