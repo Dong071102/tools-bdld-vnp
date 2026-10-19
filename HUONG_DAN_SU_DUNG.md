@@ -97,15 +97,18 @@ Nằm ngay dưới phần tiêu đề, cung cấp 3 chỉ số cốt lõi về t
 
 ---
 
-### 2.2. Cấu Hình Hiển Thị Bưu Cục Tồn & Lưu Ý Phạm Vi Power BI
+### 2.2. Cấu Hình Hiển Thị & Đổi Tên Bưu Cục Tồn (Lưu Ý Phạm Vi Power BI)
 
 ![Hình 2.2 - Modal Cấu hình hiển thị bưu cục](docs/images/02_cau_hinh_buu_cuc.png)
 
-* **Vị trí nút bấm**: Nằm tại góc trên bên phải bảng ma trận: Nút `[ 🏢 Cấu hình hiển thị bưu cục ]`.
+* **Vị trí nút bấm**: Nằm tại góc trên bên phải bảng ma trận: Nút `[ 🏢 Cấu hình hiển thị bưu cục ]` (hoặc vào menu **Cài đặt hệ thống -> Tab Cấu hình danh sách & Tên bưu cục**).
 * **Cách thao tác**:
   1. **Ô tìm kiếm nhanh**: Nhập mã bưu cục (ví dụ: `670000`, `671040`) hoặc tên bưu cục để định vị nhanh dòng cần chỉnh.
   2. **Công tắc Bật/Tắt (Toggle Switch)**: Gạt bật công tắc màu xanh cho các bưu cục phát cần theo dõi; gạt tắt các bưu cục trung chuyển/khai thác không cần theo dõi.
-  3. **Nút Lưu**: Nhấn **`[ 💾 Lưu cấu hình bưu cục ]`** ở góc dưới modal để lưu thiết lập vào LocalStorage của trình duyệt. Số liệu bảng ma trận sẽ tự động tính toán lại ngay lập tức.
+  3. **Chỉnh sửa Tên bưu cục theo ý muốn**:
+     * Trực tiếp nhấp vào ô nhập liệu tại cột **"Tên bưu cục"** để sửa lại tên theo quy ước nội bộ của đơn vị (ví dụ: đổi `BCP Đà Lạt` thành `Bưu cục Phát Đà Lạt`).
+     * Tên mới sẽ được tự động đồng bộ lên toàn bộ giao diện: Dashboard ma trận, Bộ lọc tìm kiếm và bảng Chi tiết bưu gửi tồn.
+  4. **Nút Lưu**: Nhấn **`[ 💾 Lưu cấu hình & Áp dụng ]`** ở góc dưới modal để lưu thiết lập vào cơ sở dữ liệu. Bảng ma trận và báo cáo sẽ tự động làm mới ngay lập tức theo tên mới.
 
 > [!IMPORTANT]
 > **Lưu ý về Phạm vi thu thập dữ liệu từ Power BI**:

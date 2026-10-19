@@ -3461,17 +3461,34 @@ function renderPosConfigRows(tbodyEl, configs, isModal = false) {
         }
 
         const checkboxId = `${isModal ? 'modal' : 'panel'}-pos-check-${item.pos_code}`;
+        const nameInputId = `${isModal ? 'modal' : 'panel'}-pos-name-${item.pos_code}`;
+        const escapedName = (item.pos_name || '').replace(/"/g, '&quot;');
 
         tr.innerHTML = `
             <td class="text-center" style="font-weight: 500; color: var(--text-muted);">${idx + 1}</td>
             <td class="text-center">
-                <input type="checkbox" id="${checkboxId}" data-code="${item.pos_code}" ${item.is_active ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: var(--accent-emerald); cursor: pointer;">
+                <input type="checkbox" id="${checkboxId}" data-code="${item.pos_code}" ${item.is_active ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: var(--accent-emerald); cursor: pointer;" title="Bật/tắt hiển thị">
             </td>
-            <td><code style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-emerald); font-size: 13.5px;">${item.pos_code}</code></td>
-            <td style="font-weight: 600; color: var(--text-primary);">${item.pos_name}</td>
+            <td><code style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-emerald); font-size: 13px;">${item.pos_code}</code></td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 6px; position: relative;">
+                    <input type="text" id="${nameInputId}" class="input-field pos-name-input" data-code="${item.pos_code}" value="${escapedName}" placeholder="Nhập tên bưu cục..." title="Nhấp để sửa tên bưu cục" style="height: 32px; font-size: 13px; font-weight: 600; width: 100%; border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 10px; background: var(--bg-primary); color: var(--text-primary); transition: all 0.2s ease;">
+                </div>
+            </td>
             <td class="text-center">${typeBadge}</td>
             <td class="text-right" style="font-family: var(--font-mono); font-weight: 600; color: ${item.item_count > 0 ? 'var(--text-primary)' : 'var(--text-muted)'};">${formatNumber(item.item_count || 0)}</td>
         `;
+
+        const nameInput = tr.querySelector(`#${nameInputId}`);
+        if (nameInput) {
+            nameInput.addEventListener("input", (e) => {
+                const val = e.target.value;
+                const target = currentPosConfigs.find(c => c.pos_code === item.pos_code);
+                if (target) {
+                    target.pos_name = val;
+                }
+            });
+        }
 
         const cb = tr.querySelector(`#${checkboxId}`);
         cb.addEventListener("change", (e) => {
@@ -3556,6 +3573,7 @@ async function savePosConfigChanges() {
         const payload = {
             configs: currentPosConfigs.map(c => ({
                 pos_code: c.pos_code,
+                pos_name: c.pos_name ? c.pos_name.trim() : "",
                 is_active: Boolean(c.is_active)
             }))
         };

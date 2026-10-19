@@ -334,6 +334,15 @@ def save_detailed_data(rows):
                 FROM #detailed_report_staging_temp
             """)
 
+            # Step 3.5: Apply configured pos_name from pos_config to detailed_report_staging
+            cursor.execute("""
+                UPDATE d
+                SET d.pos_name = c.pos_name
+                FROM detailed_report_staging d
+                INNER JOIN pos_config c ON d.pos_code = c.pos_code
+                WHERE c.pos_name IS NOT NULL AND LTRIM(RTRIM(c.pos_name)) <> '' AND c.pos_name <> d.pos_name
+            """)
+
             # Step 4: Auto-learn new post offices into pos_config
             # Rule: If pos_code is new, insert with:
             # - is_active = 1 if pos_name starts with BCP

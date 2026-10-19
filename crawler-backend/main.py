@@ -204,6 +204,7 @@ def trigger_crawl(background_tasks: BackgroundTasks):
 class PosConfigItem(BaseModel):
     pos_code: str
     is_active: bool
+    pos_name: Optional[str] = None
 
 class PosConfigRequest(BaseModel):
     configs: list[PosConfigItem]
@@ -247,18 +248,35 @@ def get_pos_configs():
 
 @app.post("/api/pos-config")
 def update_pos_configs(req: PosConfigRequest):
-    """Batch update is_active status for post offices."""
+    """Batch update is_active status and pos_name for post offices."""
     if not req.configs:
         return {"status": "ok", "updated": 0}
     conn = get_connection(with_db=True, autocommit=False)
     try:
         with conn.cursor() as cursor:
             for item in req.configs:
-                cursor.execute("""
-                    UPDATE pos_config 
-                    SET is_active = %s, updated_at = GETDATE()
-                    WHERE pos_code = %s
-                """, (1 if item.is_active else 0, item.pos_code.strip()))
+                code = item.pos_code.strip()
+                is_act = 1 if item.is_active else 0
+                new_name = item.pos_name.strip() if item.pos_name else None
+                
+                if new_name:
+                    cursor.execute("""
+                        UPDATE pos_config 
+                        SET is_active = %s, pos_name = %s, updated_at = GETDATE()
+                        WHERE pos_code = %s
+                    """, (is_act, new_name, code))
+                    
+                    cursor.execute("""
+                        UPDATE detailed_report_staging
+                        SET pos_name = %s
+                        WHERE pos_code = %s
+                    """, (new_name, code))
+                else:
+                    cursor.execute("""
+                        UPDATE pos_config 
+                        SET is_active = %s, updated_at = GETDATE()
+                        WHERE pos_code = %s
+                    """, (is_act, code))
         conn.commit()
         return {"status": "ok", "updated": len(req.configs)}
     except Exception as e:
