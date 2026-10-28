@@ -418,7 +418,11 @@ app.post('/api/vnpost/add-session', authenticateToken, async (req, res) => {
 
 // Đặt lại các luồng kết nối
 app.post('/api/vnpost/reset-sessions', authenticateToken, async (req, res) => {
-  const username = req.user.username;
+  const username = req.user.username || req.user.sub || req.user.id;
+  if (!username) {
+    return res.status(400).json({ error: 'Không tìm thấy thông tin tài khoản người dùng từ Token.' });
+  }
+
   try {
     await run(
       `UPDATE users SET vnpost_cookie = ? WHERE username = ?`,
@@ -430,13 +434,18 @@ app.post('/api/vnpost/reset-sessions', authenticateToken, async (req, res) => {
       message: 'Đã đặt lại tất cả các luồng kết nối thành công.'
     });
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi hệ thống khi đặt lại luồng.' });
+    console.error('[Reset Sessions Error]:', err);
+    res.status(500).json({ error: 'Lỗi hệ thống khi đặt lại luồng: ' + err.message });
   }
 });
 
 // Lấy trạng thái hoạt động thực tế của từng luồng phiên kết nối
 app.get('/api/vnpost/sessions-status', authenticateToken, async (req, res) => {
-  const username = req.user.username;
+  const username = req.user.username || req.user.sub || req.user.id;
+  if (!username) {
+    return res.status(400).json({ error: 'Không tìm thấy thông tin tài khoản người dùng từ Token.' });
+  }
+
   try {
     const user = await get(`SELECT vnpost_cookie FROM users WHERE username = ?`, [username]);
     if (!user || !user.vnpost_cookie) {
@@ -471,7 +480,8 @@ app.get('/api/vnpost/sessions-status', authenticateToken, async (req, res) => {
             'Cookie': cookiesStrFormatted,
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-          }
+          },
+          signal: AbortSignal.timeout(8000)
         });
         const html = await response.text();
         const active = !(html.includes('btnLogin') || html.includes('txtUser') || html.includes('txtUsername'));

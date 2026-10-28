@@ -9,10 +9,7 @@
 ## 📑 MỤC LỤC CHI TIẾT
 
 1. [Phần 1: Các Chức Năng Cơ Bản & Lưu Ý](#-phần-1-các-chức-năng-cơ-bản--lưu-ý)
-   * 1.1. Địa chỉ truy cập hệ thống
-   * 1.2. Hướng dẫn Đăng nhập & Đăng xuất
-   * 1.3. Đồng bộ dữ liệu Power BI & Mẹo xử lý khi dữ liệu không hiển thị
-2. [Phần 2: Dashboard Tổng Quan Hàng Tồn](#-phần-2-dashboard-tổng-quan-hàng-tồn)
+   * 1.1. Địa chỉ truy cập hệ th�2. [Phần 2: Dashboard Tổng Quan Hàng Tồn](#-phần-2-dashboard-tổng-quan-hàng-tồn)
    * 2.1. Khối thẻ thống kê KPI tổng hợp
    * 2.2. Cấu hình hiển thị bưu cục tồn & Lưu ý phạm vi Power BI
    * 2.3. Cấu hình mốc thời gian tồn hiển thị trên bảng Ma trận
@@ -23,12 +20,25 @@
    * 3.2. Cấu hình thứ tự & Ẩn/Hiện cột hiển thị
    * 3.3. Chức năng bộ lọc & Giải thích chi tiết các trường tìm kiếm
    * 3.4. Chức năng Xuất Excel chi tiết & Nút Định vị nhanh
-4. [Phần 4: Định Vị Bưu Gửi Đa Luồng (VNPost Trace)](#-phần-4-định-vị-bưu-gửi-đa-luồng-vnpost-trace)
-   * 4.1. Giao diện tổng quan & Vị trí các thành phần
-   * 4.2. Hướng dẫn chi tiết Quy trình tạo luồng & Cách nhập Captcha
-   * 4.3. Luồng xử lý định vị toàn trình, Tiến trình & Tải file kết quả
-5. [Phần 5: Mô-đun Đối Soát & Lọc Tồn Bưu Gửi](#-phần-5-mô-đun-đối-soát--lọc-tồn-bưu-gửi)
-   * 5.1. Nạp 2 file dữ liệu đầu vào bắt buộc & Khởi chạy Lọc Tồn
+4. [Phần 4: Thống Kê & Đối Chiếu Hàng Tồn Đa Mốc Thời Gian](#-phần-4-thống-kê--đối-chiếu-hàng-tồn-đa-mốc-thời-gian)
+   * 4.1. Vị trí Menu Tab "Thống Kê"
+   * 4.2. Thanh công cụ chọn Ngày đối chiếu (T), Bưu cục & Nhóm KH
+   * 4.3. Ý nghĩa 4 Khối thẻ KPI Delta (T vs T-1, T-5, T-7, T-14) & Tiền COD
+   * 4.4. Biểu đồ đường xu hướng 14 ngày & Biểu đồ cơ cấu nhóm tuổi tồn
+   * 4.5. Bảng ma trận đối chiếu tồn chi tiết từng Bưu cục & Đánh giá
+   * 4.6. Xuất báo cáo Excel 2 Sheets chuẩn hóa
+5. [Phần 5: Định Vị Bưu Gửi Đa Luồng (VNPost Trace)](#-phần-5-định-vị-bưu-gửi-đa-luồng-vnpost-trace)
+   * 5.1. Giao diện tổng quan & Vị trí các thành phần
+   * 5.2. Hướng dẫn chi tiết Quy trình tạo luồng & Cách nhập Captcha
+   * 5.3. Luồng xử lý định vị toàn trình, Tiến trình & Tải file kết quả
+6. [Phần 6: Mô-đun Đối Soát & Lọc Tồn Bưu Gửi](#-phần-6-mô-đun-đối-soát--lọc-tồn-bưu-gửi)
+   * 6.1. Nạp 2 file dữ liệu đầu vào bắt buộc & Khởi chạy Lọc Tồn
+   * 6.2. Thời gian xử lý & Màn hình hiệu ứng Animation trực quan
+   * 6.3. Khối thẻ thống kê KPI kết quả đối soát
+   * 6.4. Chi tiết 3 Bảng dữ liệu kết quả & Quy tắc phân loại nghiệp vụ
+   * 6.5. Hướng dẫn sử dụng Toolbar bộ lọc phân loại & Quy tắc sắp xếp
+   * 6.6. Xuất báo cáo đối soát Excel 3 Sheets chuẩn hóa
+7. [Sơ Đồ Luồng Nghiệp Vụ Toàn Trình](#-sơ-đồ-luồng-nghiệp-vụ-toàn-trình)2 file dữ liệu đầu vào bắt buộc & Khởi chạy Lọc Tồn
    * 5.2. Thời gian xử lý & Màn hình hiệu ứng Animation trực quan
    * 5.3. Khối thẻ thống kê KPI kết quả đối soát
    * 5.4. Chi tiết 3 Bảng dữ liệu kết quả & Quy tắc phân loại nghiệp vụ

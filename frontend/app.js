@@ -1589,7 +1589,7 @@ document.getElementById("menu-logout").addEventListener("click", (e) => {
 
 
 // Tab / View Switching controller
-const views = ["dashboard", "export", "locton", "users"];
+const views = ["dashboard", "thongke", "export", "locton", "users"];
 let activeView = "dashboard";
 
 
@@ -1635,6 +1635,10 @@ function switchView(viewName) {
         startSessionPolling();
     } else {
         stopSessionPolling();
+    }
+
+    if (viewName === "thongke") {
+        initThongKeView();
     }
 
     if (viewName === "locton") {
@@ -1689,7 +1693,14 @@ async function loadSessionsStatus() {
         const res = await fetch(`${API_BASE_DINHVI}/api/vnpost/sessions-status`, {
             headers: getHeaders()
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            const container = document.getElementById("sessions-container");
+            if (container) {
+                container.innerHTML = `<span class="text-red" style="font-size: 13px;"><i class="fa-solid fa-circle-exclamation"></i> Không thể tải luồng: ${errData.error || res.statusText} <button type="button" class="btn btn-sm btn-secondary" onclick="loadSessionsStatus()" style="margin-left: 8px; padding: 2px 8px; font-size: 11px;"><i class="fa-solid fa-rotate"></i> Thử lại</button></span>`;
+            }
+            return;
+        }
         const resultData = await res.json();
         const sessions = resultData.sessions || [];
 
@@ -5092,6 +5103,519 @@ function resetLoctonState() {
     if (kpiSec) kpiSec.style.display = "none";
     if (tblCard) tblCard.style.display = "none";
     if (btnExp) btnExp.style.display = "none";
+}
+
+// =========================================================================
+// --- THỐNG KÊ & XU HƯỚNG HÀNG TỒN (SO SÁNH ĐA MỐC THỜI GIAN) ---
+// =========================================================================
+
+let thongkeData = null;
+let thongkeChartTrend = null;
+let thongkeChartAge = null;
+let thongkeInited = false;
+
+function initThongKeView() {
+    if (!thongkeInited) {
+        setupThongKeControls();
+        thongkeInited = true;
+    }
+    populateThongKeFilters();
+    loadThongKeData();
+}
+
+function setupThongKeControls() {
+    const targetDateInput = document.getElementById("thongke-target-date");
+    if (targetDateInput && !targetDateInput.value) {
+        const todayStr = new Date().toISOString().split("T")[0];
+        targetDateInput.value = todayStr;
+    }
+
+    const btnApply = document.getElementById("btn-thongke-filter-apply");
+    if (btnApply) {
+        btnApply.addEventListener("click", () => {
+            loadThongKeData();
+        });
+    }
+
+    const btnRefresh = document.getElementById("btn-thongke-refresh");
+    if (btnRefresh) {
+        btnRefresh.addEventListener("click", () => {
+            loadThongKeData();
+        });
+    }
+
+    const btnExportExcel = document.getElementById("btn-thongke-export-excel");
+    if (btnExportExcel) {
+        btnExportExcel.addEventListener("click", exportThongKeExcel);
+    }
+
+    // Client-side filtering for POS Matrix table
+    const matrixSearch = document.getElementById("thongke-matrix-search");
+    if (matrixSearch) {
+        matrixSearch.addEventListener("input", filterAndRenderThongKeMatrix);
+    }
+
+    const matrixType = document.getElementById("thongke-matrix-type");
+    if (matrixType) {
+        matrixType.addEventListener("change", filterAndRenderThongKeMatrix);
+    }
+}
+
+async function populateThongKeFilters() {
+    // Populate POS select
+    const posSelect = document.getElementById("thongke-filter-pos");
+    if (posSelect && posSelect.options.length <= 1) {
+        try {
+            const res = await fetch("/api/pos-config", { headers: getHeaders() });
+            if (res.ok) {
+                const configs = await res.json();
+                configs.forEach(cfg => {
+                    const opt = document.createElement("option");
+                    opt.value = cfg.pos_code;
+                    const displayName = cfg.custom_pos_name || cfg.pos_name || cfg.pos_code;
+                    opt.textContent = `${cfg.pos_code} - ${displayName}`;
+                    posSelect.appendChild(opt);
+                });
+            }
+        } catch (e) {
+            console.error("Error loading POS configs for ThongKe:", e);
+        }
+    }
+
+    // Populate Nhom KH select
+    const nhomSelect = document.getElementById("thongke-filter-nhom");
+    if (nhomSelect && nhomSelect.options.length <= 1) {
+        try {
+            const res = await fetch("/api/filters", { headers: getHeaders() });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.nhom_kh && Array.isArray(data.nhom_kh)) {
+                    data.nhom_kh.forEach(nhom => {
+                        if (nhom) {
+                            const opt = document.createElement("option");
+                            opt.value = nhom;
+                            opt.textContent = nhom;
+                            nhomSelect.appendChild(opt);
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            console.error("Error loading Nhom KH for ThongKe:", e);
+        }
+    }
+}
+
+async function loadThongKeData() {
+    const targetDateInput = document.getElementById("thongke-target-date");
+    const posSelect = document.getElementById("thongke-filter-pos");
+    const nhomSelect = document.getElementById("thongke-filter-nhom");
+
+    const targetDate = targetDateInput ? targetDateInput.value : "";
+    const posCode = posSelect ? posSelect.value : "";
+    const nhomKh = nhomSelect ? nhomSelect.value : "";
+
+    const tbody = document.getElementById("thongke-matrix-tbody");
+    if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center text-muted" style="padding: 30px;"><i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px; color: var(--accent-emerald);"></i> Đang tính toán dữ liệu đối chiếu đa mốc thời gian...</td></tr>`;
+    }
+
+    try {
+        const queryParams = new URLSearchParams();
+        if (targetDate) queryParams.set("target_date", targetDate);
+        if (posCode) queryParams.set("pos_code", posCode);
+        if (nhomKh) queryParams.set("nhom_kh", nhomKh);
+
+        const res = await fetch(`/api/inventory-comparison?${queryParams.toString()}`, {
+            headers: getHeaders()
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || `HTTP ${res.status}`);
+        }
+
+        thongkeData = await res.json();
+
+        // Render sections
+        renderThongKeKPIs(thongkeData.milestones);
+        renderThongKeCharts(thongkeData.timeline_trend, thongkeData.age_breakdown);
+        filterAndRenderThongKeMatrix();
+
+    } catch (err) {
+        console.error("Error loading ThongKe data:", err);
+        showToast("Lỗi tải dữ liệu thống kê: " + err.message, "error");
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="12" class="text-center text-red" style="padding: 24px;"><i class="fa-solid fa-circle-exclamation"></i> Không thể tải dữ liệu: ${err.message}</td></tr>`;
+        }
+    }
+}
+
+function renderThongKeKPIs(milestones) {
+    if (!milestones) return;
+
+    const t = milestones.t || { qty: 0, cod: 0, date: "" };
+    const t1 = milestones.t_minus_1 || { qty: 0, cod: 0, diff_qty: 0, pct_qty: 0, diff_cod: 0 };
+    const t5 = milestones.t_minus_5 || { qty: 0, cod: 0, diff_qty: 0, pct_qty: 0, diff_cod: 0 };
+    const t7 = milestones.t_minus_7 || { qty: 0, cod: 0, diff_qty: 0, pct_qty: 0, diff_cod: 0 };
+    const t14 = milestones.t_minus_14 || { qty: 0, cod: 0, diff_qty: 0, pct_qty: 0, diff_cod: 0 };
+
+    const fmt = n => (n || 0).toLocaleString("vi-VN");
+
+    function formatPill(diffQty, pctQty) {
+        if (diffQty < 0) {
+            return {
+                html: `<i class="fa-solid fa-arrow-down"></i> ${fmt(diffQty)} (${pctQty > 0 ? '-' : ''}${Math.abs(pctQty)}%)`,
+                style: `background: rgba(16, 185, 129, 0.15); color: #10b981;`
+            };
+        } else if (diffQty > 0) {
+            return {
+                html: `<i class="fa-solid fa-arrow-up"></i> +${fmt(diffQty)} (+${pctQty}%)`,
+                style: `background: rgba(239, 68, 68, 0.15); color: #ef4444;`
+            };
+        } else {
+            return {
+                html: `0 (0.0%)`,
+                style: `background: rgba(100, 116, 139, 0.15); color: var(--text-secondary);`
+            };
+        }
+    }
+
+    function formatCodDiff(diffCod) {
+        if (diffCod > 0) {
+            return `<span style="color: #ef4444;">+${fmt(diffCod)} đ (Tăng)</span>`;
+        } else if (diffCod < 0) {
+            return `<span style="color: #10b981;">${fmt(diffCod)} đ (Giảm)</span>`;
+        }
+        return `<span>0 đ</span>`;
+    }
+
+    // Card 1: T vs T-1
+    const badgeT1 = document.getElementById("thongke-kpi-badge-t1");
+    const valT = document.getElementById("thongke-kpi-val-t");
+    const valT1 = document.getElementById("thongke-kpi-val-t1");
+    const diffCodT1 = document.getElementById("thongke-kpi-diff-cod-t1");
+
+    if (valT) valT.textContent = `${fmt(t.qty)} bưu gửi`;
+    if (valT1) valT1.textContent = `${fmt(t1.qty)} bg (${t1.date || 'T-1'})`;
+    if (badgeT1) {
+        const p1 = formatPill(t1.diff_qty, t1.pct_qty);
+        badgeT1.innerHTML = p1.html;
+        badgeT1.style.cssText = `font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 12px; ${p1.style}`;
+    }
+    if (diffCodT1) diffCodT1.innerHTML = formatCodDiff(t1.diff_cod);
+
+    // Card 2: T vs T-5
+    const badgeT5 = document.getElementById("thongke-kpi-badge-t5");
+    const subvalT5 = document.getElementById("thongke-kpi-subval-t-5");
+    const valT5 = document.getElementById("thongke-kpi-val-t5");
+    const diffCodT5 = document.getElementById("thongke-kpi-diff-cod-t5");
+
+    if (subvalT5) subvalT5.textContent = `${fmt(t.qty)} bưu gửi`;
+    if (valT5) valT5.textContent = `${fmt(t5.qty)} bg (${t5.date || 'T-5'})`;
+    if (badgeT5) {
+        const p5 = formatPill(t5.diff_qty, t5.pct_qty);
+        badgeT5.innerHTML = p5.html;
+        badgeT5.style.cssText = `font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 12px; ${p5.style}`;
+    }
+    if (diffCodT5) diffCodT5.innerHTML = formatCodDiff(t5.diff_cod);
+
+    // Card 3: T vs T-7
+    const badgeT7 = document.getElementById("thongke-kpi-badge-t7");
+    const subvalT7 = document.getElementById("thongke-kpi-subval-t-7");
+    const valT7 = document.getElementById("thongke-kpi-val-t7");
+    const diffCodT7 = document.getElementById("thongke-kpi-diff-cod-t7");
+
+    if (subvalT7) subvalT7.textContent = `${fmt(t.qty)} bưu gửi`;
+    if (valT7) valT7.textContent = `${fmt(t7.qty)} bg (${t7.date || 'T-7'})`;
+    if (badgeT7) {
+        const p7 = formatPill(t7.diff_qty, t7.pct_qty);
+        badgeT7.innerHTML = p7.html;
+        badgeT7.style.cssText = `font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 12px; ${p7.style}`;
+    }
+    if (diffCodT7) diffCodT7.innerHTML = formatCodDiff(t7.diff_cod);
+
+    // Card 4: T vs T-14
+    const badgeT14 = document.getElementById("thongke-kpi-badge-t14");
+    const subvalT14 = document.getElementById("thongke-kpi-subval-t-14");
+    const valT14 = document.getElementById("thongke-kpi-val-t14");
+    const diffCodT14 = document.getElementById("thongke-kpi-diff-cod-t14");
+
+    if (subvalT14) subvalT14.textContent = `${fmt(t.qty)} bưu gửi`;
+    if (valT14) valT14.textContent = `${fmt(t14.qty)} bg (${t14.date || 'T-14'})`;
+    if (badgeT14) {
+        const p14 = formatPill(t14.diff_qty, t14.pct_qty);
+        badgeT14.innerHTML = p14.html;
+        badgeT14.style.cssText = `font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 12px; ${p14.style}`;
+    }
+    if (diffCodT14) diffCodT14.innerHTML = formatCodDiff(t14.diff_cod);
+}
+
+function renderThongKeCharts(timelineTrend, ageBreakdown) {
+    if (typeof Chart === "undefined") {
+        console.warn("Chart.js is not loaded yet.");
+        return;
+    }
+
+    // 1. Line Trend Chart
+    const canvasTrend = document.getElementById("thongke-chart-trend");
+    if (canvasTrend) {
+        if (thongkeChartTrend) {
+            thongkeChartTrend.destroy();
+            thongkeChartTrend = null;
+        }
+
+        const labels = (timelineTrend || []).map(item => {
+            const parts = item.date.split("-");
+            return parts.length === 3 ? `${parts[2]}/${parts[1]}` : item.date;
+        });
+        const dataValues = (timelineTrend || []).map(item => item.qty);
+
+        const ctxTrend = canvasTrend.getContext("2d");
+        thongkeChartTrend = new Chart(ctxTrend, {
+            type: "line",
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: "Số bưu gửi tồn",
+                    data: dataValues,
+                    borderColor: "#10b981",
+                    backgroundColor: "rgba(16, 185, 129, 0.12)",
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2.5,
+                    pointBackgroundColor: "#10b981",
+                    pointBorderColor: "#ffffff",
+                    pointBorderWidth: 1.5,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                return ` Tồn: ${ctx.parsed.y.toLocaleString("vi-VN")} bưu gửi`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 11 } }
+                    },
+                    y: {
+                        beginAtZero: false,
+                        grid: { color: "rgba(148, 163, 184, 0.15)" },
+                        ticks: {
+                            font: { size: 11 },
+                            callback: function(val) {
+                                return val >= 1000 ? `${(val/1000).toFixed(1)}k` : val;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // 2. Age Breakdown Donut Chart
+    const canvasAge = document.getElementById("thongke-chart-age");
+    if (canvasAge) {
+        if (thongkeChartAge) {
+            thongkeChartAge.destroy();
+            thongkeChartAge = null;
+        }
+
+        const ageLabels = (ageBreakdown || []).map(a => a.loai_ton);
+        const ageValues = (ageBreakdown || []).map(a => a.qty);
+        const palette = ["#10b981", "#3b82f6", "#f59e0b", "#ec4899", "#8b5cf6", "#64748b", "#ef4444"];
+
+        const ctxAge = canvasAge.getContext("2d");
+        thongkeChartAge = new Chart(ctxAge, {
+            type: "doughnut",
+            data: {
+                labels: ageLabels,
+                datasets: [{
+                    data: ageValues,
+                    backgroundColor: palette.slice(0, ageLabels.length),
+                    borderWidth: 2,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: "bottom",
+                        labels: {
+                            boxWidth: 12,
+                            font: { size: 11 },
+                            padding: 10
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                const val = ctx.parsed;
+                                const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                                return ` ${ctx.label}: ${val.toLocaleString("vi-VN")} bg (${pct}%)`;
+                            }
+                        }
+                    }
+                },
+                cutout: "60%"
+            }
+        });
+    }
+}
+
+function filterAndRenderThongKeMatrix() {
+    if (!thongkeData || !Array.isArray(thongkeData.pos_matrix)) return;
+
+    const searchInput = document.getElementById("thongke-matrix-search");
+    const typeSelect = document.getElementById("thongke-matrix-type");
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+    const typeFilter = typeSelect ? typeSelect.value : "";
+
+    const filtered = thongkeData.pos_matrix.filter(item => {
+        if (typeFilter && item.pos_type !== typeFilter) return false;
+        if (query) {
+            const codeMatch = (item.pos_code || "").toLowerCase().includes(query);
+            const nameMatch = (item.pos_name || "").toLowerCase().includes(query);
+            if (!codeMatch && !nameMatch) return false;
+        }
+        return true;
+    });
+
+    renderThongKeMatrixRows(filtered);
+}
+
+function renderThongKeMatrixRows(list) {
+    const tbody = document.getElementById("thongke-matrix-tbody");
+    if (!tbody) return;
+
+    if (!list || list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center text-muted" style="padding: 24px;">Không tìm thấy bưu cục nào phù hợp với bộ lọc tìm kiếm.</td></tr>`;
+        return;
+    }
+
+    const fmt = n => (n || 0).toLocaleString("vi-VN");
+
+    const rowsHtml = list.map((item, idx) => {
+        // Delta T-1 styling
+        let diffHtml = "";
+        if (item.diff_t1 < 0) {
+            diffHtml = `<span style="display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: #10b981; font-size: 12px; background: rgba(16,185,129,0.12); padding: 2px 7px; border-radius: 10px;">
+                <i class="fa-solid fa-arrow-down"></i> ${fmt(item.diff_t1)} (${item.pct_t1}%)
+            </span>`;
+        } else if (item.diff_t1 > 0) {
+            diffHtml = `<span style="display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: #ef4444; font-size: 12px; background: rgba(239,68,68,0.12); padding: 2px 7px; border-radius: 10px;">
+                <i class="fa-solid fa-arrow-up"></i> +${fmt(item.diff_t1)} (+${item.pct_t1}%)
+            </span>`;
+        } else {
+            diffHtml = `<span style="color: var(--text-muted); font-size: 12px;">0 (0%)</span>`;
+        }
+
+        // Evaluation badge styling
+        let evalHtml = "";
+        if (item.evaluation === "Giảm tốt") {
+            evalHtml = `<span style="background: rgba(16,185,129,0.15); color: #10b981; font-weight: 700; padding: 3px 8px; border-radius: 12px; font-size: 11.5px; display: inline-flex; align-items: center; gap: 4px;"><i class="fa-solid fa-arrow-down"></i> Giảm tốt</span>`;
+        } else if (item.evaluation === "Tăng nhẹ") {
+            evalHtml = `<span style="background: rgba(245,158,11,0.15); color: #f59e0b; font-weight: 700; padding: 3px 8px; border-radius: 12px; font-size: 11.5px; display: inline-flex; align-items: center; gap: 4px;"><i class="fa-solid fa-arrow-up"></i> Tăng nhẹ</span>`;
+        } else if (item.evaluation === "Tăng cao") {
+            evalHtml = `<span style="background: rgba(239,68,68,0.15); color: #ef4444; font-weight: 700; padding: 3px 8px; border-radius: 12px; font-size: 11.5px; display: inline-flex; align-items: center; gap: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> Tăng cao</span>`;
+        } else {
+            evalHtml = `<span style="background: rgba(59,130,246,0.15); color: #3b82f6; font-weight: 700; padding: 3px 8px; border-radius: 12px; font-size: 11.5px; display: inline-flex; align-items: center; gap: 4px;"><i class="fa-solid fa-check"></i> Ổn định</span>`;
+        }
+
+        // Pos type badge
+        const typeBadge = item.pos_type === "BCP" 
+            ? `<span style="background: rgba(16,185,129,0.12); color: #10b981; font-weight: 700; font-size: 11px; padding: 2px 6px; border-radius: 4px;">BCP</span>`
+            : `<span style="background: rgba(59,130,246,0.12); color: #3b82f6; font-weight: 700; font-size: 11px; padding: 2px 6px; border-radius: 4px;">BCKT</span>`;
+
+        return `
+            <tr>
+                <td class="text-center" style="color: var(--text-muted); font-size: 12px;">${idx + 1}</td>
+                <td class="text-center" style="font-family: var(--font-mono); font-weight: 700; font-size: 12.5px;">${item.pos_code}</td>
+                <td style="font-weight: 600;">${item.pos_name}</td>
+                <td class="text-center">${typeBadge}</td>
+                <td class="text-right" style="font-family: var(--font-mono); font-weight: 800; color: var(--accent-emerald); font-size: 13.5px;">${fmt(item.qty_t)}</td>
+                <td class="text-right" style="font-family: var(--font-mono);">${fmt(item.qty_t1)}</td>
+                <td class="text-center">${diffHtml}</td>
+                <td class="text-right" style="font-family: var(--font-mono); color: var(--text-secondary);">${fmt(item.qty_t5)}</td>
+                <td class="text-right" style="font-family: var(--font-mono); color: var(--text-secondary);">${fmt(item.qty_t7)}</td>
+                <td class="text-right" style="font-family: var(--font-mono); color: var(--text-secondary);">${fmt(item.qty_t14)}</td>
+                <td class="text-right" style="font-family: var(--font-mono); font-weight: 600; color: #f59e0b;">${fmt(item.cod_t)} đ</td>
+                <td class="text-center">${evalHtml}</td>
+            </tr>
+        `;
+    }).join("");
+
+    tbody.innerHTML = rowsHtml;
+}
+
+async function exportThongKeExcel() {
+    const targetDateInput = document.getElementById("thongke-target-date");
+    const posSelect = document.getElementById("thongke-filter-pos");
+    const nhomSelect = document.getElementById("thongke-filter-nhom");
+
+    const targetDate = targetDateInput ? targetDateInput.value : "";
+    const posCode = posSelect ? posSelect.value : "";
+    const nhomKh = nhomSelect ? nhomSelect.value : "";
+
+    const btn = document.getElementById("btn-thongke-export-excel");
+    const origHtml = btn ? btn.innerHTML : "";
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang xuất Excel...`;
+    }
+
+    try {
+        const queryParams = new URLSearchParams();
+        if (targetDate) queryParams.set("target_date", targetDate);
+        if (posCode) queryParams.set("pos_code", posCode);
+        if (nhomKh) queryParams.set("nhom_kh", nhomKh);
+
+        const res = await fetch(`/api/inventory-comparison/export?${queryParams.toString()}`, {
+            headers: getHeaders()
+        });
+
+        if (!res.ok) {
+            const errText = await res.text().catch(() => "");
+            throw new Error(`HTTP ${res.status}: ${errText.slice(0, 100)}`);
+        }
+
+        const blob = await res.blob();
+        const dateStr = targetDate || new Date().toISOString().split("T")[0];
+        const filename = `Bao_cao_so_sanh_ton_${dateStr}.xlsx`;
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        showToast("Đã tải xuống file Excel báo cáo so sánh tồn thành công!", "success");
+    } catch (err) {
+        console.error("Lỗi xuất Excel Thống Kê:", err);
+        showToast("Lỗi xuất Excel: " + err.message, "error");
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    }
 }
 
 document.addEventListener("DOMContentLoaded", () => {

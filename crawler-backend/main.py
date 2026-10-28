@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 import sys
 import io
 from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 import os
 import requests
 
@@ -812,6 +813,382 @@ def get_history():
         return []
     finally:
         conn.close()
+
+# --- INVENTORY COMPARISON & TREND ANALYTICS (TAB THỐNG KÊ) ---
+
+@app.get("/api/inventory-comparison")
+def get_inventory_comparison(
+    target_date: Optional[str] = None,
+    pos_code: Optional[str] = None,
+    nhom_kh: Optional[str] = None
+):
+    """
+    Get inventory backlog comparison between target date T and historical milestones:
+    T-1 (yesterday), T-5 (5 days ago), T-7 (7 days ago), T-14 (14 days ago).
+    """
+    conn = get_connection(with_db=True)
+    try:
+        today_date = datetime.now().date()
+        if target_date:
+            try:
+                base_dt = datetime.strptime(target_date.strip(), "%Y-%m-%d").date()
+            except ValueError:
+                base_dt = today_date
+        else:
+            base_dt = today_date
+
+        d_t = base_dt
+        d_t1 = base_dt - timedelta(days=1)
+        d_t5 = base_dt - timedelta(days=5)
+        d_t7 = base_dt - timedelta(days=7)
+        d_t14 = base_dt - timedelta(days=14)
+
+        is_base_today = (d_t == today_date)
+
+        pos_filter_staging = ""
+        pos_filter_snapshot = ""
+        nhom_filter_staging = ""
+        nhom_filter_snapshot = ""
+        params_filter = []
+
+        if pos_code and pos_code.strip():
+            p_code = pos_code.strip()
+            pos_filter_staging += " AND pos_code = %s"
+            pos_filter_snapshot += " AND pos_code = %s"
+            params_filter.append(p_code)
+
+        if nhom_kh and nhom_kh.strip():
+            n_kh = nhom_kh.strip()
+            nhom_filter_staging += " AND nhom_kh = %s"
+            nhom_filter_snapshot += " AND nhom_kh = %s"
+            params_filter.append(n_kh)
+
+        with conn.cursor() as cursor:
+            # 1. Total KPI for date T
+            if is_base_today:
+                cursor.execute(f"""
+                    SELECT COUNT(*), COALESCE(SUM(cod_amount), 0), COALESCE(SUM(weight), 0)
+                    FROM detailed_report_staging
+                    WHERE province_ton = N'BĐT Lâm Đồng'
+                      {pos_filter_staging} {nhom_filter_staging}
+                """, tuple(params_filter))
+            else:
+                cursor.execute(f"""
+                    SELECT COUNT(*), COALESCE(SUM(cod_amount), 0), COALESCE(SUM(weight), 0)
+                    FROM daily_snapshot
+                    WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = %s
+                      {pos_filter_snapshot} {nhom_filter_snapshot}
+                """, (str(d_t),) + tuple(params_filter))
+            row_t = cursor.fetchone()
+            qty_t = row_t[0] or 0
+            cod_t = float(row_t[1] or 0.0)
+            weight_t = float(row_t[2] or 0.0)
+
+            # Query T-1, T-5, T-7, T-14 from daily_snapshot
+            hist_dates = [str(d_t1), str(d_t5), str(d_t7), str(d_t14)]
+            cursor.execute(f"""
+                SELECT snapshot_date, COUNT(*), COALESCE(SUM(cod_amount), 0), COALESCE(SUM(weight), 0)
+                FROM daily_snapshot
+                WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date IN (%s, %s, %s, %s)
+                  {pos_filter_snapshot} {nhom_filter_snapshot}
+                GROUP BY snapshot_date
+            """, tuple(hist_dates) + tuple(params_filter))
+            hist_rows = {str(r[0]): {"qty": r[1], "cod": float(r[2]), "weight": float(r[3])} for r in cursor.fetchall()}
+
+            def calc_milestone(dt_obj, label):
+                dt_str = str(dt_obj)
+                item = hist_rows.get(dt_str, {"qty": 0, "cod": 0.0, "weight": 0.0})
+                q = item["qty"]
+                c = item["cod"]
+                diff_q = qty_t - q
+                pct_q = round((diff_q / q * 100), 1) if q > 0 else 0.0
+                diff_c = cod_t - c
+                return {
+                    "date": dt_str,
+                    "label": label,
+                    "qty": q,
+                    "cod": c,
+                    "diff_qty": diff_q,
+                    "pct_qty": pct_q,
+                    "diff_cod": diff_c
+                }
+
+            milestones = {
+                "t": {
+                    "date": str(d_t),
+                    "label": f"Ngày chọn ({d_t.strftime('%d/%m/%Y')})",
+                    "qty": qty_t,
+                    "cod": cod_t,
+                    "weight": weight_t
+                },
+                "t1": calc_milestone(d_t1, f"Hôm qua ({d_t1.strftime('%d/%m/%Y')})"),
+                "t5": calc_milestone(d_t5, f"5 ngày trước ({d_t5.strftime('%d/%m/%Y')})"),
+                "t7": calc_milestone(d_t7, f"7 ngày trước ({d_t7.strftime('%d/%m/%Y')})"),
+                "t14": calc_milestone(d_t14, f"14 ngày trước ({d_t14.strftime('%d/%m/%Y')})"),
+            }
+
+            # 2. 14-day trend line up to target_date
+            trend_dates = [(base_dt - timedelta(days=i)) for i in range(13, -1, -1)]
+            trend_dates_str = [str(d) for d in trend_dates]
+            placeholders = ", ".join(["%s"] * len(trend_dates_str))
+            cursor.execute(f"""
+                SELECT snapshot_date, COUNT(*), COALESCE(SUM(cod_amount), 0)
+                FROM daily_snapshot
+                WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date IN ({placeholders})
+                  {pos_filter_snapshot} {nhom_filter_snapshot}
+                GROUP BY snapshot_date
+                ORDER BY snapshot_date ASC
+            """, tuple(trend_dates_str) + tuple(params_filter))
+            trend_dict = {str(r[0]): {"qty": r[1], "cod": float(r[2])} for r in cursor.fetchall()}
+            
+            timeline_trend = []
+            for d in trend_dates:
+                d_str = str(d)
+                if d == today_date and is_base_today:
+                    timeline_trend.append({"date": d_str, "label": d.strftime("%d/%m"), "qty": qty_t, "cod": cod_t})
+                else:
+                    val = trend_dict.get(d_str, {"qty": 0, "cod": 0.0})
+                    timeline_trend.append({"date": d_str, "label": d.strftime("%d/%m"), "qty": val["qty"], "cod": val["cod"]})
+
+            # 3. Age breakdown for date T
+            if is_base_today:
+                cursor.execute(f"""
+                    SELECT loai_ton, COUNT(*)
+                    FROM detailed_report_staging
+                    WHERE province_ton = N'BĐT Lâm Đồng' AND loai_ton IS NOT NULL
+                      {pos_filter_staging} {nhom_filter_staging}
+                    GROUP BY loai_ton
+                """, tuple(params_filter))
+            else:
+                cursor.execute(f"""
+                    SELECT loai_ton, COUNT(*)
+                    FROM daily_snapshot
+                    WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = %s AND loai_ton IS NOT NULL
+                      {pos_filter_snapshot} {nhom_filter_snapshot}
+                    GROUP BY loai_ton
+                """, (str(d_t),) + tuple(params_filter))
+            age_rows = cursor.fetchall()
+            age_breakdown = [{"loai_ton": r[0], "qty": r[1]} for r in age_rows]
+
+            # 4. Per-POS Matrix Breakdown
+            sub_t_sql = "SELECT 'T' as src, pos_code, cod_amount FROM detailed_report_staging WHERE province_ton = N'BĐT Lâm Đồng'" if is_base_today else f"SELECT 'T' as src, pos_code, cod_amount FROM daily_snapshot WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = '{d_t}'"
+
+            cursor.execute(f"""
+                SELECT 
+                    c.pos_code,
+                    c.pos_name,
+                    c.pos_type,
+                    SUM(CASE WHEN d.src = 'T' THEN 1 ELSE 0 END) as qty_t,
+                    SUM(CASE WHEN d.src = 'T1' THEN 1 ELSE 0 END) as qty_t1,
+                    SUM(CASE WHEN d.src = 'T5' THEN 1 ELSE 0 END) as qty_t5,
+                    SUM(CASE WHEN d.src = 'T7' THEN 1 ELSE 0 END) as qty_t7,
+                    SUM(CASE WHEN d.src = 'T14' THEN 1 ELSE 0 END) as qty_t14,
+                    SUM(CASE WHEN d.src = 'T' THEN d.cod_amount ELSE 0 END) as cod_t
+                FROM pos_config c
+                LEFT JOIN (
+                    {sub_t_sql}
+                    UNION ALL
+                    SELECT 'T1' as src, pos_code, cod_amount FROM daily_snapshot WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = %s
+                    UNION ALL
+                    SELECT 'T5' as src, pos_code, cod_amount FROM daily_snapshot WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = %s
+                    UNION ALL
+                    SELECT 'T7' as src, pos_code, cod_amount FROM daily_snapshot WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = %s
+                    UNION ALL
+                    SELECT 'T14' as src, pos_code, cod_amount FROM daily_snapshot WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = %s
+                ) d ON c.pos_code = d.pos_code
+                WHERE c.is_active = 1
+                GROUP BY c.pos_code, c.pos_name, c.pos_type
+                ORDER BY qty_t DESC
+            """, (str(d_t1), str(d_t5), str(d_t7), str(d_t14)))
+            pos_matrix_rows = cursor.fetchall()
+
+            pos_matrix = []
+            for r in pos_matrix_rows:
+                p_code = r[0]
+                p_name = r[1]
+                p_type = r[2] or "BCP"
+                q_t = r[3] or 0
+                q_t1 = r[4] or 0
+                q_t5 = r[5] or 0
+                q_t7 = r[6] or 0
+                q_t14 = r[7] or 0
+                c_t = float(r[8] or 0.0)
+
+                diff_1 = q_t - q_t1
+                pct_1 = round((diff_1 / q_t1 * 100), 1) if q_t1 > 0 else 0.0
+                diff_5 = q_t - q_t5
+                diff_7 = q_t - q_t7
+                diff_14 = q_t - q_t14
+
+                if diff_1 < 0:
+                    status_text = "Giảm tốt"
+                    status_type = "success"
+                elif diff_1 == 0:
+                    status_text = "Ổn định"
+                    status_type = "neutral"
+                elif diff_1 > 100 or pct_1 > 20:
+                    status_text = "Tăng cao"
+                    status_type = "danger"
+                else:
+                    status_text = "Tăng nhẹ"
+                    status_type = "warning"
+
+                pos_matrix.append({
+                    "pos_code": p_code,
+                    "pos_name": p_name,
+                    "pos_type": p_type,
+                    "qty_t": q_t,
+                    "qty_t1": q_t1,
+                    "diff_t1": diff_1,
+                    "pct_t1": pct_1,
+                    "qty_t5": q_t5,
+                    "diff_t5": diff_5,
+                    "qty_t7": q_t7,
+                    "diff_t7": diff_7,
+                    "qty_t14": q_t14,
+                    "diff_t14": diff_14,
+                    "cod_t": c_t,
+                    "status_text": status_text,
+                    "status_type": status_type
+                })
+
+            return {
+                "base_date": str(d_t),
+                "is_base_today": is_base_today,
+                "milestones": milestones,
+                "timeline_trend": timeline_trend,
+                "age_breakdown": age_breakdown,
+                "pos_matrix": pos_matrix
+            }
+    except Exception as e:
+        logger.error(f"Error fetching inventory comparison: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+@app.get("/api/inventory-comparison/export")
+def export_inventory_comparison(
+    target_date: Optional[str] = None,
+    pos_code: Optional[str] = None,
+    nhom_kh: Optional[str] = None
+):
+    """Export comparison report to Excel with OpenPyXL formatting."""
+    data = get_inventory_comparison(target_date=target_date, pos_code=pos_code, nhom_kh=nhom_kh)
+    
+    output = io.BytesIO()
+    wb = Workbook()
+    
+    # Header styles
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="047857", end_color="047857", fill_type="solid")
+    title_font = Font(name="Calibri", size=14, bold=True, color="047857")
+    bold_font = Font(name="Calibri", size=11, bold=True)
+    border_thin = Border(
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='thin', color='D1D5DB')
+    )
+
+    # Sheet 1: Tổng hợp & So sánh
+    ws1 = wb.active
+    ws1.title = "Tổng Hợp & So Sánh"
+    ws1.append(["BÁO CÁO SO SÁNH & XU HƯỚNG TỒN BƯU GỬI - BĐT LÂM ĐỒNG"])
+    ws1.cell(row=1, column=1).font = title_font
+    ws1.append([f"Ngày cơ sở đối chiếu: {data['base_date']}"])
+    ws1.append([])
+
+    # KPI Milestones table
+    ws1.append(["Mốc thời gian", "Ngày đối chiếu", "Sản lượng tồn (đơn)", "Tổng COD (đ)", "Chênh lệch so với T (đơn)", "Tỷ lệ tăng/giảm (%)"])
+    for col_idx in range(1, 7):
+        cell = ws1.cell(row=4, column=col_idx)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border_thin
+
+    m = data["milestones"]
+    rows_m = [
+        ["Ngày chọn (T)", m["t"]["date"], m["t"]["qty"], m["t"]["cod"], 0, "0.0%"],
+        ["Hôm qua (T-1)", m["t1"]["date"], m["t1"]["qty"], m["t1"]["cod"], m["t1"]["diff_qty"], f"{m['t1']['pct_qty']:+0.1f}%"],
+        ["5 ngày trước (T-5)", m["t5"]["date"], m["t5"]["qty"], m["t5"]["cod"], m["t5"]["diff_qty"], f"{m['t5']['pct_qty']:+0.1f}%"],
+        ["7 ngày trước (T-7)", m["t7"]["date"], m["t7"]["qty"], m["t7"]["cod"], m["t7"]["diff_qty"], f"{m['t7']['pct_qty']:+0.1f}%"],
+        ["14 ngày trước (T-14)", m["t14"]["date"], m["t14"]["qty"], m["t14"]["cod"], m["t14"]["diff_qty"], f"{m['t14']['pct_qty']:+0.1f}%"],
+    ]
+    for r in rows_m:
+        ws1.append(r)
+        curr_row = ws1.max_row
+        for col_idx in range(1, 7):
+            cell = ws1.cell(row=curr_row, column=col_idx)
+            cell.border = border_thin
+            if col_idx in [3, 4, 5]:
+                cell.number_format = '#,##0'
+                cell.alignment = Alignment(horizontal="right")
+
+    # Sheet 2: Chi tiết Ma trận Bưu cục
+    ws2 = wb.create_sheet(title="Ma Trận Bưu Cục")
+    ws2.append(["MA TRẬN ĐỐI CHIẾU HÀNG TỒN CHI TIẾT THEO BƯU CỤC"])
+    ws2.cell(row=1, column=1).font = title_font
+    ws2.append([f"Ngày cơ sở: {data['base_date']}"])
+    ws2.append([])
+
+    headers_pos = ["STT", "Mã BC", "Tên bưu cục", "Loại BC", "Tồn ngày T (đơn)", "Hôm qua T-1", "Chênh lệch T-1", "% Biến động T-1", "5N trước T-5", "7N trước T-7", "14N trước T-14", "COD T (đ)", "Đánh giá"]
+    ws2.append(headers_pos)
+    for col_idx in range(1, len(headers_pos) + 1):
+        cell = ws2.cell(row=4, column=col_idx)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border_thin
+
+    fill_green = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+    fill_red = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+
+    for idx, p in enumerate(data["pos_matrix"]):
+        row_vals = [
+            idx + 1,
+            p["pos_code"],
+            p["pos_name"],
+            p["pos_type"],
+            p["qty_t"],
+            p["qty_t1"],
+            p["diff_t1"],
+            f"{p['pct_t1']:+0.1f}%",
+            p["qty_t5"],
+            p["qty_t7"],
+            p["qty_t14"],
+            p["cod_t"],
+            p["status_text"]
+        ]
+        ws2.append(row_vals)
+        curr_row = ws2.max_row
+        for col_idx in range(1, len(headers_pos) + 1):
+            cell = ws2.cell(row=curr_row, column=col_idx)
+            cell.border = border_thin
+            if col_idx in [5, 6, 7, 9, 10, 11, 12]:
+                cell.number_format = '#,##0'
+                cell.alignment = Alignment(horizontal="right")
+            if col_idx == 7: # diff_t1
+                if p["diff_t1"] < 0:
+                    cell.fill = fill_green
+                elif p["diff_t1"] > 0:
+                    cell.fill = fill_red
+
+    # Adjust column widths
+    for ws in [ws1, ws2]:
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or '')) for cell in col)
+            col_letter = col[0].column_letter
+            ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    wb.save(output)
+    output.seek(0)
+    filename = f"BaoCao_SoSanhTon_{data['base_date'].replace('-', '')}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 # --- AUTHENTICATION & USER MANAGEMENT ---
 
