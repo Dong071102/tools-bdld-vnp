@@ -103,3 +103,8 @@ Thumbs.db
 
 # Agent skills & configs
 .agents/
+
+# Test data & raw json dumps
+raw_pbi_response*.json
+*.xlsx.tmp
+

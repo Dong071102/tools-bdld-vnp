@@ -13,7 +13,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+  limits: { fileSize: 25 * 1024 * 1024 } // 25MB max to protect against OOM
 });
 
 // Router helper to mount routes at both root and /api/locton
@@ -105,6 +105,20 @@ router.post('/export', async (req, res) => {
 // Mount at both '/' and '/api/locton'
 app.use('/api/locton', router);
 app.use('/', router);
+
+// Error handling middleware (e.g. Multer limit error)
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ success: false, message: 'File tải lên vượt quá giới hạn cho phép (tối đa 25MB)' });
+    }
+    return res.status(400).json({ success: false, message: `Lỗi tải file: ${err.message}` });
+  }
+  if (err) {
+    return res.status(500).json({ success: false, message: err.message || 'Lỗi máy chủ' });
+  }
+  next();
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Locton backend service running on port ${PORT}`);

@@ -1985,7 +1985,8 @@ btnStartExport.addEventListener("click", async () => {
                 body: JSON.stringify({
                     codes: batchCodes,
                     sessionIndex: activeSessionIndexes[workerId]
-                })
+                }),
+                signal: AbortSignal.timeout(60000)
             });
 
             if (!res.ok) {
@@ -2014,8 +2015,9 @@ btnStartExport.addEventListener("click", async () => {
 
         } catch (err) {
             label.className = "batch-label error";
-            addExportLog(`Lỗi tải Lô ${index + 1}: ${err.message}`, "error");
-            if (err.message.includes("Cookie") || err.message.includes("hết hạn")) {
+            const errMsg = err.name === 'TimeoutError' ? 'Hết thời gian chờ (60s) từ máy chủ VNPost' : err.message;
+            addExportLog(`Lỗi tải Lô ${index + 1}: ${errMsg}`, "error");
+            if (errMsg.includes("Cookie") || errMsg.includes("hết hạn")) {
                 hasError = true;
             }
         }

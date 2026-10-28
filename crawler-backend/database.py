@@ -420,11 +420,30 @@ def create_daily_snapshot():
             """
             cursor.execute(sql, (today_str, 'BĐT Lâm Đồng', today_str))
         logger.info(f"Created daily snapshot for {today_str} successfully.")
+        
+        # Purge snapshots older than 90 days to prevent 10GB Express database limit overflow
+        purge_old_snapshots(retention_days=90)
     except Exception as e:
         logger.error(f"Error creating daily snapshot: {e}")
         raise e
     finally:
         conn.close()
+
+def purge_old_snapshots(retention_days: int = 90):
+    """Purge daily_snapshot records older than retention_days (90 days) to prevent 10GB limit overflow."""
+    try:
+        conn = get_connection(with_db=True, autocommit=True)
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM daily_snapshot WHERE snapshot_date < DATEADD(day, -%s, GETDATE())",
+                (retention_days,)
+            )
+            deleted = cursor.rowcount
+            if deleted and deleted > 0:
+                logger.info(f"Purged {deleted} daily_snapshot records older than {retention_days} days.")
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error purging old daily snapshots: {e}")
 
 if __name__ == "__main__":
     init_db()

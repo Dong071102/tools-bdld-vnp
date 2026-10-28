@@ -1192,7 +1192,7 @@ def export_inventory_comparison(
 
 # --- AUTHENTICATION & USER MANAGEMENT ---
 
-JWT_SECRET = "vnpost-excel-exporter-jwt-secret-key-2026-dynamic-secure"
+JWT_SECRET = os.getenv("JWT_SECRET", "vnpost-excel-exporter-jwt-secret-key-2026-dynamic-secure")
 JWT_ALGORITHM = "HS256"
 
 class LoginRequest(BaseModel):
