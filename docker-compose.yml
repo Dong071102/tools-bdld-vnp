@@ -16,6 +16,7 @@ services:
       - TZ=${TZ:-Asia/Ho_Chi_Minh}
       - DINHVI_BACKEND_URL=${DINHVI_BACKEND_URL:-http://vnp-dinhvi-backend:5000}
       - POWERBI_URL=${POWERBI_URL}
+      - JWT_SECRET=${JWT_SECRET:-vnpost-excel-exporter-jwt-secret-key-2026-dynamic-secure}
     networks:
       - bdld-vnp-network
 
@@ -26,7 +27,7 @@ services:
     # Không expose port ra ngoài, chỉ giao tiếp nội bộ qua bdld-vnp-network
     environment:
       - PORT=${DINHVI_PORT:-5000}
-      - JWT_SECRET=${JWT_SECRET}
+      - JWT_SECRET=${JWT_SECRET:-vnpost-excel-exporter-jwt-secret-key-2026-dynamic-secure}
       - DB_HOST=${DB_HOST:-${DB_SERVER}}
       - DB_SERVER=${DB_SERVER}
       - DB_PORT=${DB_PORT:-1433}
