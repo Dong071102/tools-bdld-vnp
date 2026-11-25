@@ -7,18 +7,34 @@ const app = express();
 app.use(express.static(path.join(__dirname, 'frontend')));
 app.use('/static', express.static(path.join(__dirname, 'frontend')));
 
-const dinhviProxy = createProxyMiddleware({ target: 'http://127.0.0.1:5000', changeOrigin: true });
-const crawlerProxy = createProxyMiddleware({ target: 'http://127.0.0.1:8000', changeOrigin: true });
+// Proxies with full path preservation
+app.use(createProxyMiddleware({
+    target: 'http://127.0.0.1:5000',
+    changeOrigin: true,
+    pathFilter: [
+        '/api/vnpost/**',
+        '/api/export/**',
+        '/api/export-batch/**',
+        '/api/merge-and-save/**',
+        '/api/history/**'
+    ]
+}));
 
-app.use('/api/vnpost', dinhviProxy);
-app.use('/api/export', dinhviProxy);
-app.use('/api/export-batch', dinhviProxy);
-app.use('/api/merge-and-save', dinhviProxy);
-app.use('/api/history', dinhviProxy);
-app.use('/api', crawlerProxy);
+app.use(createProxyMiddleware({
+    target: 'http://127.0.0.1:3001',
+    changeOrigin: true,
+    pathFilter: '/api/locton/**'
+}));
 
-app.listen(9999, () => {
+app.use(createProxyMiddleware({
+    target: 'http://127.0.0.1:8000',
+    changeOrigin: true,
+    pathFilter: '/api/**'
+}));
+
+const PORT = process.env.PORT || process.env.FRONTEND_PORT || 8080;
+app.listen(PORT, () => {
     console.log('----------------------------------------------------');
-    console.log('Frontend and proxy running on http://localhost:9999');
+    console.log(`Frontend and proxy running on http://localhost:${PORT}`);
     console.log('----------------------------------------------------');
 });

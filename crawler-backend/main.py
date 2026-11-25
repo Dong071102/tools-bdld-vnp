@@ -1,259 +1,352 @@
-from fastapi import FastAPI, Query, BackgroundTasks, Depends, Header, HTTPException, Request, Response
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse
-import jwt
-import bcrypt
-from pydantic import BaseModel
-from typing import Optional
-import pandas as pd
 import io
-import uvicorn
+import json
 import logging
+import os
 import threading
 import time
 import webbrowser
 from datetime import datetime, timedelta
-import sys
-import io
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-import os
+from typing import Optional
+
+import bcrypt
+import jwt
 import requests
+import uvicorn
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from pydantic import BaseModel
 
-from database import get_connection, create_daily_snapshot, init_db
-from pbi_crawler import crawl_lamdong_data, PowerBIUrlError, check_powerbi_url_health
+from database import create_daily_snapshot, get_connection, init_db
+from pbi_crawler import PowerBIUrlError, check_powerbi_url_health, crawl_lamdong_data
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 DINHVI_BACKEND_URL = os.getenv("DINHVI_BACKEND_URL", "http://localhost:5000")
+JWT_SECRET = os.getenv("JWT_SECRET", "vnpost-excel-exporter-jwt-secret-key-2026-dynamic-secure")
+JWT_ALGORITHM = "HS256"
+PBI_ERROR_TEXT = "Lỗi URL Power BI, liên hệ bộ phận IT để hỗ trợ"
 
-# SQLite Sync is deprecated since both backends now share the same SQL Server database.
-# Keeping empty functions to avoid breaking other imports/invocations.
-def sync_user_to_sqlite(username, role, concurrency_limit, password_hash=None, vnpost_username=None, vnpost_password=None):
-    pass
-
-def delete_user_from_sqlite(username):
-    pass
+PROVINCE_SQL = "province_ton = N'BĐT Lâm Đồng'"
+ACTIVE_POS_SQL = (
+    "(NOT EXISTS (SELECT 1 FROM pos_config WHERE is_active = 1) "
+    "OR pos_code IN (SELECT pos_code FROM pos_config WHERE is_active = 1))"
+)
+BCKT_POS_SQL = (
+    "(pos_name LIKE N'%KTC1%' OR pos_name LIKE N'%BCKT%' OR pos_name LIKE N'%KHL%' "
+    "OR pos_name LIKE N'%GD%' OR pos_name LIKE N'%Hub%' OR pos_name LIKE N'%KT %')"
+)
+AGE_ORDER = ["<1 ngày", "≥1 ngày", "≥1.5 ngày", "≥2 ngày", "≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"]
+LOAI_TON_SORT_SQL = (
+    "CASE "
+    "WHEN loai_ton = N'<1 ngày' THEN 0.5 "
+    "WHEN loai_ton = N'≥1 ngày' THEN 1 "
+    "WHEN loai_ton = N'≥1.5 ngày' THEN 1.5 "
+    "WHEN loai_ton = N'≥2 ngày' THEN 2 "
+    "WHEN loai_ton = N'≥3 ngày' THEN 3 "
+    "WHEN loai_ton = N'≥4 ngày' THEN 4 "
+    "WHEN loai_ton = N'≥5 ngày' THEN 5 "
+    "WHEN loai_ton = N'≥7 ngày' THEN 7 "
+    "WHEN loai_ton = N'≥14 ngày' THEN 14 "
+    "ELSE 99 END"
+)
+ALLOWED_SORT_COLS = {
+    "item_code", "pos_code", "pos_name", "dk1", "status_name",
+    "loai_ton", "cod_amount", "weight", "updated_at", "postman_name", "nhom_kh",
+}
+FIRST_LOGIN_MARKERS = {None, "", "BCCP_PENDING", "vnpost-auth-placeholder"}
 
 app = FastAPI(title="Lâm Đồng Power BI Dashboard Clone")
 
-# Shared state to prevent concurrent crawls
+# Shared crawl state
 crawl_lock = threading.Lock()
-is_crawling = False
-last_crawl_time = None
-last_crawl_status = "Not started"
-last_crawl_url_error = False
-last_crawl_error_detail = ""
-last_crawl_http_status = None
+crawl_state = {
+    "is_crawling": False,
+    "last_crawl_time": None,
+    "last_crawl_status": "Not started",
+    "url_error": False,
+    "error_detail": "",
+    "http_status": None,
+}
+
+
+def _set_pbi_error(code=None, detail=PBI_ERROR_TEXT):
+    crawl_state["url_error"] = True
+    crawl_state["error_detail"] = detail
+    crawl_state["http_status"] = code
+    crawl_state["last_crawl_status"] = f"URL Error ({code or 'Network'})"
+
+
+def _clear_pbi_error(status="Online"):
+    crawl_state["url_error"] = False
+    crawl_state["error_detail"] = ""
+    crawl_state["http_status"] = 200
+    if status:
+        crawl_state["last_crawl_status"] = status
+
+
+def _parse_date(target_date: Optional[str]):
+    today = datetime.now().date()
+    if not target_date:
+        return today
+    try:
+        return datetime.strptime(target_date.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return today
+
+
+def _add_csv_filter(clauses, params, column, raw_csv):
+    if not raw_csv:
+        return
+    vals = [v.strip() for v in raw_csv.split(",") if v.strip()]
+    if vals:
+        clauses.append(f"{column} IN ({','.join(['%s'] * len(vals))})")
+        params.extend(vals)
+
+
+def _build_detailed_where(search="", pos_name="", loai_ton="", status_name="", nhom_kh=""):
+    clauses = [PROVINCE_SQL, ACTIVE_POS_SQL]
+    params = []
+    if search:
+        s = f"%{search}%"
+        clauses.append("(item_code LIKE %s OR postman_name LIKE %s OR pos_name LIKE %s)")
+        params.extend([s, s, s])
+    _add_csv_filter(clauses, params, "pos_name", pos_name)
+    _add_csv_filter(clauses, params, "loai_ton", loai_ton)
+    _add_csv_filter(clauses, params, "status_name", status_name)
+    _add_csv_filter(clauses, params, "nhom_kh", nhom_kh)
+    return " AND ".join(clauses), params
+
+
+def _build_order_by(sort_col: str, sort_dir: str):
+    col = sort_col if sort_col in ALLOWED_SORT_COLS else "item_code"
+    direction = "DESC" if sort_dir.lower() == "desc" else "ASC"
+    return f"{LOAI_TON_SORT_SQL} {direction}" if col == "loai_ton" else f"{col} {direction}"
+
+
+def _build_drilldown_query(target_date, pos_code, postman_name, loai_ton, status_name, nhom_kh, search):
+    today = datetime.now().date()
+    base_dt = _parse_date(target_date)
+    is_base_today = base_dt == today
+    src_table = "detailed_report_staging" if is_base_today else "daily_snapshot"
+
+    conditions = [PROVINCE_SQL]
+    params = []
+    if not is_base_today:
+        conditions.append("snapshot_date = %s")
+        params.append(str(base_dt))
+
+    for col, val in (
+        ("pos_code", pos_code),
+        ("postman_name", postman_name),
+        ("loai_ton", loai_ton),
+        ("status_name", status_name),
+        ("nhom_kh", nhom_kh),
+    ):
+        if val and val.strip():
+            conditions.append(f"{col} = %s")
+            params.append(val.strip())
+
+    if search and search.strip():
+        s = f"%{search.strip()}%"
+        conditions.append("(item_code LIKE %s OR postman_name LIKE %s OR pos_name LIKE %s)")
+        params.extend([s, s, s])
+
+    return base_dt, src_table, " WHERE " + " AND ".join(conditions), params
+
+
+def _hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def _thin_border(color="CBD5E1"):
+    side = Side(style="thin", color=color)
+    return Border(left=side, right=side, top=side, bottom=side)
+
+
+def _style_header_row(ws, row_idx, col_count, fill_hex="0D9488", border_color="CBD5E1"):
+    font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    fill = PatternFill(start_color=fill_hex, end_color=fill_hex, fill_type="solid")
+    border = _thin_border(border_color)
+    align = Alignment(horizontal="center", vertical="center")
+    for col_idx in range(1, col_count + 1):
+        cell = ws.cell(row=row_idx, column=col_idx)
+        cell.font = font
+        cell.fill = fill
+        cell.alignment = align
+        cell.border = border
+
+
+def _autofit_columns(ws, min_w=10, max_w=None):
+    for col in ws.columns:
+        width = max(max(len(str(c.value or "")) for c in col) + 3, min_w)
+        ws.column_dimensions[col[0].column_letter].width = min(width, max_w) if max_w else width
+
+
+def _xlsx_response(wb, filename):
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
 
 def run_crawler_task():
-    """Wrapper to run crawler thread-safely."""
-    global is_crawling, last_crawl_time, last_crawl_status, last_crawl_url_error, last_crawl_error_detail, last_crawl_http_status
+    """Run Power BI crawler safely without overlapping executions."""
     if crawl_lock.locked():
         logger.warning("Crawl already in progress. Skipping.")
         return
-        
+
     with crawl_lock:
-        is_crawling = True
-        last_crawl_status = "In progress"
+        crawl_state["is_crawling"] = True
+        crawl_state["last_crawl_status"] = "In progress"
         try:
-            success = crawl_lamdong_data()
-            last_crawl_time = datetime.now()
-            if success:
-                last_crawl_status = "Success"
-                last_crawl_url_error = False
-                last_crawl_error_detail = ""
-                last_crawl_http_status = 200
+            if crawl_lamdong_data():
+                _clear_pbi_error("Success")
             else:
-                last_crawl_status = "Failed"
+                crawl_state["last_crawl_status"] = "Failed"
         except PowerBIUrlError as pbi_err:
-            last_crawl_time = datetime.now()
-            last_crawl_status = f"URL Error ({pbi_err.status_code or 'Network'})"
-            last_crawl_url_error = True
-            last_crawl_error_detail = str(pbi_err)
-            last_crawl_http_status = pbi_err.status_code
+            _set_pbi_error(pbi_err.status_code, str(pbi_err))
             logger.error(f"Power BI URL error: {pbi_err}")
         except Exception as e:
-            last_crawl_time = datetime.now()
             logger.error(f"Error in background crawl: {e}")
-            last_crawl_status = f"Error: {e}"
-            err_str = str(e).lower()
-            if any(k in err_str for k in ["401", "403", "404", "url", "connection"]):
-                last_crawl_url_error = True
-                last_crawl_error_detail = str(e)
+            crawl_state["last_crawl_status"] = f"Error: {e}"
+            if any(k in str(e).lower() for k in ("401", "403", "404", "url", "connection")):
+                crawl_state["url_error"] = True
+                crawl_state["error_detail"] = str(e)
         finally:
-            is_crawling = False
+            crawl_state["last_crawl_time"] = datetime.now()
+            crawl_state["is_crawling"] = False
 
-# Background scheduler thread
+
 def scheduler_thread():
-    """
-    Background scheduler to:
-    1. Probe URL health immediately on startup.
-    2. Run initial crawl on startup.
-    3. Run fixed scheduled crawl at 5:00 AM, 12:00 PM (noon), and 18:00 PM (6:00 PM).
-    4. Run daily snapshot at 00:00 midnight.
-    """
-    SCHEDULED_HOURS = [5, 12, 18]  # 5h sáng, 12h trưa, 6h tối (18h)
-    logger.info(f"Background scheduler thread started. Fixed crawl schedule: {SCHEDULED_HOURS}.")
-    global last_crawl_url_error, last_crawl_error_detail, last_crawl_http_status, last_crawl_status
+    """Probe PBI URL on startup, run initial crawl, crawl at 05:00/12:00/18:00, snapshot at 00:00."""
+    scheduled_hours = (5, 12, 18)
+    logger.info(f"Background scheduler thread started. Fixed crawl schedule: {list(scheduled_hours)}.")
 
-    # 1. Quick probe on startup
     try:
         is_valid, msg, code = check_powerbi_url_health()
         if not is_valid:
-            last_crawl_url_error = True
-            last_crawl_error_detail = "Lỗi URL Power BI, liên hệ bộ phận IT để hỗ trợ"
-            last_crawl_http_status = code
-            last_crawl_status = f"URL Error ({code or 'Network'})"
+            _set_pbi_error(code, PBI_ERROR_TEXT)
             logger.warning(f"Initial Power BI health check failed: {msg}")
         else:
             logger.info("Initial Power BI health check passed.")
     except Exception as e:
         logger.error(f"Error in initial health check: {e}")
-    
-    # Run initial crawl on startup after a brief delay (only if not blocked by URL error)
+
     time.sleep(5)
     run_crawler_task()
-    
-    last_crawl_slot = None  # Tracks (date, hour)
-    last_snapshot_date = datetime.now().date() - timedelta(days=1)  # force run today if not done
-    
+
+    last_crawl_slot = None
+    last_snapshot_date = datetime.now().date() - timedelta(days=1)
+
     while True:
         try:
             now = datetime.now()
-            today = now.date()
-            current_hour = now.hour
-            
-            # 1. Check for midnight snapshot (00:00)
-            if current_hour == 0 and today > last_snapshot_date:
+            today, hour = now.date(), now.hour
+            if hour == 0 and today > last_snapshot_date:
                 logger.info(f"Midnight reached. Creating daily snapshot for date {today}...")
                 create_daily_snapshot()
                 last_snapshot_date = today
-                
-            # 2. Run crawl at fixed hours: 5:00 AM, 12:00 PM, 18:00 PM (6:00 PM)
-            if current_hour in SCHEDULED_HOURS and (today, current_hour) != last_crawl_slot:
-                logger.info(f"Fixed schedule reached ({current_hour:02d}:00). Running scheduled crawl...")
-                last_crawl_slot = (today, current_hour)
+            if hour in scheduled_hours and (today, hour) != last_crawl_slot:
+                logger.info(f"Fixed schedule reached ({hour:02d}:00). Running scheduled crawl...")
+                last_crawl_slot = (today, hour)
                 run_crawler_task()
-                
         except Exception as e:
             logger.error(f"Error in scheduler loop: {e}")
-            
-        time.sleep(30) # Check every 30 seconds
+        time.sleep(30)
 
-# API Endpoints
+
+# --- STATUS & CRAWL ENDPOINTS ---
+
 @app.get("/api/status")
 def get_status():
-    """Get the current crawling status and last update time."""
+    last_time = crawl_state["last_crawl_time"]
     return {
-        "is_crawling": is_crawling,
-        "last_crawl_time": last_crawl_time.strftime("%Y-%m-%d %H:%M:%S") if last_crawl_time else None,
-        "last_crawl_status": last_crawl_status,
-        "url_error": last_crawl_url_error,
-        "error_message": last_crawl_error_detail,
-        "http_status": last_crawl_http_status
+        "is_crawling": crawl_state["is_crawling"],
+        "last_crawl_time": last_time.strftime("%Y-%m-%d %H:%M:%S") if last_time else None,
+        "last_crawl_status": crawl_state["last_crawl_status"],
+        "url_error": crawl_state["url_error"],
+        "error_message": crawl_state["error_detail"],
+        "http_status": crawl_state["http_status"],
     }
+
 
 @app.get("/api/check-pbi-url")
 def check_pbi_url():
-    """Explicitly check Power BI URL health."""
-    global last_crawl_url_error, last_crawl_error_detail, last_crawl_http_status, last_crawl_status
-    is_valid, msg, code = check_powerbi_url_health()
+    is_valid, _, code = check_powerbi_url_health()
     if not is_valid:
-        full_msg = "Lỗi URL Power BI, liên hệ bộ phận IT để hỗ trợ"
-        last_crawl_url_error = True
-        last_crawl_error_detail = full_msg
-        last_crawl_http_status = code
-        last_crawl_status = f"URL Error ({code or 'Network'})"
-    else:
-        full_msg = ""
-        last_crawl_url_error = False
-        last_crawl_error_detail = ""
-        last_crawl_http_status = 200
-        last_crawl_status = "Online"
-    return {
-        "is_valid": is_valid,
-        "error_message": full_msg,
-        "http_status": code
-    }
+        _set_pbi_error(code, PBI_ERROR_TEXT)
+        return {"is_valid": False, "error_message": PBI_ERROR_TEXT, "http_status": code}
+    _clear_pbi_error("Online")
+    return {"is_valid": True, "error_message": "", "http_status": code}
+
 
 @app.post("/api/trigger-crawl")
 def trigger_crawl(background_tasks: BackgroundTasks):
-    """Manually trigger a crawl in a background task."""
-    global is_crawling, last_crawl_url_error, last_crawl_error_detail, last_crawl_http_status, last_crawl_status
-    if is_crawling:
+    if crawl_state["is_crawling"]:
         return {"status": "already_running", "message": "Crawl is already in progress"}
-    
-    # If URL error is flagged, probe first to see if link was updated
-    is_valid, msg, code = check_powerbi_url_health()
-    if not is_valid:
-        last_crawl_url_error = True
-        last_crawl_error_detail = "Lỗi URL Power BI, liên hệ bộ phận IT để hỗ trợ"
-        last_crawl_http_status = code
-        last_crawl_status = f"URL Error ({code or 'Network'})"
-        return {
-            "status": "url_error",
-            "message": "Lỗi URL Power BI, liên hệ bộ phận IT để hỗ trợ"
-        }
 
-    # URL is valid, clear error and run
-    last_crawl_url_error = False
-    last_crawl_error_detail = ""
-    last_crawl_http_status = 200
+    is_valid, _, code = check_powerbi_url_health()
+    if not is_valid:
+        _set_pbi_error(code, PBI_ERROR_TEXT)
+        return {"status": "url_error", "message": PBI_ERROR_TEXT}
+
+    _clear_pbi_error(status=None)
     background_tasks.add_task(run_crawler_task)
     return {"status": "triggered", "message": "Crawl triggered successfully"}
 
-# --- POS CONFIGURATION MODELS & ENDPOINTS ---
+
+# --- POS CONFIGURATION ---
+
 class PosConfigItem(BaseModel):
     pos_code: str
     is_active: bool
     pos_name: Optional[str] = None
 
+
 class PosConfigRequest(BaseModel):
     configs: list[PosConfigItem]
 
+
 @app.get("/api/pos-config")
 def get_pos_configs():
-    """Get list of all post offices with active status, type, and current item count."""
     conn = get_connection(with_db=True)
     try:
         with conn.cursor() as cursor:
-            cursor.execute("""
-                SELECT 
-                    c.pos_code, 
-                    c.pos_name, 
-                    c.is_active, 
-                    c.pos_type, 
-                    c.updated_at,
-                    COUNT(d.item_code) as item_count
+            cursor.execute(f"""
+                SELECT c.pos_code, c.pos_name, c.is_active, c.pos_type, c.updated_at, COUNT(d.item_code)
                 FROM pos_config c
-                LEFT JOIN detailed_report_staging d ON c.pos_code = d.pos_code AND d.province_ton = N'BĐT Lâm Đồng'
+                LEFT JOIN detailed_report_staging d ON c.pos_code = d.pos_code AND d.{PROVINCE_SQL}
                 GROUP BY c.pos_code, c.pos_name, c.is_active, c.pos_type, c.updated_at
                 ORDER BY c.is_active DESC, c.pos_name ASC
             """)
-            rows = cursor.fetchall()
-            results = []
-            for r in rows:
-                results.append({
+            return [
+                {
                     "pos_code": r[0],
                     "pos_name": r[1],
                     "is_active": bool(r[2]),
                     "pos_type": r[3] or "OTHER",
                     "updated_at": r[4].strftime("%Y-%m-%d %H:%M:%S") if r[4] else None,
-                    "item_count": r[5] or 0
-                })
-            return results
+                    "item_count": r[5] or 0,
+                }
+                for r in cursor.fetchall()
+            ]
     except Exception as e:
         logger.error(f"Error fetching pos config: {e}")
         return []
     finally:
         conn.close()
 
+
 @app.post("/api/pos-config")
 def update_pos_configs(req: PosConfigRequest):
-    """Batch update is_active status and pos_name for post offices."""
     if not req.configs:
         return {"status": "ok", "updated": 0}
     conn = get_connection(with_db=True, autocommit=False)
@@ -263,25 +356,20 @@ def update_pos_configs(req: PosConfigRequest):
                 code = item.pos_code.strip()
                 is_act = 1 if item.is_active else 0
                 new_name = item.pos_name.strip() if item.pos_name else None
-                
                 if new_name:
-                    cursor.execute("""
-                        UPDATE pos_config 
-                        SET is_active = %s, pos_name = %s, updated_at = GETDATE()
-                        WHERE pos_code = %s
-                    """, (is_act, new_name, code))
-                    
-                    cursor.execute("""
-                        UPDATE detailed_report_staging
-                        SET pos_name = %s
-                        WHERE pos_code = %s
-                    """, (new_name, code))
+                    cursor.execute(
+                        "UPDATE pos_config SET is_active = %s, pos_name = %s, updated_at = GETDATE() WHERE pos_code = %s",
+                        (is_act, new_name, code),
+                    )
+                    cursor.execute(
+                        "UPDATE detailed_report_staging SET pos_name = %s WHERE pos_code = %s",
+                        (new_name, code),
+                    )
                 else:
-                    cursor.execute("""
-                        UPDATE pos_config 
-                        SET is_active = %s, updated_at = GETDATE()
-                        WHERE pos_code = %s
-                    """, (is_act, code))
+                    cursor.execute(
+                        "UPDATE pos_config SET is_active = %s, updated_at = GETDATE() WHERE pos_code = %s",
+                        (is_act, code),
+                    )
         conn.commit()
         return {"status": "ok", "updated": len(req.configs)}
     except Exception as e:
@@ -291,70 +379,45 @@ def update_pos_configs(req: PosConfigRequest):
     finally:
         conn.close()
 
+
+# --- DASHBOARD DATA ENDPOINTS ---
+
 @app.get("/api/filters")
 def get_filters():
-    """Get unique filters list for dropdowns (POSNames, Statuses, Category ages). Filtered by active POS."""
     conn = get_connection(with_db=True)
     try:
         with conn.cursor() as cursor:
-            # POS Names list (only active post offices)
-            cursor.execute("""
-                SELECT DISTINCT pos_name 
-                FROM detailed_report_staging 
-                WHERE province_ton = N'BĐT Lâm Đồng' 
-                  AND pos_name IS NOT NULL
-                  AND (
-                      NOT EXISTS (SELECT 1 FROM pos_config WHERE is_active = 1)
-                      OR pos_code IN (SELECT pos_code FROM pos_config WHERE is_active = 1)
-                  )
+            cursor.execute(f"""
+                SELECT DISTINCT pos_name FROM detailed_report_staging
+                WHERE {PROVINCE_SQL} AND pos_name IS NOT NULL AND {ACTIVE_POS_SQL}
                 ORDER BY pos_name
             """)
             pos_names = [r[0] for r in cursor.fetchall() if r[0]]
-            
-            # Status Names list
-            cursor.execute("""
-                SELECT DISTINCT status_name 
-                FROM detailed_report_staging 
-                WHERE province_ton = N'BĐT Lâm Đồng' AND status_name IS NOT NULL
-                ORDER BY status_name
+
+            cursor.execute(f"""
+                SELECT DISTINCT status_name FROM detailed_report_staging
+                WHERE {PROVINCE_SQL} AND status_name IS NOT NULL ORDER BY status_name
             """)
             status_names = [r[0] for r in cursor.fetchall() if r[0]]
-            
-            # Category list
-            cursor.execute("""
-                SELECT DISTINCT loai_ton,
-                    CASE 
-                        WHEN loai_ton = N'<1 ngày' THEN 0.5
-                        WHEN loai_ton = N'≥1 ngày' THEN 1
-                        WHEN loai_ton = N'≥1.5 ngày' THEN 1.5
-                        WHEN loai_ton = N'≥2 ngày' THEN 2
-                        WHEN loai_ton = N'≥3 ngày' THEN 3
-                        WHEN loai_ton = N'≥4 ngày' THEN 4
-                        WHEN loai_ton = N'≥5 ngày' THEN 5
-                        WHEN loai_ton = N'≥7 ngày' THEN 7
-                        WHEN loai_ton = N'≥14 ngày' THEN 14
-                        ELSE 99
-                    END as sort_order
-                FROM detailed_report_staging 
-                WHERE province_ton = N'BĐT Lâm Đồng' AND loai_ton IS NOT NULL
-                ORDER BY sort_order ASC
+
+            cursor.execute(f"""
+                SELECT DISTINCT loai_ton, {LOAI_TON_SORT_SQL} AS sort_order
+                FROM detailed_report_staging
+                WHERE {PROVINCE_SQL} AND loai_ton IS NOT NULL ORDER BY sort_order ASC
             """)
             loai_tons = [r[0] for r in cursor.fetchall() if r[0]]
-            
-            # Nhom_KH list
-            cursor.execute("""
-                SELECT DISTINCT nhom_kh 
-                FROM detailed_report_staging 
-                WHERE province_ton = N'BĐT Lâm Đồng' AND nhom_kh IS NOT NULL
-                ORDER BY nhom_kh
+
+            cursor.execute(f"""
+                SELECT DISTINCT nhom_kh FROM detailed_report_staging
+                WHERE {PROVINCE_SQL} AND nhom_kh IS NOT NULL ORDER BY nhom_kh
             """)
             nhom_khs = [r[0] for r in cursor.fetchall() if r[0]]
-            
+
             return {
                 "pos_names": pos_names,
                 "status_names": status_names,
                 "loai_tons": loai_tons,
-                "nhom_khs": nhom_khs
+                "nhom_khs": nhom_khs,
             }
     except Exception as e:
         logger.error(f"Error fetching filters: {e}")
@@ -362,79 +425,44 @@ def get_filters():
     finally:
         conn.close()
 
+
 @app.get("/api/summary")
 def get_summary(nhom_kh: str = ""):
-    """Get KPI summary cards and the pivot matrix data by POS office, filtered by active POS."""
     conn = get_connection(with_db=True)
     try:
-        with conn.cursor() as cursor:
-            nhom_filter_sql = ""
-            params1 = []
-            params2 = []
-            if nhom_kh:
-                nhoms = [n.strip() for n in nhom_kh.split(",") if n.strip()]
-                if nhoms:
-                    placeholders = ", ".join(["%s"] * len(nhoms))
-                    nhom_filter_sql = f" AND nhom_kh IN ({placeholders})"
-                    params1 = list(nhoms)
-                    params2 = list(nhoms)
+        clauses = [PROVINCE_SQL, ACTIVE_POS_SQL]
+        params = []
+        _add_csv_filter(clauses, params, "nhom_kh", nhom_kh)
+        where_sql = " AND ".join(clauses)
 
-            # 1. Total Metrics (Filtered by active POS)
-            cursor.execute(f"""
-                SELECT 
-                    COUNT(*) as total_qty,
-                    SUM(cod_amount) as total_cod,
-                    SUM(weight) as total_weight
-                FROM detailed_report_staging
-                WHERE province_ton = N'BĐT Lâm Đồng'
-                  AND (
-                      NOT EXISTS (SELECT 1 FROM pos_config WHERE is_active = 1)
-                      OR pos_code IN (SELECT pos_code FROM pos_config WHERE is_active = 1)
-                  )
-                {nhom_filter_sql}
-            """, tuple(params1))
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"SELECT COUNT(*), SUM(cod_amount), SUM(weight) FROM detailed_report_staging WHERE {where_sql}",
+                tuple(params),
+            )
             kpis = cursor.fetchone()
             total_qty = kpis[0] if kpis and kpis[0] is not None else 0
             total_cod = float(kpis[1]) if kpis and kpis[1] is not None else 0.0
             total_weight = float(kpis[2]) if kpis and kpis[2] is not None else 0.0
-            
-            # 2. Pivot Matrix Data (Rows: POSName, Columns: loai_ton, Metrics: Count & COD, Filtered by active POS)
-            cursor.execute(f"""
-                SELECT 
-                    pos_name,
-                    loai_ton,
-                    COUNT(*) as qty,
-                    SUM(cod_amount) as cod
+
+            cursor.execute(
+                f"""
+                SELECT pos_name, loai_ton, COUNT(*), SUM(cod_amount)
                 FROM detailed_report_staging
-                WHERE province_ton = N'BĐT Lâm Đồng' AND pos_name IS NOT NULL AND loai_ton IS NOT NULL
-                  AND (
-                      NOT EXISTS (SELECT 1 FROM pos_config WHERE is_active = 1)
-                      OR pos_code IN (SELECT pos_code FROM pos_config WHERE is_active = 1)
-                  )
-                {nhom_filter_sql}
-                GROUP BY pos_name, loai_ton
-                ORDER BY pos_name
-            """, tuple(params2))
-            raw_matrix = cursor.fetchall()
-            
-            # Format matrix data for easy rendering in frontend
-            # We want: { "pos_name": { "loai_ton": { "qty": X, "cod": Y } } }
+                WHERE {where_sql} AND pos_name IS NOT NULL AND loai_ton IS NOT NULL
+                GROUP BY pos_name, loai_ton ORDER BY pos_name
+                """,
+                tuple(params),
+            )
             matrix_data = {}
-            for r in raw_matrix:
-                pos = r[0]
-                category = r[1]
-                qty = r[2]
-                cod = float(r[3]) if r[3] is not None else 0.0
-                
-                if pos not in matrix_data:
-                    matrix_data[pos] = {}
-                matrix_data[pos][category] = {"qty": qty, "cod": cod}
-                
+            for pos, category, qty, cod in cursor.fetchall():
+                matrix_data.setdefault(pos, {})[category] = {"qty": qty, "cod": float(cod or 0.0)}
+
             return {
                 "total_qty": total_qty,
                 "total_cod": total_cod,
                 "total_weight": total_weight,
-                "matrix": matrix_data
+                "matrix": matrix_data,
             }
     except Exception as e:
         logger.error(f"Error fetching summary: {e}")
@@ -442,91 +470,55 @@ def get_summary(nhom_kh: str = ""):
     finally:
         conn.close()
 
+
 @app.get("/api/bckt-summary")
 def get_bckt_summary():
-    """Get breakdown and detailed item list for Khai thác / KTC1 / BCKT / KHL / GD offices."""
     conn = get_connection(with_db=True)
     try:
         with conn.cursor() as cursor:
-            # 1. Grouped matrix per BCKT office
-            cursor.execute("""
-                SELECT pos_name, pos_code, loai_ton, COUNT(*) as qty, SUM(cod_amount) as cod
+            cursor.execute(f"""
+                SELECT pos_name, pos_code, loai_ton, COUNT(*), SUM(cod_amount)
                 FROM detailed_report_staging
-                WHERE province_ton = N'BĐT Lâm Đồng'
-                  AND (
-                      pos_name LIKE N'%KTC1%' 
-                      OR pos_name LIKE N'%BCKT%' 
-                      OR pos_name LIKE N'%KHL%' 
-                      OR pos_name LIKE N'%GD%' 
-                      OR pos_name LIKE N'%Hub%'
-                      OR pos_name LIKE N'%KT %'
-                  )
-                GROUP BY pos_name, pos_code, loai_ton
-                ORDER BY pos_name
+                WHERE {PROVINCE_SQL} AND {BCKT_POS_SQL}
+                GROUP BY pos_name, pos_code, loai_ton ORDER BY pos_name
             """)
-            raw_summary = cursor.fetchall()
-            
             summary_dict = {}
-            for r in raw_summary:
-                pos = r[0].strip()
-                code = r[1]
-                cat = r[2]
-                qty = r[3]
-                cod = float(r[4]) if r[4] is not None else 0.0
-                
-                if pos not in summary_dict:
-                    summary_dict[pos] = {
-                        "pos_name": pos,
-                        "pos_code": code,
-                        "total_qty": 0,
-                        "total_cod": 0.0,
-                        "matrix": {}
-                    }
-                summary_dict[pos]["matrix"][cat] = {"qty": qty, "cod": cod}
-                summary_dict[pos]["total_qty"] += qty
-                summary_dict[pos]["total_cod"] += cod
+            for raw_pos, code, cat, qty, raw_cod in cursor.fetchall():
+                pos = raw_pos.strip()
+                cod = float(raw_cod or 0.0)
+                entry = summary_dict.setdefault(pos, {
+                    "pos_name": pos, "pos_code": code, "total_qty": 0, "total_cod": 0.0, "matrix": {},
+                })
+                entry["matrix"][cat] = {"qty": qty, "cod": cod}
+                entry["total_qty"] += qty
+                entry["total_cod"] += cod
 
-            # 2. Detailed item list
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT item_code, pos_name, pos_code, loai_ton, status_name, cod_amount, weight, nhom_kh, postman_name
                 FROM detailed_report_staging
-                WHERE province_ton = N'BĐT Lâm Đồng'
-                  AND (
-                      pos_name LIKE N'%KTC1%' 
-                      OR pos_name LIKE N'%BCKT%' 
-                      OR pos_name LIKE N'%KHL%' 
-                      OR pos_name LIKE N'%GD%' 
-                      OR pos_name LIKE N'%Hub%'
-                      OR pos_name LIKE N'%KT %'
-                  )
+                WHERE {PROVINCE_SQL} AND {BCKT_POS_SQL}
                 ORDER BY cod_amount DESC, pos_name ASC
             """)
-            raw_items = cursor.fetchall()
-            items_list = []
-            for r in raw_items:
-                items_list.append({
-                    "item_code": r[0],
-                    "pos_name": r[1],
-                    "pos_code": r[2],
-                    "loai_ton": r[3],
-                    "status_name": r[4],
-                    "cod_amount": float(r[5]) if r[5] is not None else 0.0,
-                    "weight": float(r[6]) if r[6] is not None else 0.0,
-                    "nhom_kh": r[7],
-                    "postman_name": r[8]
-                })
-
+            items_list = [
+                {
+                    "item_code": r[0], "pos_name": r[1], "pos_code": r[2], "loai_ton": r[3],
+                    "status_name": r[4], "cod_amount": float(r[5] or 0.0), "weight": float(r[6] or 0.0),
+                    "nhom_kh": r[7], "postman_name": r[8],
+                }
+                for r in cursor.fetchall()
+            ]
             return {
                 "bckt_summary": list(summary_dict.values()),
                 "bckt_items": items_list,
                 "total_bckt_qty": len(items_list),
-                "total_bckt_cod": sum(i["cod_amount"] for i in items_list)
+                "total_bckt_cod": sum(i["cod_amount"] for i in items_list),
             }
     except Exception as e:
         logger.error(f"Error fetching bckt summary: {e}")
         return {"bckt_summary": [], "bckt_items": [], "total_bckt_qty": 0, "total_bckt_cod": 0.0}
     finally:
         conn.close()
+
 
 @app.get("/api/detailed")
 def get_detailed(
@@ -539,133 +531,56 @@ def get_detailed(
     nhom_kh: str = "",
     sort_col: str = "item_code",
     sort_dir: str = "asc",
-    codes_only: bool = False
+    codes_only: bool = False,
 ):
-    """Get detailed report data with server-side pagination, searching, sorting, and filtering."""
     conn = get_connection(with_db=True)
     try:
-        # Build query filters (filtered by active POS)
-        where_clauses = [
-            "province_ton = N'BĐT Lâm Đồng'",
-            "(NOT EXISTS (SELECT 1 FROM pos_config WHERE is_active = 1) OR pos_code IN (SELECT pos_code FROM pos_config WHERE is_active = 1))"
-        ]
-        params = []
-        
-        if search:
-            where_clauses.append("(item_code LIKE %s OR postman_name LIKE %s OR pos_name LIKE %s)")
-            params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
-            
-        if pos_name:
-            pos_list = [p.strip() for p in pos_name.split(",") if p.strip()]
-            logger.info(f"Detailed API filtering by pos_names: {pos_list}")
-            if pos_list:
-                placeholders = ",".join(["%s"] * len(pos_list))
-                where_clauses.append(f"pos_name IN ({placeholders})")
-                params.extend(pos_list)
-            
-        if loai_ton:
-            loai_list = [l.strip() for l in loai_ton.split(",") if l.strip()]
-            if loai_list:
-                placeholders = ",".join(["%s"] * len(loai_list))
-                where_clauses.append(f"loai_ton IN ({placeholders})")
-                params.extend(loai_list)
-            
-        if status_name:
-            status_list = [s.strip() for s in status_name.split(",") if s.strip()]
-            if status_list:
-                placeholders = ",".join(["%s"] * len(status_list))
-                where_clauses.append(f"status_name IN ({placeholders})")
-                params.extend(status_list)
-                
-        if nhom_kh:
-            nhom_list = [n.strip() for n in nhom_kh.split(",") if n.strip()]
-            if nhom_list:
-                placeholders = ",".join(["%s"] * len(nhom_list))
-                where_clauses.append(f"nhom_kh IN ({placeholders})")
-                params.extend(nhom_list)
-            
-        where_str = " AND ".join(where_clauses)
-        
-        # Fast path: If only codes are requested, return lightweight distinct list
+        where_str, params = _build_detailed_where(search, pos_name, loai_ton, status_name, nhom_kh)
+
         if codes_only:
-            codes_sql = f"SELECT DISTINCT item_code FROM detailed_report_staging WHERE {where_str}"
             with conn.cursor() as cursor:
-                cursor.execute(codes_sql, tuple(params))
-                rows = cursor.fetchall()
-                codes = [r[0] for r in rows if r[0]]
-            return {
-                "total": len(codes),
-                "codes": codes,
-                "rows": [{"item_code": c} for c in codes]
-            }
-        
-        # Validation of sort column to prevent SQL injection
-        allowed_sort_cols = ["item_code", "pos_code", "pos_name", "dk1", "status_name", "loai_ton", "cod_amount", "weight", "updated_at", "postman_name", "nhom_kh"]
-        if sort_col not in allowed_sort_cols:
-            sort_col = "item_code"
-            
-        sort_dir_str = "DESC" if sort_dir.lower() == "desc" else "ASC"
-        
-        if sort_col == "loai_ton":
-            order_by_clause = f"CASE WHEN loai_ton = N'<1 ngày' THEN 0.5 WHEN loai_ton = N'≥1 ngày' THEN 1 WHEN loai_ton = N'≥1.5 ngày' THEN 1.5 WHEN loai_ton = N'≥2 ngày' THEN 2 WHEN loai_ton = N'≥3 ngày' THEN 3 WHEN loai_ton = N'≥4 ngày' THEN 4 WHEN loai_ton = N'≥5 ngày' THEN 5 WHEN loai_ton = N'≥7 ngày' THEN 7 WHEN loai_ton = N'≥14 ngày' THEN 14 ELSE 99 END {sort_dir_str}"
-        else:
-            order_by_clause = f"{sort_col} {sort_dir_str}"
-        
-        # Query total count
-        count_sql = f"SELECT COUNT(*) FROM detailed_report_staging WHERE {where_str}"
-        logger.info(f"count_sql: {count_sql}")
-        logger.info(f"params: {params}")
-        
-        # Query paginated rows
-        # MS SQL Server uses OFFSET / FETCH NEXT for pagination (supported in SQL Server 2012+)
-        offset = (page - 1) * page_size
-        rows_sql = f"""
-            SELECT item_code, pos_code, pos_name, dk1, status_name, loai_ton, nhom_kh, cod_amount, weight, color_code, updated_at, postman_name
-            FROM detailed_report_staging
-            WHERE {where_str}
-            ORDER BY {order_by_clause}
-            OFFSET %s ROWS
-            FETCH NEXT %s ROWS ONLY
-        """
-        
+                cursor.execute(f"SELECT DISTINCT item_code FROM detailed_report_staging WHERE {where_str}", tuple(params))
+                codes = [r[0] for r in cursor.fetchall() if r[0]]
+            return {"total": len(codes), "codes": codes, "rows": [{"item_code": c} for c in codes]}
+
+        order_by = _build_order_by(sort_col, sort_dir)
+        safe_page = max(1, page)
+        safe_size = max(1, page_size)
+        offset = (safe_page - 1) * safe_size
+
         with conn.cursor() as cursor:
-            # 1. Total records count
-            cursor.execute(count_sql, tuple(params))
+            cursor.execute(f"SELECT COUNT(*) FROM detailed_report_staging WHERE {where_str}", tuple(params))
             total_records = cursor.fetchone()[0]
-            
-            # 2. Page records
-            cursor.execute(rows_sql, tuple(params + [offset, page_size]))
-            rows = cursor.fetchall()
-            
-            # Format date for response
-            formatted_rows = []
-            for r in rows:
-                formatted_rows.append({
-                    "item_code": r[0],
-                    "pos_code": r[1],
-                    "pos_name": r[2],
-                    "dk1": r[3],
-                    "status_name": r[4],
-                    "loai_ton": r[5],
-                    "nhom_kh": r[6],
-                    "cod_amount": float(r[7]) if r[7] is not None else 0.0,
-                    "weight": float(r[8]) if r[8] is not None else 0.0,
+
+            cursor.execute(
+                f"""
+                SELECT item_code, pos_code, pos_name, dk1, status_name, loai_ton, nhom_kh,
+                       cod_amount, weight, color_code, updated_at, postman_name
+                FROM detailed_report_staging
+                WHERE {where_str}
+                ORDER BY {order_by}
+                OFFSET %s ROWS FETCH NEXT %s ROWS ONLY
+                """,
+                tuple(params + [offset, safe_size]),
+            )
+            formatted_rows = [
+                {
+                    "item_code": r[0], "pos_code": r[1], "pos_name": r[2], "dk1": r[3],
+                    "status_name": r[4], "loai_ton": r[5], "nhom_kh": r[6],
+                    "cod_amount": float(r[7] or 0.0), "weight": float(r[8] or 0.0),
                     "color_code": r[9],
                     "updated_at": r[10].strftime("%Y-%m-%d %H:%M:%S") if r[10] else None,
-                    "postman_name": r[11]
-                })
-                
-        return {
-            "total": total_records,
-            "page": page,
-            "page_size": page_size,
-            "rows": formatted_rows
-        }
+                    "postman_name": r[11],
+                }
+                for r in cursor.fetchall()
+            ]
+        return {"total": total_records, "page": safe_page, "page_size": safe_size, "rows": formatted_rows}
     except Exception as e:
         logger.error(f"Error fetching detailed report: {e}")
         return {"total": 0, "page": page, "page_size": page_size, "rows": []}
     finally:
         conn.close()
+
 
 @app.get("/api/summary/export")
 def get_export(
@@ -675,144 +590,74 @@ def get_export(
     status_name: str = "",
     nhom_kh: str = "",
     sort_col: str = "item_code",
-    sort_dir: str = "asc"
+    sort_dir: str = "asc",
 ):
-    """
-    Get all rows matching filters (without pagination) for Excel/CSV export.
-    Returns raw rows.
-    """
     conn = get_connection(with_db=True)
     try:
-        where_clauses = [
-            "province_ton = N'BĐT Lâm Đồng'",
-            "(NOT EXISTS (SELECT 1 FROM pos_config WHERE is_active = 1) OR pos_code IN (SELECT pos_code FROM pos_config WHERE is_active = 1))"
-        ]
-        params = []
-        
-        if search:
-            where_clauses.append("(item_code LIKE %s OR pos_name LIKE %s)")
-            params.extend([f"%{search}%", f"%{search}%"])
-            
-        if pos_name:
-            pos_list = [p.strip() for p in pos_name.split(",") if p.strip()]
-            logger.info(f"Export API filtering by pos_names: {pos_list}")
-            if pos_list:
-                placeholders = ",".join(["%s"] * len(pos_list))
-                where_clauses.append(f"pos_name IN ({placeholders})")
-                params.extend(pos_list)
-            
-        if loai_ton:
-            loai_list = [l.strip() for l in loai_ton.split(",") if l.strip()]
-            if loai_list:
-                placeholders = ",".join(["%s"] * len(loai_list))
-                where_clauses.append(f"loai_ton IN ({placeholders})")
-                params.extend(loai_list)
-            
-        if status_name:
-            status_list = [s.strip() for s in status_name.split(",") if s.strip()]
-            if status_list:
-                placeholders = ",".join(["%s"] * len(status_list))
-                where_clauses.append(f"status_name IN ({placeholders})")
-                params.extend(status_list)
-                
-        if nhom_kh:
-            nhom_list = [n.strip() for n in nhom_kh.split(",") if n.strip()]
-            if nhom_list:
-                placeholders = ",".join(["%s"] * len(nhom_list))
-                where_clauses.append(f"nhom_kh IN ({placeholders})")
-                params.extend(nhom_list)
-            
-        where_str = " AND ".join(where_clauses)
-        
-        # Validation of sort column to prevent SQL injection
-        allowed_sort_cols = ["item_code", "pos_code", "pos_name", "dk1", "status_name", "loai_ton", "cod_amount", "weight", "updated_at"]
-        if sort_col not in allowed_sort_cols:
-            sort_col = "item_code"
-            
-        sort_dir_str = "DESC" if sort_dir.lower() == "desc" else "ASC"
-        
-        if sort_col == "loai_ton":
-            order_by_clause = f"CASE WHEN loai_ton = N'≥3 ngày' THEN 3 WHEN loai_ton = N'≥4 ngày' THEN 4 WHEN loai_ton = N'≥5 ngày' THEN 5 WHEN loai_ton = N'≥7 ngày' THEN 7 WHEN loai_ton = N'≥14 ngày' THEN 14 ELSE 99 END {sort_dir_str}"
-        else:
-            order_by_clause = f"{sort_col} {sort_dir_str}"
-        
-        rows_sql = f"""
-            SELECT item_code, pos_code, pos_name, dk1, status_name, loai_ton, nhom_kh, cod_amount, weight, updated_at, postman_name
-            FROM detailed_report_staging
-            WHERE {where_str}
-            ORDER BY {order_by_clause}
-        """
-        
+        where_str, params = _build_detailed_where(search, pos_name, loai_ton, status_name, nhom_kh)
+        order_by = _build_order_by(sort_col, sort_dir)
+
         with conn.cursor() as cursor:
-            cursor.execute(rows_sql, tuple(params))
-            # Use cursor iterator for streaming rows
-            rows = cursor.fetchall()
-            return StreamingResponse(
-                generate_excel_file(rows),
-                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                headers={"Content-Disposition": "attachment; filename=report_ton.xlsx"}
+            cursor.execute(
+                f"""
+                SELECT item_code, pos_code, pos_name, dk1, status_name, loai_ton, nhom_kh,
+                       cod_amount, weight, updated_at, postman_name
+                FROM detailed_report_staging
+                WHERE {where_str}
+                ORDER BY {order_by}
+                """,
+                tuple(params),
             )
+            wb = Workbook()
+            ws = wb.active
+            ws.append([
+                "Mã bưu gửi", "Mã bưu cục", "Bưu cục Phát", "DK1", "Thời gian tồn",
+                "Trạng thái", "Nhóm KH", "Bưu tá", "COD", "Trọng lượng", "Thời gian quét",
+            ])
+            for r in cursor.fetchall():
+                ws.append([
+                    r[0], r[1], r[2], r[3], r[5], r[4], r[6], r[10],
+                    float(r[7]) if r[7] else 0.0,
+                    float(r[8]) if r[8] else 0.0,
+                    r[9].strftime("%Y-%m-%d %H:%M:%S") if r[9] else "",
+                ])
+            return _xlsx_response(wb, "report_ton.xlsx")
     except Exception as e:
         logger.error(f"Error exporting data: {e}")
-        # Fallback: return an empty Excel file with error message
-        output = io.BytesIO()
         wb = Workbook()
         ws = wb.active
         ws.title = "Error"
         ws.append(["Error", str(e)])
-        wb.save(output)
-        output.seek(0)
-        return StreamingResponse(
-            io.BytesIO(output.read()),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": "attachment; filename=report_error.xlsx"}
-        )
+        return _xlsx_response(wb, "report_error.xlsx")
     finally:
         conn.close()
 
-def generate_excel_file(rows):
-    """Helper to generate Excel from DB rows."""
-    output = io.BytesIO()
-    wb = Workbook()
-    ws = wb.active
-    ws.append(["Mã bưu gửi", "Mã bưu cục", "Bưu cục Phát", "DK1", "Thời gian tồn", "Trạng thái", "Nhóm KH", "Bưu tá", "COD", "Trọng lượng", "Thời gian quét"])
-    for r in rows:
-        ws.append([r[0], r[1], r[2], r[3], r[5], r[4], r[6], r[10], float(r[7]) if r[7] else 0.0, float(r[8]) if r[8] else 0.0, r[9].strftime("%Y-%m-%d %H:%M:%S") if r[9] else ""])
-    wb.save(output)
-    output.seek(0)
-    return output
 
 @app.get("/api/history")
 def get_history():
-    """Get aggregate history metrics from daily_snapshot table for graphing."""
     conn = get_connection(with_db=True)
     try:
         with conn.cursor() as cursor:
-            cursor.execute("""
-                SELECT 
-                    snapshot_date,
-                    COUNT(*) as qty,
-                    SUM(cod_amount) as cod
+            cursor.execute(f"""
+                SELECT snapshot_date, COUNT(*), SUM(cod_amount)
                 FROM daily_snapshot
-                WHERE province_ton = N'BĐT Lâm Đồng'
-                GROUP BY snapshot_date
-                ORDER BY snapshot_date ASC
+                WHERE {PROVINCE_SQL}
+                GROUP BY snapshot_date ORDER BY snapshot_date ASC
             """)
-            rows = cursor.fetchall()
-            
-            history_data = []
-            for r in rows:
-                history_data.append({
-                    "date": r[0].strftime("%Y-%m-%d") if isinstance(r[0], datetime) or hasattr(r[0], 'strftime') else str(r[0]),
+            return [
+                {
+                    "date": r[0].strftime("%Y-%m-%d") if hasattr(r[0], "strftime") else str(r[0]),
                     "qty": r[1],
-                    "cod": float(r[2]) if r[2] is not None else 0.0
-                })
-            return history_data
+                    "cod": float(r[2] or 0.0),
+                }
+                for r in cursor.fetchall()
+            ]
     except Exception as e:
         logger.error(f"Error fetching history data: {e}")
         return []
     finally:
         conn.close()
+
 
 # --- INVENTORY COMPARISON & TREND ANALYTICS (TAB THỐNG KÊ) ---
 
@@ -820,245 +665,220 @@ def get_history():
 def get_inventory_comparison(
     target_date: Optional[str] = None,
     pos_code: Optional[str] = None,
-    nhom_kh: Optional[str] = None
+    nhom_kh: Optional[str] = None,
 ):
-    """
-    Get inventory backlog comparison between target date T and historical milestones:
-    T-1 (yesterday), T-5 (5 days ago), T-7 (7 days ago), T-14 (14 days ago).
-    """
     conn = get_connection(with_db=True)
     try:
         today_date = datetime.now().date()
-        if target_date:
-            try:
-                base_dt = datetime.strptime(target_date.strip(), "%Y-%m-%d").date()
-            except ValueError:
-                base_dt = today_date
-        else:
-            base_dt = today_date
-
+        base_dt = _parse_date(target_date)
         d_t = base_dt
         d_t1 = base_dt - timedelta(days=1)
         d_t5 = base_dt - timedelta(days=5)
         d_t7 = base_dt - timedelta(days=7)
         d_t14 = base_dt - timedelta(days=14)
+        is_base_today = d_t == today_date
 
-        is_base_today = (d_t == today_date)
-
-        pos_filter_staging = ""
-        pos_filter_snapshot = ""
-        nhom_filter_staging = ""
-        nhom_filter_snapshot = ""
+        extra_sql = ""
         params_filter = []
-
         if pos_code and pos_code.strip():
-            p_code = pos_code.strip()
-            pos_filter_staging += " AND pos_code = %s"
-            pos_filter_snapshot += " AND pos_code = %s"
-            params_filter.append(p_code)
-
+            extra_sql += " AND pos_code = %s"
+            params_filter.append(pos_code.strip())
         if nhom_kh and nhom_kh.strip():
-            n_kh = nhom_kh.strip()
-            nhom_filter_staging += " AND nhom_kh = %s"
-            nhom_filter_snapshot += " AND nhom_kh = %s"
-            params_filter.append(n_kh)
+            extra_sql += " AND nhom_kh = %s"
+            params_filter.append(nhom_kh.strip())
+
+        src_table = "detailed_report_staging" if is_base_today else "daily_snapshot"
+        date_cond = "" if is_base_today else " AND snapshot_date = %s"
+        base_params = ([] if is_base_today else [str(d_t)]) + params_filter
 
         with conn.cursor() as cursor:
-            # 1. Total KPI for date T
-            if is_base_today:
-                cursor.execute(f"""
-                    SELECT COUNT(*), COALESCE(SUM(cod_amount), 0), COALESCE(SUM(weight), 0)
-                    FROM detailed_report_staging
-                    WHERE province_ton = N'BĐT Lâm Đồng'
-                      {pos_filter_staging} {nhom_filter_staging}
-                """, tuple(params_filter))
-            else:
-                cursor.execute(f"""
-                    SELECT COUNT(*), COALESCE(SUM(cod_amount), 0), COALESCE(SUM(weight), 0)
-                    FROM daily_snapshot
-                    WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = %s
-                      {pos_filter_snapshot} {nhom_filter_snapshot}
-                """, (str(d_t),) + tuple(params_filter))
+            cursor.execute(
+                f"SELECT COUNT(*), COALESCE(SUM(cod_amount), 0), COALESCE(SUM(weight), 0) "
+                f"FROM {src_table} WHERE {PROVINCE_SQL} {date_cond} {extra_sql}",
+                tuple(base_params),
+            )
             row_t = cursor.fetchone()
             qty_t = row_t[0] or 0
             cod_t = float(row_t[1] or 0.0)
             weight_t = float(row_t[2] or 0.0)
 
-            # Query T-1, T-5, T-7, T-14 from daily_snapshot
             hist_dates = [str(d_t1), str(d_t5), str(d_t7), str(d_t14)]
-            cursor.execute(f"""
+            cursor.execute(
+                f"""
                 SELECT snapshot_date, COUNT(*), COALESCE(SUM(cod_amount), 0), COALESCE(SUM(weight), 0)
                 FROM daily_snapshot
-                WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date IN (%s, %s, %s, %s)
-                  {pos_filter_snapshot} {nhom_filter_snapshot}
+                WHERE {PROVINCE_SQL} AND snapshot_date IN (%s, %s, %s, %s) {extra_sql}
                 GROUP BY snapshot_date
-            """, tuple(hist_dates) + tuple(params_filter))
+                """,
+                tuple(hist_dates + params_filter),
+            )
             hist_rows = {str(r[0]): {"qty": r[1], "cod": float(r[2]), "weight": float(r[3])} for r in cursor.fetchall()}
 
             def calc_milestone(dt_obj, label):
-                dt_str = str(dt_obj)
-                item = hist_rows.get(dt_str, {"qty": 0, "cod": 0.0, "weight": 0.0})
-                q = item["qty"]
-                c = item["cod"]
+                item = hist_rows.get(str(dt_obj), {"qty": 0, "cod": 0.0})
+                q, c = item["qty"], item["cod"]
                 diff_q = qty_t - q
-                pct_q = round((diff_q / q * 100), 1) if q > 0 else 0.0
-                diff_c = cod_t - c
                 return {
-                    "date": dt_str,
+                    "date": str(dt_obj),
                     "label": label,
                     "qty": q,
                     "cod": c,
                     "diff_qty": diff_q,
-                    "pct_qty": pct_q,
-                    "diff_cod": diff_c
+                    "pct_qty": round(diff_q / q * 100, 1) if q > 0 else 0.0,
+                    "diff_cod": cod_t - c,
                 }
 
             milestones = {
-                "t": {
-                    "date": str(d_t),
-                    "label": f"Ngày chọn ({d_t.strftime('%d/%m/%Y')})",
-                    "qty": qty_t,
-                    "cod": cod_t,
-                    "weight": weight_t
-                },
+                "t": {"date": str(d_t), "label": f"Ngày chọn ({d_t.strftime('%d/%m/%Y')})", "qty": qty_t, "cod": cod_t, "weight": weight_t},
                 "t1": calc_milestone(d_t1, f"Hôm qua ({d_t1.strftime('%d/%m/%Y')})"),
                 "t5": calc_milestone(d_t5, f"5 ngày trước ({d_t5.strftime('%d/%m/%Y')})"),
                 "t7": calc_milestone(d_t7, f"7 ngày trước ({d_t7.strftime('%d/%m/%Y')})"),
                 "t14": calc_milestone(d_t14, f"14 ngày trước ({d_t14.strftime('%d/%m/%Y')})"),
             }
 
-            # 2. 14-day trend line up to target_date
-            trend_dates = [(base_dt - timedelta(days=i)) for i in range(13, -1, -1)]
-            trend_dates_str = [str(d) for d in trend_dates]
-            placeholders = ", ".join(["%s"] * len(trend_dates_str))
-            cursor.execute(f"""
+            # 14-day trend line
+            trend_dates = [base_dt - timedelta(days=i) for i in range(13, -1, -1)]
+            trend_strs = [str(d) for d in trend_dates]
+            placeholders = ", ".join(["%s"] * len(trend_strs))
+            cursor.execute(
+                f"""
                 SELECT snapshot_date, COUNT(*), COALESCE(SUM(cod_amount), 0)
                 FROM daily_snapshot
-                WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date IN ({placeholders})
-                  {pos_filter_snapshot} {nhom_filter_snapshot}
-                GROUP BY snapshot_date
-                ORDER BY snapshot_date ASC
-            """, tuple(trend_dates_str) + tuple(params_filter))
+                WHERE {PROVINCE_SQL} AND snapshot_date IN ({placeholders}) {extra_sql}
+                GROUP BY snapshot_date ORDER BY snapshot_date ASC
+                """,
+                tuple(trend_strs + params_filter),
+            )
             trend_dict = {str(r[0]): {"qty": r[1], "cod": float(r[2])} for r in cursor.fetchall()}
-            
-            timeline_trend = []
-            for d in trend_dates:
-                d_str = str(d)
-                if d == today_date and is_base_today:
-                    timeline_trend.append({"date": d_str, "label": d.strftime("%d/%m"), "qty": qty_t, "cod": cod_t})
-                else:
-                    val = trend_dict.get(d_str, {"qty": 0, "cod": 0.0})
-                    timeline_trend.append({"date": d_str, "label": d.strftime("%d/%m"), "qty": val["qty"], "cod": val["cod"]})
+            timeline_trend = [
+                {"date": str(d), "label": d.strftime("%d/%m"), "qty": qty_t, "cod": cod_t}
+                if d == today_date and is_base_today
+                else {"date": str(d), "label": d.strftime("%d/%m"), **trend_dict.get(str(d), {"qty": 0, "cod": 0.0})}
+                for d in trend_dates
+            ]
 
-            # 3. Age breakdown for date T
-            if is_base_today:
-                cursor.execute(f"""
-                    SELECT loai_ton, COUNT(*)
-                    FROM detailed_report_staging
-                    WHERE province_ton = N'BĐT Lâm Đồng' AND loai_ton IS NOT NULL
-                      {pos_filter_staging} {nhom_filter_staging}
-                    GROUP BY loai_ton
-                """, tuple(params_filter))
-            else:
-                cursor.execute(f"""
-                    SELECT loai_ton, COUNT(*)
-                    FROM daily_snapshot
-                    WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = %s AND loai_ton IS NOT NULL
-                      {pos_filter_snapshot} {nhom_filter_snapshot}
-                    GROUP BY loai_ton
-                """, (str(d_t),) + tuple(params_filter))
-            age_rows = cursor.fetchall()
-            age_breakdown = [{"loai_ton": r[0], "qty": r[1]} for r in age_rows]
+            # Age breakdown
+            cursor.execute(
+                f"SELECT loai_ton, COUNT(*), COALESCE(SUM(cod_amount), 0) "
+                f"FROM {src_table} WHERE {PROVINCE_SQL} AND loai_ton IS NOT NULL {date_cond} {extra_sql} GROUP BY loai_ton",
+                tuple(base_params),
+            )
+            raw_age = {r[0]: {"qty": r[1], "cod": float(r[2] or 0.0)} for r in cursor.fetchall()}
+            age_breakdown = [{"loai_ton": a, **raw_age[a]} for a in AGE_ORDER if a in raw_age]
+            age_breakdown.extend({"loai_ton": a, **v} for a, v in raw_age.items() if a not in AGE_ORDER)
 
-            # 4. Per-POS Matrix Breakdown
-            sub_t_sql = "SELECT 'T' as src, pos_code, cod_amount FROM detailed_report_staging WHERE province_ton = N'BĐT Lâm Đồng'" if is_base_today else f"SELECT 'T' as src, pos_code, cod_amount FROM daily_snapshot WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = '{d_t}'"
+            # Top 10 postmen
+            cursor.execute(
+                f"""
+                SELECT TOP 10 postman_name, MAX(pos_name), COUNT(*) AS qty,
+                       COALESCE(SUM(cod_amount), 0),
+                       SUM(CASE WHEN status_name = N'Phát không thành công' THEN 1 ELSE 0 END)
+                FROM {src_table}
+                WHERE {PROVINCE_SQL} AND postman_name IS NOT NULL AND LTRIM(RTRIM(postman_name)) != '' {date_cond} {extra_sql}
+                GROUP BY postman_name ORDER BY qty DESC
+                """,
+                tuple(base_params),
+            )
+            top_postmen = [
+                {"postman_name": r[0], "pos_name": r[1] or "", "qty": r[2], "cod_total": float(r[3] or 0.0), "failed_qty": r[4] or 0}
+                for r in cursor.fetchall()
+            ]
 
-            cursor.execute(f"""
-                SELECT 
-                    c.pos_code,
-                    c.pos_name,
-                    c.pos_type,
-                    SUM(CASE WHEN d.src = 'T' THEN 1 ELSE 0 END) as qty_t,
-                    SUM(CASE WHEN d.src = 'T1' THEN 1 ELSE 0 END) as qty_t1,
-                    SUM(CASE WHEN d.src = 'T5' THEN 1 ELSE 0 END) as qty_t5,
-                    SUM(CASE WHEN d.src = 'T7' THEN 1 ELSE 0 END) as qty_t7,
-                    SUM(CASE WHEN d.src = 'T14' THEN 1 ELSE 0 END) as qty_t14,
-                    SUM(CASE WHEN d.src = 'T' THEN d.cod_amount ELSE 0 END) as cod_t
+            # Customer groups & operational status
+            cursor.execute(
+                f"SELECT nhom_kh, COUNT(*) AS qty, COALESCE(SUM(cod_amount), 0) "
+                f"FROM {src_table} WHERE {PROVINCE_SQL} AND nhom_kh IS NOT NULL {date_cond} {extra_sql} "
+                f"GROUP BY nhom_kh ORDER BY qty DESC",
+                tuple(base_params),
+            )
+            customer_groups = [{"nhom_kh": r[0], "qty": r[1], "cod_total": float(r[2] or 0.0)} for r in cursor.fetchall()]
+
+            cursor.execute(
+                f"SELECT status_name, COUNT(*) AS qty, COALESCE(SUM(cod_amount), 0) "
+                f"FROM {src_table} WHERE {PROVINCE_SQL} AND status_name IS NOT NULL {date_cond} {extra_sql} "
+                f"GROUP BY status_name ORDER BY qty DESC",
+                tuple(base_params),
+            )
+            status_breakdown = [{"status_name": r[0], "qty": r[1], "cod_total": float(r[2] or 0.0)} for r in cursor.fetchall()]
+
+            critical_age_qty = sum(i["qty"] for i in age_breakdown if "≥7" in i["loai_ton"] or "≥14" in i["loai_ton"])
+            on_delivery_qty = sum(i["qty"] for i in status_breakdown if "bưu tá" in i["status_name"].lower())
+            failed_delivery_qty = sum(i["qty"] for i in status_breakdown if "không thành công" in i["status_name"].lower())
+
+            # Per-POS comparison matrix (parameterized for date T too)
+            sub_t_sql = (
+                f"SELECT 'T' AS src, pos_code, cod_amount FROM detailed_report_staging WHERE {PROVINCE_SQL}"
+                if is_base_today
+                else f"SELECT 'T' AS src, pos_code, cod_amount FROM daily_snapshot WHERE {PROVINCE_SQL} AND snapshot_date = %s"
+            )
+            matrix_params = ([] if is_base_today else [str(d_t)]) + hist_dates
+            cursor.execute(
+                f"""
+                SELECT c.pos_code, c.pos_name, c.pos_type,
+                       SUM(CASE WHEN d.src = 'T' THEN 1 ELSE 0 END) AS qty_t,
+                       SUM(CASE WHEN d.src = 'T1' THEN 1 ELSE 0 END),
+                       SUM(CASE WHEN d.src = 'T5' THEN 1 ELSE 0 END),
+                       SUM(CASE WHEN d.src = 'T7' THEN 1 ELSE 0 END),
+                       SUM(CASE WHEN d.src = 'T14' THEN 1 ELSE 0 END),
+                       SUM(CASE WHEN d.src = 'T' THEN d.cod_amount ELSE 0 END)
                 FROM pos_config c
                 LEFT JOIN (
                     {sub_t_sql}
-                    UNION ALL
-                    SELECT 'T1' as src, pos_code, cod_amount FROM daily_snapshot WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = %s
-                    UNION ALL
-                    SELECT 'T5' as src, pos_code, cod_amount FROM daily_snapshot WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = %s
-                    UNION ALL
-                    SELECT 'T7' as src, pos_code, cod_amount FROM daily_snapshot WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = %s
-                    UNION ALL
-                    SELECT 'T14' as src, pos_code, cod_amount FROM daily_snapshot WHERE province_ton = N'BĐT Lâm Đồng' AND snapshot_date = %s
+                    UNION ALL SELECT 'T1', pos_code, cod_amount FROM daily_snapshot WHERE {PROVINCE_SQL} AND snapshot_date = %s
+                    UNION ALL SELECT 'T5', pos_code, cod_amount FROM daily_snapshot WHERE {PROVINCE_SQL} AND snapshot_date = %s
+                    UNION ALL SELECT 'T7', pos_code, cod_amount FROM daily_snapshot WHERE {PROVINCE_SQL} AND snapshot_date = %s
+                    UNION ALL SELECT 'T14', pos_code, cod_amount FROM daily_snapshot WHERE {PROVINCE_SQL} AND snapshot_date = %s
                 ) d ON c.pos_code = d.pos_code
                 WHERE c.is_active = 1
                 GROUP BY c.pos_code, c.pos_name, c.pos_type
                 ORDER BY qty_t DESC
-            """, (str(d_t1), str(d_t5), str(d_t7), str(d_t14)))
-            pos_matrix_rows = cursor.fetchall()
-
+                """,
+                tuple(matrix_params),
+            )
             pos_matrix = []
-            for r in pos_matrix_rows:
-                p_code = r[0]
-                p_name = r[1]
-                p_type = r[2] or "BCP"
-                q_t = r[3] or 0
-                q_t1 = r[4] or 0
-                q_t5 = r[5] or 0
-                q_t7 = r[6] or 0
-                q_t14 = r[7] or 0
-                c_t = float(r[8] or 0.0)
-
+            for p_code, p_name, p_type, q_t, q_t1, q_t5, q_t7, q_t14, c_t in cursor.fetchall():
+                q_t, q_t1, q_t5, q_t7, q_t14 = q_t or 0, q_t1 or 0, q_t5 or 0, q_t7 or 0, q_t14 or 0
                 diff_1 = q_t - q_t1
-                pct_1 = round((diff_1 / q_t1 * 100), 1) if q_t1 > 0 else 0.0
-                diff_5 = q_t - q_t5
-                diff_7 = q_t - q_t7
-                diff_14 = q_t - q_t14
-
+                pct_1 = round(diff_1 / q_t1 * 100, 1) if q_t1 > 0 else 0.0
                 if diff_1 < 0:
-                    status_text = "Giảm tốt"
-                    status_type = "success"
+                    status_text, status_type = "Giảm tốt", "success"
                 elif diff_1 == 0:
-                    status_text = "Ổn định"
-                    status_type = "neutral"
+                    status_text, status_type = "Ổn định", "neutral"
                 elif diff_1 > 100 or pct_1 > 20:
-                    status_text = "Tăng cao"
-                    status_type = "danger"
+                    status_text, status_type = "Tăng cao", "danger"
                 else:
-                    status_text = "Tăng nhẹ"
-                    status_type = "warning"
-
+                    status_text, status_type = "Tăng nhẹ", "warning"
                 pos_matrix.append({
-                    "pos_code": p_code,
-                    "pos_name": p_name,
-                    "pos_type": p_type,
-                    "qty_t": q_t,
-                    "qty_t1": q_t1,
-                    "diff_t1": diff_1,
-                    "pct_t1": pct_1,
-                    "qty_t5": q_t5,
-                    "diff_t5": diff_5,
-                    "qty_t7": q_t7,
-                    "diff_t7": diff_7,
-                    "qty_t14": q_t14,
-                    "diff_t14": diff_14,
-                    "cod_t": c_t,
-                    "status_text": status_text,
-                    "status_type": status_type
+                    "pos_code": p_code, "pos_name": p_name, "pos_type": p_type or "BCP",
+                    "qty_t": q_t, "qty_t1": q_t1, "diff_t1": diff_1, "pct_t1": pct_1,
+                    "qty_t5": q_t5, "diff_t5": q_t - q_t5,
+                    "qty_t7": q_t7, "diff_t7": q_t - q_t7,
+                    "qty_t14": q_t14, "diff_t14": q_t - q_t14,
+                    "cod_t": float(c_t or 0.0),
+                    "status_text": status_text, "status_type": status_type,
                 })
 
             return {
                 "base_date": str(d_t),
                 "is_base_today": is_base_today,
                 "milestones": milestones,
+                "kpi_summary": {
+                    "total_qty": qty_t,
+                    "total_cod": cod_t,
+                    "total_weight": weight_t,
+                    "on_delivery_qty": on_delivery_qty,
+                    "failed_delivery_qty": failed_delivery_qty,
+                    "critical_age_qty": critical_age_qty,
+                    "diff_t1": milestones["t1"]["diff_qty"],
+                    "pct_t1": milestones["t1"]["pct_qty"],
+                    "diff_cod_t1": milestones["t1"]["diff_cod"],
+                },
                 "timeline_trend": timeline_trend,
                 "age_breakdown": age_breakdown,
-                "pos_matrix": pos_matrix
+                "top_postmen": top_postmen,
+                "customer_groups": customer_groups,
+                "status_breakdown": status_breakdown,
+                "pos_matrix": pos_matrix,
             }
     except Exception as e:
         logger.error(f"Error fetching inventory comparison: {e}")
@@ -1066,29 +886,136 @@ def get_inventory_comparison(
     finally:
         conn.close()
 
+
+@app.get("/api/thongke/drilldown")
+def get_thongke_drilldown(
+    target_date: Optional[str] = None,
+    pos_code: Optional[str] = None,
+    postman_name: Optional[str] = None,
+    loai_ton: Optional[str] = None,
+    status_name: Optional[str] = None,
+    nhom_kh: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
+):
+    conn = get_connection(with_db=True)
+    try:
+        _, src_table, where_clause, params = _build_drilldown_query(
+            target_date, pos_code, postman_name, loai_ton, status_name, nhom_kh, search
+        )
+        safe_page = max(1, page)
+        safe_limit = min(max(1, limit), 200)
+        offset = (safe_page - 1) * safe_limit
+
+        with conn.cursor() as cursor:
+            cursor.execute(f"SELECT COUNT(*) FROM {src_table} {where_clause}", tuple(params))
+            total_count = cursor.fetchone()[0] or 0
+
+            cursor.execute(
+                f"""
+                SELECT item_code, pos_code, pos_name, postman_name, loai_ton, status_name, nhom_kh, cod_amount, weight, updated_at
+                FROM {src_table} {where_clause}
+                ORDER BY cod_amount DESC, item_code ASC
+                OFFSET %s ROWS FETCH NEXT %s ROWS ONLY
+                """,
+                tuple(params) + (offset, safe_limit),
+            )
+            items = [
+                {
+                    "item_code": r[0], "pos_code": r[1], "pos_name": r[2],
+                    "postman_name": r[3] or "Chưa phân tuyến", "loai_ton": r[4] or "",
+                    "status_name": r[5] or "", "nhom_kh": r[6] or "",
+                    "cod_amount": float(r[7] or 0.0), "weight": float(r[8] or 0.0),
+                    "updated_at": r[9].strftime("%d/%m/%Y %H:%M") if r[9] else "",
+                }
+                for r in cursor.fetchall()
+            ]
+        return {
+            "total": total_count,
+            "page": safe_page,
+            "limit": safe_limit,
+            "total_pages": (total_count + safe_limit - 1) // safe_limit,
+            "items": items,
+        }
+    except Exception as e:
+        logger.error(f"Error in thongke drilldown: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/api/thongke/drilldown/export")
+def export_thongke_drilldown(
+    target_date: Optional[str] = None,
+    pos_code: Optional[str] = None,
+    postman_name: Optional[str] = None,
+    loai_ton: Optional[str] = None,
+    status_name: Optional[str] = None,
+    nhom_kh: Optional[str] = None,
+    search: Optional[str] = None,
+):
+    conn = get_connection(with_db=True)
+    try:
+        base_dt, src_table, where_clause, params = _build_drilldown_query(
+            target_date, pos_code, postman_name, loai_ton, status_name, nhom_kh, search
+        )
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT TOP 10000 item_code, pos_code, pos_name, postman_name, loai_ton, status_name, nhom_kh, cod_amount, weight, updated_at
+                FROM {src_table} {where_clause}
+                ORDER BY cod_amount DESC, item_code ASC
+                """,
+                tuple(params),
+            )
+            rows = cursor.fetchall()
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "ChiTietHangTon"
+        headers = [
+            "STT", "Mã bưu gửi", "Mã BC", "Tên bưu cục", "Bưu tá phát",
+            "Tuổi tồn", "Trạng thái", "Nhóm KH", "Tiền COD (đ)", "Khối lượng (kg)", "Cập nhật",
+        ]
+        ws.append(headers)
+        _style_header_row(ws, 1, len(headers), fill_hex="0D9488", border_color="CBD5E1")
+        border = _thin_border("CBD5E1")
+
+        for idx, r in enumerate(rows, start=1):
+            ws.append([
+                idx, r[0], r[1], r[2], r[3] or "Chưa phân tuyến", r[4] or "", r[5] or "", r[6] or "",
+                float(r[7] or 0.0), float(r[8] or 0.0), r[9].strftime("%d/%m/%Y %H:%M") if r[9] else "",
+            ])
+            row_num = idx + 1
+            for col_idx in range(1, len(headers) + 1):
+                c = ws.cell(row=row_num, column=col_idx)
+                c.border = border
+                if col_idx in (1, 2, 3):
+                    c.alignment = Alignment(horizontal="center")
+                elif col_idx in (9, 10):
+                    c.alignment = Alignment(horizontal="right")
+                    c.number_format = "#,##0" if col_idx == 9 else "#,##0.00"
+
+        _autofit_columns(ws, min_w=10, max_w=35)
+        return _xlsx_response(wb, f"Chi_tiet_buu_gui_ton_{base_dt}.xlsx")
+    except Exception as e:
+        logger.error(f"Error exporting thongke drilldown: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
 @app.get("/api/inventory-comparison/export")
 def export_inventory_comparison(
     target_date: Optional[str] = None,
     pos_code: Optional[str] = None,
-    nhom_kh: Optional[str] = None
+    nhom_kh: Optional[str] = None,
 ):
-    """Export comparison report to Excel with OpenPyXL formatting."""
     data = get_inventory_comparison(target_date=target_date, pos_code=pos_code, nhom_kh=nhom_kh)
-    
-    output = io.BytesIO()
     wb = Workbook()
-    
-    # Header styles
-    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="047857", end_color="047857", fill_type="solid")
     title_font = Font(name="Calibri", size=14, bold=True, color="047857")
-    bold_font = Font(name="Calibri", size=11, bold=True)
-    border_thin = Border(
-        left=Side(style='thin', color='D1D5DB'),
-        right=Side(style='thin', color='D1D5DB'),
-        top=Side(style='thin', color='D1D5DB'),
-        bottom=Side(style='thin', color='D1D5DB')
-    )
+    border = _thin_border("D1D5DB")
 
     # Sheet 1: Tổng hợp & So sánh
     ws1 = wb.active
@@ -1097,103 +1024,62 @@ def export_inventory_comparison(
     ws1.cell(row=1, column=1).font = title_font
     ws1.append([f"Ngày cơ sở đối chiếu: {data['base_date']}"])
     ws1.append([])
-
-    # KPI Milestones table
     ws1.append(["Mốc thời gian", "Ngày đối chiếu", "Sản lượng tồn (đơn)", "Tổng COD (đ)", "Chênh lệch so với T (đơn)", "Tỷ lệ tăng/giảm (%)"])
-    for col_idx in range(1, 7):
-        cell = ws1.cell(row=4, column=col_idx)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-        cell.border = border_thin
+    _style_header_row(ws1, 4, 6, fill_hex="047857", border_color="D1D5DB")
 
     m = data["milestones"]
-    rows_m = [
-        ["Ngày chọn (T)", m["t"]["date"], m["t"]["qty"], m["t"]["cod"], 0, "0.0%"],
-        ["Hôm qua (T-1)", m["t1"]["date"], m["t1"]["qty"], m["t1"]["cod"], m["t1"]["diff_qty"], f"{m['t1']['pct_qty']:+0.1f}%"],
-        ["5 ngày trước (T-5)", m["t5"]["date"], m["t5"]["qty"], m["t5"]["cod"], m["t5"]["diff_qty"], f"{m['t5']['pct_qty']:+0.1f}%"],
-        ["7 ngày trước (T-7)", m["t7"]["date"], m["t7"]["qty"], m["t7"]["cod"], m["t7"]["diff_qty"], f"{m['t7']['pct_qty']:+0.1f}%"],
-        ["14 ngày trước (T-14)", m["t14"]["date"], m["t14"]["qty"], m["t14"]["cod"], m["t14"]["diff_qty"], f"{m['t14']['pct_qty']:+0.1f}%"],
+    milestone_rows = [
+        ("Ngày chọn (T)", m["t"]["date"], m["t"]["qty"], m["t"]["cod"], 0, "0.0%"),
+        ("Hôm qua (T-1)", m["t1"]["date"], m["t1"]["qty"], m["t1"]["cod"], m["t1"]["diff_qty"], f"{m['t1']['pct_qty']:+0.1f}%"),
+        ("5 ngày trước (T-5)", m["t5"]["date"], m["t5"]["qty"], m["t5"]["cod"], m["t5"]["diff_qty"], f"{m['t5']['pct_qty']:+0.1f}%"),
+        ("7 ngày trước (T-7)", m["t7"]["date"], m["t7"]["qty"], m["t7"]["cod"], m["t7"]["diff_qty"], f"{m['t7']['pct_qty']:+0.1f}%"),
+        ("14 ngày trước (T-14)", m["t14"]["date"], m["t14"]["qty"], m["t14"]["cod"], m["t14"]["diff_qty"], f"{m['t14']['pct_qty']:+0.1f}%"),
     ]
-    for r in rows_m:
-        ws1.append(r)
-        curr_row = ws1.max_row
+    for r in milestone_rows:
+        ws1.append(list(r))
         for col_idx in range(1, 7):
-            cell = ws1.cell(row=curr_row, column=col_idx)
-            cell.border = border_thin
-            if col_idx in [3, 4, 5]:
-                cell.number_format = '#,##0'
-                cell.alignment = Alignment(horizontal="right")
+            c = ws1.cell(row=ws1.max_row, column=col_idx)
+            c.border = border
+            if col_idx in (3, 4, 5):
+                c.number_format = "#,##0"
+                c.alignment = Alignment(horizontal="right")
 
-    # Sheet 2: Chi tiết Ma trận Bưu cục
+    # Sheet 2: Ma trận Bưu cục
     ws2 = wb.create_sheet(title="Ma Trận Bưu Cục")
     ws2.append(["MA TRẬN ĐỐI CHIẾU HÀNG TỒN CHI TIẾT THEO BƯU CỤC"])
     ws2.cell(row=1, column=1).font = title_font
     ws2.append([f"Ngày cơ sở: {data['base_date']}"])
     ws2.append([])
-
-    headers_pos = ["STT", "Mã BC", "Tên bưu cục", "Loại BC", "Tồn ngày T (đơn)", "Hôm qua T-1", "Chênh lệch T-1", "% Biến động T-1", "5N trước T-5", "7N trước T-7", "14N trước T-14", "COD T (đ)", "Đánh giá"]
+    headers_pos = [
+        "STT", "Mã BC", "Tên bưu cục", "Loại BC", "Tồn ngày T (đơn)", "Hôm qua T-1",
+        "Chênh lệch T-1", "% Biến động T-1", "5N trước T-5", "7N trước T-7", "14N trước T-14", "COD T (đ)", "Đánh giá",
+    ]
     ws2.append(headers_pos)
-    for col_idx in range(1, len(headers_pos) + 1):
-        cell = ws2.cell(row=4, column=col_idx)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-        cell.border = border_thin
+    _style_header_row(ws2, 4, len(headers_pos), fill_hex="047857", border_color="D1D5DB")
 
     fill_green = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
     fill_red = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
 
-    for idx, p in enumerate(data["pos_matrix"]):
-        row_vals = [
-            idx + 1,
-            p["pos_code"],
-            p["pos_name"],
-            p["pos_type"],
-            p["qty_t"],
-            p["qty_t1"],
-            p["diff_t1"],
-            f"{p['pct_t1']:+0.1f}%",
-            p["qty_t5"],
-            p["qty_t7"],
-            p["qty_t14"],
-            p["cod_t"],
-            p["status_text"]
-        ]
-        ws2.append(row_vals)
-        curr_row = ws2.max_row
+    for idx, p in enumerate(data["pos_matrix"], start=1):
+        ws2.append([
+            idx, p["pos_code"], p["pos_name"], p["pos_type"], p["qty_t"], p["qty_t1"],
+            p["diff_t1"], f"{p['pct_t1']:+0.1f}%", p["qty_t5"], p["qty_t7"], p["qty_t14"], p["cod_t"], p["status_text"],
+        ])
         for col_idx in range(1, len(headers_pos) + 1):
-            cell = ws2.cell(row=curr_row, column=col_idx)
-            cell.border = border_thin
-            if col_idx in [5, 6, 7, 9, 10, 11, 12]:
-                cell.number_format = '#,##0'
-                cell.alignment = Alignment(horizontal="right")
-            if col_idx == 7: # diff_t1
-                if p["diff_t1"] < 0:
-                    cell.fill = fill_green
-                elif p["diff_t1"] > 0:
-                    cell.fill = fill_red
+            c = ws2.cell(row=ws2.max_row, column=col_idx)
+            c.border = border
+            if col_idx in (5, 6, 7, 9, 10, 11, 12):
+                c.number_format = "#,##0"
+                c.alignment = Alignment(horizontal="right")
+            if col_idx == 7 and p["diff_t1"] != 0:
+                c.fill = fill_green if p["diff_t1"] < 0 else fill_red
 
-    # Adjust column widths
-    for ws in [ws1, ws2]:
-        for col in ws.columns:
-            max_len = max(len(str(cell.value or '')) for cell in col)
-            col_letter = col[0].column_letter
-            ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+    _autofit_columns(ws1, min_w=12)
+    _autofit_columns(ws2, min_w=12)
+    return _xlsx_response(wb, f"BaoCao_SoSanhTon_{data['base_date'].replace('-', '')}.xlsx")
 
-    wb.save(output)
-    output.seek(0)
-    filename = f"BaoCao_SoSanhTon_{data['base_date'].replace('-', '')}.xlsx"
-    return StreamingResponse(
-        output,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
 
 # --- AUTHENTICATION & USER MANAGEMENT ---
-
-JWT_SECRET = os.getenv("JWT_SECRET", "vnpost-excel-exporter-jwt-secret-key-2026-dynamic-secure")
-JWT_ALGORITHM = "HS256"
 
 class LoginRequest(BaseModel):
     username: str
@@ -1201,6 +1087,7 @@ class LoginRequest(BaseModel):
     captchaSolution: Optional[str] = None
     initialFields: Optional[dict] = None
     initialCookies: Optional[dict] = None
+
 
 class ImportUserItem(BaseModel):
     username: str
@@ -1210,8 +1097,10 @@ class ImportUserItem(BaseModel):
     vnpost_username: Optional[str] = None
     vnpost_password: Optional[str] = None
 
+
 class ImportUsersRequest(BaseModel):
     users: list[ImportUserItem]
+
 
 class UserCreate(BaseModel):
     username: str
@@ -1221,6 +1110,7 @@ class UserCreate(BaseModel):
     vnpost_username: Optional[str] = None
     vnpost_password: Optional[str] = None
 
+
 class UserUpdate(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
@@ -1229,125 +1119,110 @@ class UserUpdate(BaseModel):
     vnpost_username: Optional[str] = None
     vnpost_password: Optional[str] = None
 
+
 class SettingsUpdate(BaseModel):
     vnpost_cookie: Optional[str] = None
     vnpost_username: Optional[str] = None
     vnpost_password: Optional[str] = None
     password: Optional[str] = None
 
+
 def get_current_user(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Không tìm thấy mã Token xác thực.")
-    token = authorization.split(" ")[1]
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload
+        return jwt.decode(authorization.split(" ")[1], JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except Exception:
         raise HTTPException(status_code=403, detail="Token không hợp lệ hoặc đã hết hạn.")
+
+
+def require_admin(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Từ chối truy cập. Quyền Admin được yêu cầu.")
+    return current_user
+
 
 @app.get("/api/auth/login-captcha")
 def get_login_captcha():
     try:
-        r = requests.get(f"{DINHVI_BACKEND_URL}/api/auth/login-captcha")
+        r = requests.get(f"{DINHVI_BACKEND_URL}/api/auth/login-captcha", timeout=15)
         if r.status_code == 200:
             return r.json()
         raise HTTPException(status_code=r.status_code, detail="Không thể lấy captcha từ Node.js")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi lấy Captcha từ máy chủ: {e}")
+
 
 @app.get("/api/app-version")
 def get_app_version():
     return {"version": "3.10.0"}
 
+
 @app.post("/api/auth/login")
 def auth_login(req: LoginRequest):
     username = req.username.strip()
     password = req.password
-    
     conn = get_connection(with_db=True)
     try:
         with conn.cursor() as cursor:
-            cursor.execute("""
-                SELECT id, username, password_hash, role, concurrency_limit, vnpost_cookie
-                FROM users 
-                WHERE username = %s
-            """, (username,))
+            cursor.execute(
+                "SELECT id, username, password_hash, role, concurrency_limit, vnpost_cookie FROM users WHERE username = %s",
+                (username,),
+            )
             row = cursor.fetchone()
             if not row:
                 raise HTTPException(status_code=400, detail="Tài khoản không tồn tại.")
-                
-            user_id, db_username, db_password_hash, db_role, db_concurrency_limit, db_cookie = row
-            
-            is_first_login = (db_password_hash is None or db_password_hash == "" or 
-                              db_password_hash == "BCCP_PENDING" or 
-                              db_password_hash == "vnpost-auth-placeholder")
-            
-            has_captcha = bool(req.captchaSolution and req.initialFields and req.initialCookies)
-            
-            if is_first_login:
-                # ── FIRST LOGIN: Set password directly without requiring Captcha ──
-                hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                cursor.execute("""
-                    UPDATE users 
-                    SET password_hash = %s, vnpost_username = %s, vnpost_password = %s
-                    WHERE id = %s
-                """, (hashed, username, password, user_id))
-                sync_user_to_sqlite(db_username, db_role, db_concurrency_limit, hashed)
-                logger.info(f"First login complete for '{username}' — password initialized.")
 
+            user_id, db_username, db_password_hash, db_role, db_concurrency_limit, db_cookie = row
+
+            if db_password_hash in FIRST_LOGIN_MARKERS:
+                hashed = _hash_password(password)
+                cursor.execute(
+                    "UPDATE users SET password_hash = %s, vnpost_username = %s, vnpost_password = %s WHERE id = %s",
+                    (hashed, username, password, user_id),
+                )
+                logger.info(f"First login complete for '{username}' — password initialized.")
             else:
-                # ── REGULAR LOGIN: verify password locally ──
                 try:
-                    is_correct = bcrypt.checkpw(password.encode('utf-8'), db_password_hash.encode('utf-8'))
+                    is_correct = bcrypt.checkpw(password.encode("utf-8"), db_password_hash.encode("utf-8"))
                 except Exception:
                     is_correct = False
-                    
                 if not is_correct:
                     raise HTTPException(status_code=400, detail="Mật khẩu không chính xác.")
-                
-                # Always sync vnpost_username and vnpost_password so worker threads have credentials
-                cursor.execute("""
-                    UPDATE users 
-                    SET vnpost_username = %s, vnpost_password = %s 
-                    WHERE id = %s
-                """, (username, password, user_id))
-                
-                # Optional: If captcha was provided, refresh VNPost session slot 0
-                if has_captcha:
+
+                cursor.execute(
+                    "UPDATE users SET vnpost_username = %s, vnpost_password = %s WHERE id = %s",
+                    (username, password, user_id),
+                )
+
+                if req.captchaSolution and req.initialFields and req.initialCookies:
                     try:
-                        payload = {
-                            "username": username,
-                            "password": password,
-                            "captchaSolution": req.captchaSolution,
-                            "initialFields": req.initialFields,
-                            "initialCookies": req.initialCookies
-                        }
                         node_res = requests.post(
                             f"{DINHVI_BACKEND_URL}/api/auth/login",
-                            json=payload,
-                            timeout=15
+                            json={
+                                "username": username,
+                                "password": password,
+                                "captchaSolution": req.captchaSolution,
+                                "initialFields": req.initialFields,
+                                "initialCookies": req.initialCookies,
+                            },
+                            timeout=15,
                         )
                         if node_res.status_code == 200:
                             cursor.execute("SELECT vnpost_cookie FROM users WHERE username = %s", (username,))
                             sql_row = cursor.fetchone()
-                            fresh_cookie = sql_row[0] if sql_row else None
-
-                            if fresh_cookie:
-                                cursor.execute("""
-                                    UPDATE users SET vnpost_cookie = %s WHERE id = %s
-                                """, (fresh_cookie, user_id))
-                                db_cookie = fresh_cookie
-                                logger.info(f"Login: refreshed VNPost session slot 0 for '{username}' using captcha.")
+                            if sql_row and sql_row[0]:
+                                db_cookie = sql_row[0]
                     except Exception as e:
                         logger.warning(f"Login optional captcha VNPost refresh error for '{username}': {e}")
-                        
-            # Create JWT token
-            token = jwt.encode({
-                "id": user_id,
-                "username": db_username,
-                "role": db_role
-            }, JWT_SECRET, algorithm=JWT_ALGORITHM)
-            
+
+            token = jwt.encode(
+                {"id": user_id, "username": db_username, "role": db_role},
+                JWT_SECRET,
+                algorithm=JWT_ALGORITHM,
+            )
             return {
                 "token": token,
                 "user": {
@@ -1356,17 +1231,15 @@ def auth_login(req: LoginRequest):
                     "role": db_role,
                     "hasVnpostCookie": bool(db_cookie),
                     "vnpostUsername": db_username,
-                    "concurrency_limit": db_concurrency_limit
-                }
+                    "concurrency_limit": db_concurrency_limit,
+                },
             }
     finally:
         conn.close()
 
+
 @app.post("/api/admin/import-users")
-def admin_import_users(req: ImportUsersRequest, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Từ chối truy cập. Quyền Admin được yêu cầu.")
-        
+def admin_import_users(req: ImportUsersRequest, _admin: dict = Depends(require_admin)):
     conn = get_connection(with_db=True)
     success_count = 0
     try:
@@ -1375,57 +1248,49 @@ def admin_import_users(req: ImportUsersRequest, current_user: dict = Depends(get
                 username = user_item.username.strip()
                 if not username:
                     continue
-                # Check duplicate
                 cursor.execute("SELECT COUNT(*) FROM users WHERE username = %s", (username,))
                 if cursor.fetchone()[0] > 0:
                     continue
-                
-                # If password is provided, hash it. Otherwise, set it to "BCCP_PENDING" so they authenticate via BCCP on first login
-                if user_item.password and user_item.password.strip() != "":
-                    hashed = bcrypt.hashpw(user_item.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                else:
-                    hashed = "BCCP_PENDING"
-                    
+
+                hashed = _hash_password(user_item.password) if (user_item.password and user_item.password.strip()) else "BCCP_PENDING"
                 vn_user = user_item.vnpost_username.strip() if user_item.vnpost_username else None
-                vn_pass = user_item.vnpost_password if user_item.vnpost_password else None
-                
-                cursor.execute("""
+                vn_pass = user_item.vnpost_password or None
+                cursor.execute(
+                    """
                     INSERT INTO users (username, password_hash, role, concurrency_limit, vnpost_username, vnpost_password)
                     VALUES (%s, %s, %s, %s, %s, %s)
-                """, (username, hashed, user_item.role, user_item.concurrency_limit, vn_user, vn_pass))
-                
-                # Sync user details to SQLite database
-                sync_user_to_sqlite(username, user_item.role, user_item.concurrency_limit, hashed, vn_user, vn_pass)
+                    """,
+                    (username, hashed, user_item.role, user_item.concurrency_limit, vn_user, vn_pass),
+                )
                 success_count += 1
-                
-            return {"message": f"Đồng bộ thành công {success_count} tài khoản từ BCCP."}
+        return {"message": f"Đồng bộ thành công {success_count} tài khoản từ BCCP."}
     finally:
         conn.close()
+
 
 @app.get("/api/auth/me")
 def auth_me(current_user: dict = Depends(get_current_user)):
     conn = get_connection(with_db=True)
     try:
         with conn.cursor() as cursor:
-            cursor.execute("""
-                SELECT id, username, role, concurrency_limit, vnpost_cookie
-                FROM users
-                WHERE id = %s
-            """, (current_user["id"],))
+            cursor.execute(
+                "SELECT id, username, role, concurrency_limit, vnpost_cookie FROM users WHERE id = %s",
+                (current_user["id"],),
+            )
             row = cursor.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Không tìm thấy người dùng.")
-            user_id, username, role, concurrency_limit, vnpost_cookie = row
             return {
-                "id": user_id,
-                "username": username,
-                "role": role,
-                "hasVnpostCookie": bool(vnpost_cookie),
-                "vnpostUsername": username,
-                "concurrencyLimit": concurrency_limit or 3
+                "id": row[0],
+                "username": row[1],
+                "role": row[2],
+                "hasVnpostCookie": bool(row[4]),
+                "vnpostUsername": row[1],
+                "concurrencyLimit": row[3] or 3,
             }
     finally:
         conn.close()
+
 
 @app.post("/api/user/settings")
 def user_settings(req: SettingsUpdate, current_user: dict = Depends(get_current_user)):
@@ -1434,55 +1299,46 @@ def user_settings(req: SettingsUpdate, current_user: dict = Depends(get_current_
     try:
         with conn.cursor() as cursor:
             if req.password:
-                hashed = bcrypt.hashpw(req.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                cursor.execute("UPDATE users SET password_hash = %s WHERE id = %s", (hashed, user_id))
-            
+                cursor.execute("UPDATE users SET password_hash = %s WHERE id = %s", (_hash_password(req.password), user_id))
             if req.vnpost_cookie is not None:
-                import json
-                cookie_str = json.dumps([req.vnpost_cookie.strip()])
-                cursor.execute("UPDATE users SET vnpost_cookie = %s WHERE id = %s", (cookie_str, user_id))
-                
+                cursor.execute("UPDATE users SET vnpost_cookie = %s WHERE id = %s", (json.dumps([req.vnpost_cookie.strip()]), user_id))
             if req.vnpost_username is not None and req.vnpost_password is not None:
-                cursor.execute("""
-                    UPDATE users 
-                    SET vnpost_username = %s, vnpost_password = %s 
-                    WHERE id = %s
-                """, (req.vnpost_username.strip(), req.vnpost_password, user_id))
-                
-            return {"message": "Cập nhật cấu hình thành công."}
+                cursor.execute(
+                    "UPDATE users SET vnpost_username = %s, vnpost_password = %s WHERE id = %s",
+                    (req.vnpost_username.strip(), req.vnpost_password, user_id),
+                )
+        return {"message": "Cập nhật cấu hình thành công."}
     finally:
         conn.close()
 
+
 @app.get("/api/admin/users")
-def admin_get_users(current_user: dict = Depends(get_current_user)):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Từ chối truy cập. Quyền Admin được yêu cầu.")
-        
+def admin_get_users(_admin: dict = Depends(require_admin)):
     conn = get_connection(with_db=True)
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, username, role, concurrency_limit, created_at, vnpost_username, vnpost_password FROM users ORDER BY username")
-            rows = cursor.fetchall()
-            users = []
-            for r in rows:
-                users.append({
+            cursor.execute(
+                "SELECT id, username, role, concurrency_limit, created_at, vnpost_username, vnpost_password "
+                "FROM users ORDER BY username"
+            )
+            return [
+                {
                     "id": r[0],
                     "username": r[1],
                     "role": r[2],
                     "concurrency_limit": r[3] or 3,
                     "created_at": r[4].strftime("%Y-%m-%d %H:%M:%S") if r[4] else None,
                     "vnpost_username": r[5] or "",
-                    "vnpost_password": r[6] or ""
-                })
-            return users
+                    "vnpost_password": r[6] or "",
+                }
+                for r in cursor.fetchall()
+            ]
     finally:
         conn.close()
 
+
 @app.post("/api/admin/users")
-def admin_create_user(req: UserCreate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Từ chối truy cập. Quyền Admin được yêu cầu.")
-        
+def admin_create_user(req: UserCreate, _admin: dict = Depends(require_admin)):
     username = req.username.strip()
     conn = get_connection(with_db=True)
     try:
@@ -1490,170 +1346,109 @@ def admin_create_user(req: UserCreate, current_user: dict = Depends(get_current_
             cursor.execute("SELECT COUNT(*) FROM users WHERE username = %s", (username,))
             if cursor.fetchone()[0] > 0:
                 raise HTTPException(status_code=400, detail="Tài khoản này đã tồn tại.")
-                
-            hashed = bcrypt.hashpw(req.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            
-            vn_user = req.vnpost_username.strip() if req.vnpost_username else None
-            vn_pass = req.vnpost_password if req.vnpost_password else None
 
-            cursor.execute("""
+            vn_user = req.vnpost_username.strip() if req.vnpost_username else None
+            vn_pass = req.vnpost_password or None
+            cursor.execute(
+                """
                 INSERT INTO users (username, password_hash, role, concurrency_limit, vnpost_username, vnpost_password)
                 VALUES (%s, %s, %s, %s, %s, %s)
-            """, (username, hashed, req.role, req.concurrency_limit or 3, vn_user, vn_pass))
-            
-            # Sync to SQLite database
-            sync_user_to_sqlite(username, req.role, req.concurrency_limit or 3, hashed, vn_user, vn_pass)
-            
-            return {"message": "Tạo tài khoản thành công."}
+                """,
+                (username, _hash_password(req.password), req.role, req.concurrency_limit or 3, vn_user, vn_pass),
+            )
+        return {"message": "Tạo tài khoản thành công."}
     finally:
         conn.close()
+
 
 @app.put("/api/admin/users/{user_id}")
-def admin_update_user(user_id: int, req: UserUpdate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Từ chối truy cập. Quyền Admin được yêu cầu.")
-        
+def admin_update_user(user_id: int, req: UserUpdate, _admin: dict = Depends(require_admin)):
     conn = get_connection(with_db=True)
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
+            cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản.")
-                
+
+            updates = []
+            params = []
             if req.username is not None:
-                cursor.execute("UPDATE users SET username = %s WHERE id = %s", (req.username.strip(), user_id))
+                updates.append("username = %s")
+                params.append(req.username.strip())
             if req.role is not None:
-                cursor.execute("UPDATE users SET role = %s WHERE id = %s", (req.role, user_id))
+                updates.append("role = %s")
+                params.append(req.role)
             if req.concurrency_limit is not None:
-                cursor.execute("UPDATE users SET concurrency_limit = %s WHERE id = %s", (req.concurrency_limit, user_id))
-            if req.password is not None and req.password.strip() != "":
-                hashed = bcrypt.hashpw(req.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                cursor.execute("UPDATE users SET password_hash = %s WHERE id = %s", (hashed, user_id))
+                updates.append("concurrency_limit = %s")
+                params.append(req.concurrency_limit)
+            if req.password is not None and req.password.strip():
+                updates.append("password_hash = %s")
+                params.append(_hash_password(req.password))
             if req.vnpost_username is not None:
-                vn_user = req.vnpost_username.strip() if req.vnpost_username.strip() != "" else None
-                cursor.execute("UPDATE users SET vnpost_username = %s WHERE id = %s", (vn_user, user_id))
+                updates.append("vnpost_username = %s")
+                params.append(req.vnpost_username.strip() or None)
             if req.vnpost_password is not None:
-                vn_pass = req.vnpost_password if req.vnpost_password.strip() != "" else None
-                cursor.execute("UPDATE users SET vnpost_password = %s WHERE id = %s", (vn_pass, user_id))
-                
-            # Fetch updated user details to sync with SQLite
-            cursor.execute("SELECT username, role, concurrency_limit, password_hash, vnpost_username, vnpost_password FROM users WHERE id = %s", (user_id,))
-            updated_row = cursor.fetchone()
-            if updated_row:
-                db_username, db_role, db_concurrency, db_pw_hash, db_vn_user, db_vn_pass = updated_row
-                sync_user_to_sqlite(db_username, db_role, db_concurrency, db_pw_hash, db_vn_user, db_vn_pass)
-                
-            return {"message": "Cập nhật tài khoản thành công."}
+                updates.append("vnpost_password = %s")
+                params.append(req.vnpost_password if req.vnpost_password.strip() else None)
+
+            if updates:
+                params.append(user_id)
+                cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = %s", tuple(params))
+        return {"message": "Cập nhật tài khoản thành công."}
     finally:
         conn.close()
 
+
 @app.delete("/api/admin/users/{user_id}")
-def admin_delete_user(user_id: int, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Từ chối truy cập. Quyền Admin được yêu cầu.")
-        
+def admin_delete_user(user_id: int, current_user: dict = Depends(require_admin)):
     if current_user["id"] == user_id:
         raise HTTPException(status_code=400, detail="Bạn không thể tự xóa tài khoản của chính mình.")
-        
     conn = get_connection(with_db=True)
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
-            del_row = cursor.fetchone()
-            if del_row:
-                delete_user_from_sqlite(del_row[0])
-                
             cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
-            return {"message": "Xóa tài khoản thành công."}
+        return {"message": "Xóa tài khoản thành công."}
     finally:
         conn.close()
 
-# Proxy requests for /api/vnpost to the Node.js backend
+
+# --- PROXY TO DINHVI NODE.JS BACKEND ---
+
+async def _proxy_dinhvi(target_path: str, request: Request, timeout: int = 120):
+    headers = dict(request.headers)
+    headers.pop("host", None)
+    try:
+        resp = requests.request(
+            method=request.method,
+            url=f"{DINHVI_BACKEND_URL}{target_path}",
+            headers=headers,
+            data=await request.body(),
+            params=dict(request.query_params),
+            timeout=timeout,
+        )
+        return Response(content=resp.content, status_code=resp.status_code, headers=dict(resp.headers))
+    except Exception as e:
+        logger.error(f"Proxy to Node.js backend failed for {target_path}: {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi kết nối Node.js backend: {e}")
+
+
 @app.api_route("/api/vnpost/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def proxy_vnpost(path: str, request: Request):
-    body = await request.body()
-    headers = dict(request.headers)
-    headers.pop("host", None)
-    params = dict(request.query_params)
-    
-    url = f"{DINHVI_BACKEND_URL}/api/vnpost/{path}"
-    
-    try:
-        response = requests.request(
-            method=request.method,
-            url=url,
-            headers=headers,
-            data=body,
-            params=params,
-            timeout=120
-        )
-        return Response(
-            content=response.content,
-            status_code=response.status_code,
-            headers=dict(response.headers)
-        )
-    except Exception as e:
-        logger.error(f"Proxy to Node.js backend failed for path /api/vnpost/{path}: {e}")
-        raise HTTPException(status_code=500, detail=f"Lỗi kết nối Node.js backend: {e}")
+    return await _proxy_dinhvi(f"/api/vnpost/{path}", request, timeout=120)
 
-# Proxy requests for /api/export to the Node.js backend
+
 @app.api_route("/api/export", methods=["POST"])
 async def proxy_export(request: Request):
-    body = await request.body()
-    headers = dict(request.headers)
-    headers.pop("host", None)
-    params = dict(request.query_params)
-    
-    url = f"{DINHVI_BACKEND_URL}/api/export"
-    
-    try:
-        response = requests.request(
-            method=request.method,
-            url=url,
-            headers=headers,
-            data=body,
-            params=params,
-            timeout=300
-        )
-        return Response(
-            content=response.content,
-            status_code=response.status_code,
-            headers=dict(response.headers)
-        )
-    except Exception as e:
-        logger.error(f"Proxy to Node.js backend failed for path /api/export: {e}")
-        raise HTTPException(status_code=500, detail=f"Lỗi kết nối Node.js backend: {e}")
+    return await _proxy_dinhvi("/api/export", request, timeout=300)
 
-# Proxy requests for /api/merge-and-save to the Node.js backend
+
 @app.api_route("/api/merge-and-save", methods=["POST"])
 async def proxy_merge_and_save(request: Request):
-    body = await request.body()
-    headers = dict(request.headers)
-    headers.pop("host", None)
-    params = dict(request.query_params)
-    
-    url = f"{DINHVI_BACKEND_URL}/api/merge-and-save"
-    
-    try:
-        response = requests.request(
-            method=request.method,
-            url=url,
-            headers=headers,
-            data=body,
-            params=params,
-            timeout=120
-        )
-        return Response(
-            content=response.content,
-            status_code=response.status_code,
-            headers=dict(response.headers)
-        )
-    except Exception as e:
-        logger.error(f"Proxy to Node.js backend failed for /api/merge-and-save: {e}")
-        raise HTTPException(status_code=500, detail=f"Lỗi kết nối Node.js backend: {e}")
+    return await _proxy_dinhvi("/api/merge-and-save", request, timeout=120)
 
 
-# Serves static frontend files (Dynamic lookup: prefers root ../frontend, falls back gracefully)
+# --- STATIC FRONTEND FALLBACK ---
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend"))
 if not os.path.exists(FRONTEND_DIR):
@@ -1673,29 +1468,23 @@ else:
     def read_root():
         return {"status": "ok", "message": "Crawler API is running. Frontend is served separately via Nginx."}
 
+
 def open_browser_delayed():
-    """Wait for server to start, then open standard browser."""
+    if os.getenv("NO_AUTO_BROWSER") == "1":
+        return
     time.sleep(2)
-    url = "http://localhost:8000"
-    logger.info(f"Automatically opening dashboard in browser: {url}")
-    webbrowser.open(url)
+    webbrowser.open("http://localhost:8000")
+
 
 @app.on_event("startup")
 def startup_event():
-    # Ensure database is initialized before starting
     try:
         init_db()
     except Exception as e:
         logger.error(f"Error during startup DB initialization: {e}")
-        
-    # Start scheduler thread
-    sched_t = threading.Thread(target=scheduler_thread, daemon=True)
-    sched_t.start()
+    threading.Thread(target=scheduler_thread, daemon=True).start()
+
 
 if __name__ == "__main__":
-    # Start browser opener thread
-    browser_t = threading.Thread(target=open_browser_delayed, daemon=True)
-    browser_t.start()
-    
-    # Start FastAPI Web Server
+    threading.Thread(target=open_browser_delayed, daemon=True).start()
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,7 +1,5 @@
 import { DOMParser } from 'xmldom';
 
-const BATCH_SIZE = 500;
-
 export function looksLikeZip(buffer) {
   const bytes = new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 4));
   return bytes[0] === 0x50 && bytes[1] === 0x4b;

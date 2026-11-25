@@ -50,94 +50,57 @@ function renderColumnConfigUI() {
     if (!list) return;
     list.innerHTML = "";
 
+    const refreshTable = () => {
+        saveColumnConfig();
+        renderDetailedHeader();
+        if (cachedDetailedData) renderDetailed(cachedDetailedData);
+    };
+
     columnConfig.forEach((col, index) => {
         const item = document.createElement("div");
-        item.style.display = "flex";
-        item.style.alignItems = "center";
-        item.style.justifyContent = "space-between";
-        item.style.padding = "8px 12px";
-        item.style.background = "var(--bg-primary)";
-        item.style.border = "1px solid var(--border-color)";
-        item.style.borderRadius = "6px";
-        item.style.gap = "12px";
+        item.className = "col-config-row";
 
-        const leftDiv = document.createElement("div");
-        leftDiv.style.display = "flex";
-        leftDiv.style.alignItems = "center";
-        leftDiv.style.gap = "8px";
+        const left = document.createElement("label");
+        left.className = "col-config-left";
 
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.checked = col.visible;
-        checkbox.style.width = "16px";
-        checkbox.style.height = "16px";
-        checkbox.style.accentColor = "var(--accent-emerald)";
-        checkbox.style.cursor = "pointer";
         checkbox.onchange = () => {
             col.visible = checkbox.checked;
-            saveColumnConfig();
-            renderDetailedHeader();
-            if (cachedDetailedData) renderDetailed(cachedDetailedData);
+            refreshTable();
         };
 
         const label = document.createElement("span");
         label.textContent = col.label;
-        label.style.fontSize = "14px";
-        label.style.fontWeight = "500";
-        label.style.color = "var(--text-primary)";
+        left.append(checkbox, label);
 
-        leftDiv.appendChild(checkbox);
-        leftDiv.appendChild(label);
+        const right = document.createElement("div");
+        right.className = "col-config-actions";
 
-        const rightDiv = document.createElement("div");
-        rightDiv.style.display = "flex";
-        rightDiv.style.gap = "4px";
-
-        const upBtn = document.createElement("button");
-        upBtn.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
-        upBtn.className = "btn";
-        upBtn.style.padding = "4px 8px";
-        upBtn.style.background = "var(--bg-secondary)";
-        upBtn.style.color = index === 0 ? "var(--text-muted)" : "var(--text-primary)";
-        upBtn.disabled = index === 0;
-        upBtn.onclick = (e) => {
-            e.preventDefault();
-            if (index > 0) {
-                const temp = columnConfig[index];
-                columnConfig[index] = columnConfig[index - 1];
-                columnConfig[index - 1] = temp;
-                saveColumnConfig();
+        const makeMoveBtn = (dir, icon, disabled, ariaLabel) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn btn-secondary btn-icon-sm";
+            btn.disabled = disabled;
+            btn.setAttribute("aria-label", ariaLabel);
+            btn.innerHTML = `<i class="fa-solid ${icon}"></i>`;
+            btn.onclick = () => {
+                const target = index + dir;
+                if (target < 0 || target >= columnConfig.length) return;
+                [columnConfig[index], columnConfig[target]] = [columnConfig[target], columnConfig[index]];
                 renderColumnConfigUI();
-                renderDetailedHeader();
-                if (cachedDetailedData) renderDetailed(cachedDetailedData);
-            }
+                refreshTable();
+            };
+            return btn;
         };
 
-        const downBtn = document.createElement("button");
-        downBtn.innerHTML = '<i class="fa-solid fa-arrow-down"></i>';
-        downBtn.className = "btn";
-        downBtn.style.padding = "4px 8px";
-        downBtn.style.background = "var(--bg-secondary)";
-        downBtn.style.color = index === columnConfig.length - 1 ? "var(--text-muted)" : "var(--text-primary)";
-        downBtn.disabled = index === columnConfig.length - 1;
-        downBtn.onclick = (e) => {
-            e.preventDefault();
-            if (index < columnConfig.length - 1) {
-                const temp = columnConfig[index];
-                columnConfig[index] = columnConfig[index + 1];
-                columnConfig[index + 1] = temp;
-                saveColumnConfig();
-                renderColumnConfigUI();
-                renderDetailedHeader();
-                if (cachedDetailedData) renderDetailed(cachedDetailedData);
-            }
-        };
+        right.append(
+            makeMoveBtn(-1, "fa-arrow-up", index === 0, `Di chuyển cột ${col.label} lên`),
+            makeMoveBtn(1, "fa-arrow-down", index === columnConfig.length - 1, `Di chuyển cột ${col.label} xuống`)
+        );
 
-        rightDiv.appendChild(upBtn);
-        rightDiv.appendChild(downBtn);
-
-        item.appendChild(leftDiv);
-        item.appendChild(rightDiv);
+        item.append(left, right);
         list.appendChild(item);
     });
 }
@@ -928,185 +891,58 @@ function handleSearch(e) {
     }, 400);
 }
 
-// Event Listeners for Dashboard custom multiselect POS filter
-if (multiselectPosTrigger && multiselectPosContainer) {
-    multiselectPosTrigger.addEventListener("click", (e) => {
-        e.stopPropagation();
-        multiselectPosContainer.classList.toggle("open");
-    });
-}
+const MULTISELECT_CONFIGS = [
+    { container: multiselectPosContainer, trigger: multiselectPosTrigger, label: multiselectPosLabel, selectAll: multiselectPosSelectAll, clear: multiselectPosClear, checkboxClass: "pos-checkbox", filterKey: "pos_name", emptyText: "-- Tất cả bưu cục --", unit: "bưu cục" },
+    { container: multiselectCategoryContainer, trigger: multiselectCategoryTrigger, label: multiselectCategoryLabel, selectAll: multiselectCategorySelectAll, clear: multiselectCategoryClear, checkboxClass: "category-checkbox", filterKey: "loai_ton", emptyText: "-- Tất cả thời gian --", unit: "loại" },
+    { container: multiselectStatusContainer, trigger: multiselectStatusTrigger, label: multiselectStatusLabel, selectAll: multiselectStatusSelectAll, clear: multiselectStatusClear, checkboxClass: "status-checkbox", filterKey: "status_name", emptyText: "-- Tất cả trạng thái --", unit: "trạng thái" },
+    { container: multiselectNhomKhContainer, trigger: multiselectNhomKhTrigger, label: multiselectNhomKhLabel, selectAll: multiselectNhomKhSelectAll, clear: multiselectNhomKhClear, checkboxClass: "nhom-kh-checkbox", filterKey: "nhom_kh", emptyText: "-- Tất cả Nhóm KH --", unit: "Nhóm KH" }
+];
 
-document.addEventListener("click", (e) => {
-    if (multiselectPosContainer && !multiselectPosContainer.contains(e.target)) {
-        multiselectPosContainer.classList.remove("open");
+function updateMultiselectState(cfg) {
+    const selected = Array.from(document.querySelectorAll(`.${cfg.checkboxClass}:checked`)).map(cb => cb.value);
+    filters[cfg.filterKey] = selected.join(",");
+    if (cfg.label) {
+        cfg.label.textContent = selected.length === 0
+            ? cfg.emptyText
+            : (selected.length === 1 ? selected[0] : `Đã chọn ${selected.length} ${cfg.unit}`);
     }
-});
-
-function handlePosSelectionChange() {
-    const checkedBoxes = Array.from(document.querySelectorAll(".pos-checkbox:checked"));
-    const selectedValues = checkedBoxes.map(cb => cb.value);
-    filters.pos_name = selectedValues.join(",");
-
-    if (selectedValues.length === 0) {
-        multiselectPosLabel.textContent = "-- Tất cả bưu cục --";
-    } else if (selectedValues.length === 1) {
-        multiselectPosLabel.textContent = selectedValues[0];
-    } else {
-        multiselectPosLabel.textContent = `Đã chọn ${selectedValues.length} bưu cục`;
-    }
-
     currentPage = 1;
     loadDetailed();
 }
 
-if (multiselectPosSelectAll) {
-    multiselectPosSelectAll.addEventListener("click", () => {
-        document.querySelectorAll(".pos-checkbox").forEach(cb => cb.checked = true);
-        handlePosSelectionChange();
-    });
-}
+const handlePosSelectionChange = () => updateMultiselectState(MULTISELECT_CONFIGS[0]);
+const handleCategorySelectionChange = () => updateMultiselectState(MULTISELECT_CONFIGS[1]);
+const handleStatusSelectionChange = () => updateMultiselectState(MULTISELECT_CONFIGS[2]);
+const handleNhomKhSelectionChange = () => updateMultiselectState(MULTISELECT_CONFIGS[3]);
 
-if (multiselectPosClear) {
-    multiselectPosClear.addEventListener("click", () => {
-        document.querySelectorAll(".pos-checkbox").forEach(cb => cb.checked = false);
-        handlePosSelectionChange();
-    });
-}
-
-// Event Listeners for Dashboard custom multiselect Category (Thời gian tồn) filter
-if (multiselectCategoryTrigger && multiselectCategoryContainer) {
-    multiselectCategoryTrigger.addEventListener("click", (e) => {
-        e.stopPropagation();
-        multiselectCategoryContainer.classList.toggle("open");
-    });
-}
-
-document.addEventListener("click", (e) => {
-    if (multiselectCategoryContainer && !multiselectCategoryContainer.contains(e.target)) {
-        multiselectCategoryContainer.classList.remove("open");
+MULTISELECT_CONFIGS.forEach(cfg => {
+    if (cfg.trigger && cfg.container) {
+        cfg.trigger.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const willOpen = !cfg.container.classList.contains("open");
+            MULTISELECT_CONFIGS.forEach(c => c.container && c.container.classList.remove("open"));
+            if (willOpen) cfg.container.classList.add("open");
+        });
+    }
+    if (cfg.selectAll) {
+        cfg.selectAll.addEventListener("click", () => {
+            document.querySelectorAll(`.${cfg.checkboxClass}`).forEach(cb => cb.checked = true);
+            updateMultiselectState(cfg);
+        });
+    }
+    if (cfg.clear) {
+        cfg.clear.addEventListener("click", () => {
+            document.querySelectorAll(`.${cfg.checkboxClass}`).forEach(cb => cb.checked = false);
+            updateMultiselectState(cfg);
+        });
     }
 });
 
-function handleCategorySelectionChange() {
-    const checkedBoxes = Array.from(document.querySelectorAll(".category-checkbox:checked"));
-    const selectedValues = checkedBoxes.map(cb => cb.value);
-    filters.loai_ton = selectedValues.join(",");
-
-    if (selectedValues.length === 0) {
-        multiselectCategoryLabel.textContent = "-- Tất cả thời gian --";
-    } else if (selectedValues.length === 1) {
-        multiselectCategoryLabel.textContent = selectedValues[0];
-    } else {
-        multiselectCategoryLabel.textContent = `Đã chọn ${selectedValues.length} loại`;
-    }
-
-    currentPage = 1;
-    loadDetailed();
-}
-
-if (multiselectCategorySelectAll) {
-    multiselectCategorySelectAll.addEventListener("click", () => {
-        document.querySelectorAll(".category-checkbox").forEach(cb => cb.checked = true);
-        handleCategorySelectionChange();
-    });
-}
-
-if (multiselectCategoryClear) {
-    multiselectCategoryClear.addEventListener("click", () => {
-        document.querySelectorAll(".category-checkbox").forEach(cb => cb.checked = false);
-        handleCategorySelectionChange();
-    });
-}
-
-// Event Listeners for Dashboard custom multiselect Status (Trạng thái) filter
-if (multiselectStatusTrigger && multiselectStatusContainer) {
-    multiselectStatusTrigger.addEventListener("click", (e) => {
-        e.stopPropagation();
-        multiselectStatusContainer.classList.toggle("open");
-    });
-}
-
 document.addEventListener("click", (e) => {
-    if (multiselectStatusContainer && !multiselectStatusContainer.contains(e.target)) {
-        multiselectStatusContainer.classList.remove("open");
-    }
+    MULTISELECT_CONFIGS.forEach(cfg => {
+        if (cfg.container && !cfg.container.contains(e.target)) cfg.container.classList.remove("open");
+    });
 });
-
-function handleStatusSelectionChange() {
-    const checkedBoxes = Array.from(document.querySelectorAll(".status-checkbox:checked"));
-    const selectedValues = checkedBoxes.map(cb => cb.value);
-    filters.status_name = selectedValues.join(",");
-
-    if (selectedValues.length === 0) {
-        multiselectStatusLabel.textContent = "-- Tất cả trạng thái --";
-    } else if (selectedValues.length === 1) {
-        multiselectStatusLabel.textContent = selectedValues[0];
-    } else {
-        multiselectStatusLabel.textContent = `Đã chọn ${selectedValues.length} trạng thái`;
-    }
-
-    currentPage = 1;
-    loadDetailed();
-}
-
-if (multiselectStatusSelectAll) {
-    multiselectStatusSelectAll.addEventListener("click", () => {
-        document.querySelectorAll(".status-checkbox").forEach(cb => cb.checked = true);
-        handleStatusSelectionChange();
-    });
-}
-
-if (multiselectStatusClear) {
-    multiselectStatusClear.addEventListener("click", () => {
-        document.querySelectorAll(".status-checkbox").forEach(cb => cb.checked = false);
-        handleStatusSelectionChange();
-    });
-}
-
-// Event Listeners for Dashboard custom multiselect Nhóm KH filter
-if (multiselectNhomKhTrigger && multiselectNhomKhContainer) {
-    multiselectNhomKhTrigger.addEventListener("click", (e) => {
-        e.stopPropagation();
-        multiselectNhomKhContainer.classList.toggle("open");
-    });
-}
-
-document.addEventListener("click", (e) => {
-    if (multiselectNhomKhContainer && !multiselectNhomKhContainer.contains(e.target)) {
-        multiselectNhomKhContainer.classList.remove("open");
-    }
-});
-
-function handleNhomKhSelectionChange() {
-    const checkedBoxes = Array.from(document.querySelectorAll(".nhom-kh-checkbox:checked"));
-    const selectedValues = checkedBoxes.map(cb => cb.value);
-    filters.nhom_kh = selectedValues.join(",");
-
-    if (selectedValues.length === 0) {
-        multiselectNhomKhLabel.textContent = "-- Tất cả Nhóm KH --";
-    } else if (selectedValues.length === 1) {
-        multiselectNhomKhLabel.textContent = selectedValues[0];
-    } else {
-        multiselectNhomKhLabel.textContent = `Đã chọn ${selectedValues.length} Nhóm KH`;
-    }
-
-    currentPage = 1;
-    loadDetailed();
-}
-
-if (multiselectNhomKhSelectAll) {
-    multiselectNhomKhSelectAll.addEventListener("click", () => {
-        document.querySelectorAll(".nhom-kh-checkbox").forEach(cb => cb.checked = true);
-        handleNhomKhSelectionChange();
-    });
-}
-
-if (multiselectNhomKhClear) {
-    multiselectNhomKhClear.addEventListener("click", () => {
-        document.querySelectorAll(".nhom-kh-checkbox").forEach(cb => cb.checked = false);
-        handleNhomKhSelectionChange();
-    });
-}
 
 searchInput.addEventListener("input", handleSearch);
 
@@ -1424,35 +1260,27 @@ document.querySelectorAll(".threshold-inputs input, .filters-container select, .
     el.addEventListener("change", () => checkFilterActive(el));
 });
 
-// Add threshold input event listeners
-if (document.getElementById("threshold-3")) document.getElementById("threshold-3").addEventListener("input", applyHighlights);
-if (document.getElementById("threshold-4")) document.getElementById("threshold-4").addEventListener("input", applyHighlights);
-if (document.getElementById("threshold-5")) document.getElementById("threshold-5").addEventListener("input", applyHighlights);
-if (document.getElementById("threshold-7")) document.getElementById("threshold-7").addEventListener("input", applyHighlights);
-if (document.getElementById("threshold-14")) document.getElementById("threshold-14").addEventListener("input", applyHighlights);
-if (document.getElementById("threshold-total")) document.getElementById("threshold-total").addEventListener("input", applyHighlights);
+const THRESHOLD_IDS = ["threshold-3", "threshold-4", "threshold-5", "threshold-7", "threshold-14", "threshold-total"];
+THRESHOLD_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", applyHighlights);
+});
 
 // Reset all filters and highlights
 document.getElementById("btn-reset-filters").addEventListener("click", () => {
-    if (document.getElementById("threshold-3")) document.getElementById("threshold-3").value = "";
-    if (document.getElementById("threshold-4")) document.getElementById("threshold-4").value = "";
-    if (document.getElementById("threshold-5")) document.getElementById("threshold-5").value = "";
-    if (document.getElementById("threshold-7")) document.getElementById("threshold-7").value = "";
-    if (document.getElementById("threshold-14")) document.getElementById("threshold-14").value = "";
-    if (document.getElementById("threshold-total")) document.getElementById("threshold-total").value = "";
+    THRESHOLD_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+    });
 
-    document.querySelectorAll(".pos-checkbox").forEach(cb => cb.checked = false);
-    if (multiselectPosLabel) multiselectPosLabel.textContent = "-- Tất cả bưu cục --";
-    document.querySelectorAll(".category-checkbox").forEach(cb => cb.checked = false);
-    if (multiselectCategoryLabel) multiselectCategoryLabel.textContent = "-- Tất cả thời gian --";
-    document.querySelectorAll(".status-checkbox").forEach(cb => cb.checked = false);
-    if (multiselectStatusLabel) multiselectStatusLabel.textContent = "-- Tất cả trạng thái --";
+    MULTISELECT_CONFIGS.forEach(cfg => {
+        document.querySelectorAll(`.${cfg.checkboxClass}`).forEach(cb => cb.checked = false);
+        if (cfg.label) cfg.label.textContent = cfg.emptyText;
+        filters[cfg.filterKey] = "";
+    });
     searchInput.value = "";
-
-    filters.pos_name = "";
-    filters.loai_ton = "";
-    filters.status_name = "";
     filters.search = "";
+    if (matrixNhomKh) matrixNhomKh.value = "";
 
     document.querySelectorAll(".threshold-inputs input, .filters-container select, .filters-container input").forEach(el => {
         checkFilterActive(el);
@@ -1501,15 +1329,26 @@ const mainAppContainer = document.getElementById("main-app-container");
 const loginForm = document.getElementById("login-form");
 const loginError = document.getElementById("login-error");
 
-// Login Captcha State (no longer required during login)
-async function loadLoginCaptcha() {
-    // No-op: login captcha removed
+// Mobile Sidebar Drawer
+function setMobileSidebarOpen(open) {
+    const sidebar = document.getElementById("app-sidebar");
+    const backdrop = document.getElementById("sidebar-backdrop");
+    const toggleBtn = document.getElementById("btn-mobile-menu");
+    if (sidebar) sidebar.classList.toggle("open", open);
+    if (backdrop) backdrop.classList.toggle("open", open);
+    if (toggleBtn) toggleBtn.setAttribute("aria-expanded", String(open));
 }
 
-// Bind refresh button if exists
-const btnRefreshLoginCaptcha = document.getElementById("btn-refresh-login-captcha");
-if (btnRefreshLoginCaptcha) {
-    btnRefreshLoginCaptcha.addEventListener("click", loadLoginCaptcha);
+const mobileMenuBtn = document.getElementById("btn-mobile-menu");
+const sidebarBackdrop = document.getElementById("sidebar-backdrop");
+if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener("click", () => {
+        const sidebar = document.getElementById("app-sidebar");
+        setMobileSidebarOpen(!(sidebar && sidebar.classList.contains("open")));
+    });
+}
+if (sidebarBackdrop) {
+    sidebarBackdrop.addEventListener("click", () => setMobileSidebarOpen(false));
 }
 
 // Login Submit Handler (Local DB checks on python backend port 8000)
@@ -1595,16 +1434,17 @@ let activeView = "dashboard";
 
 function switchView(viewName) {
     activeView = viewName;
+    setMobileSidebarOpen(false);
     views.forEach(v => {
         const menuEl = document.getElementById(`menu-${v}`);
         const viewEl = document.getElementById(`view-${v}`);
-        if (v === viewName) {
-            if (menuEl) menuEl.classList.add("active");
-            if (viewEl) viewEl.classList.add("active");
-        } else {
-            if (menuEl) menuEl.classList.remove("active");
-            if (viewEl) viewEl.classList.remove("active");
+        const isCurrent = v === viewName;
+        if (menuEl) {
+            menuEl.classList.toggle("active", isCurrent);
+            if (isCurrent) menuEl.setAttribute("aria-current", "page");
+            else menuEl.removeAttribute("aria-current");
         }
+        if (viewEl) viewEl.classList.toggle("active", isCurrent);
     });
 
     // Handle Power BI URL error overlay & sticky banner visibility across views
@@ -1848,26 +1688,6 @@ document.getElementById("btn-reset-sessions").addEventListener("click", async ()
         showToast("Lỗi kết nối: " + err.message, "error");
     }
 });
-
-// Add new thread button logic
-const btnAddSession = document.getElementById("btn-add-session");
-if (btnAddSession) {
-    btnAddSession.addEventListener("click", () => {
-        const activeIndices = activeSessionIndexes;
-        let nextIndex = -1;
-        for (let i = 0; i < userConcurrencyLimit; i++) {
-            if (!activeIndices.includes(i)) {
-                nextIndex = i;
-                break;
-            }
-        }
-        if (nextIndex === -1) {
-            showToast("Bạn đã mở tối đa số luồng cấu hình của tài khoản này.", "warning");
-            return;
-        }
-        showSessionCaptchaForm(nextIndex, false);
-    });
-}
 
 // Excel Exporter Core worker pool execution
 const btnStartExport = document.getElementById("btn-start-export");
@@ -2233,91 +2053,6 @@ btnStartExport.addEventListener("click", async () => {
         }
     }
 });
-
-
-// ==========================================
-// --- SETTINGS VIEW HANDLERS ---
-// ==========================================
-
-const cookieForm = document.getElementById("settings-cookie-form");
-const cookieAlert = document.getElementById("cookie-settings-alert");
-
-if (cookieForm) {
-    cookieForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const cookieVal = document.getElementById("settings-cookie-input").value.trim();
-        cookieAlert.style.display = "none";
-
-        try {
-            const res = await fetch("/api/user/settings", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    ...getHeaders()
-                },
-                body: JSON.stringify({ vnpost_cookie: cookieVal })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || "Không thể lưu Cookie.");
-
-            cookieAlert.className = "alert success";
-            cookieAlert.textContent = "Đã lưu Cookie thành công!";
-            cookieAlert.style.display = "block";
-            document.getElementById("settings-cookie-input").value = "";
-
-            const user = JSON.parse(localStorage.getItem("vnpost_user") || "{}");
-            user.hasVnpostCookie = true;
-            localStorage.setItem("vnpost_user", JSON.stringify(user));
-
-        } catch (err) {
-            cookieAlert.className = "alert danger";
-            cookieAlert.textContent = err.message;
-            cookieAlert.style.display = "block";
-        }
-    });
-}
-
-const passwordForm = document.getElementById("settings-password-form");
-const passwordAlert = document.getElementById("password-settings-alert");
-
-if (passwordForm) {
-    passwordForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const newPass = document.getElementById("settings-new-password").value;
-        const confirmPass = document.getElementById("settings-confirm-password").value;
-
-        passwordAlert.style.display = "none";
-        if (newPass !== confirmPass) {
-            passwordAlert.className = "alert danger";
-            passwordAlert.textContent = "Mật khẩu xác nhận không khớp.";
-            passwordAlert.style.display = "block";
-            return;
-        }
-
-        try {
-            const res = await fetch("/api/user/settings", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    ...getHeaders()
-                },
-                body: JSON.stringify({ password: newPass })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || "Không thể đổi mật khẩu.");
-
-            passwordAlert.className = "alert success";
-            passwordAlert.textContent = "Đổi mật khẩu thành công!";
-            passwordAlert.style.display = "block";
-            document.getElementById("settings-new-password").value = "";
-            document.getElementById("settings-confirm-password").value = "";
-        } catch (err) {
-            passwordAlert.className = "alert danger";
-            passwordAlert.textContent = err.message;
-            passwordAlert.style.display = "block";
-        }
-    });
-}
 
 
 // ==========================================
@@ -2703,8 +2438,6 @@ async function init() {
         const data = await res.json();
         localStorage.setItem("vnpost_user", JSON.stringify(data));
         showApp(data);
-        initSettingsView();
-
         await initDashboard();
 
     } catch (err) {
@@ -2745,41 +2478,17 @@ async function initDashboard() {
     }
 }
 
-const MODAL_VIS_MAP = [
-    { id: "modal-vis-col-0", val: "<1 ngày" },
-    { id: "modal-vis-col-1", val: "≥1 ngày" },
-    { id: "modal-vis-col-1-5", val: "≥1.5 ngày" },
-    { id: "modal-vis-col-2", val: "≥2 ngày" },
-    { id: "modal-vis-col-3", val: "≥3 ngày" },
-    { id: "modal-vis-col-4", val: "≥4 ngày" },
-    { id: "modal-vis-col-5", val: "≥5 ngày" },
-    { id: "modal-vis-col-7", val: "≥7 ngày" },
-    { id: "modal-vis-col-14", val: "≥14 ngày" }
+const AGE_CATEGORY_SPECS = [
+    ["0", "<1 ngày"], ["1", "≥1 ngày"], ["1-5", "≥1.5 ngày"], ["2", "≥2 ngày"],
+    ["3", "≥3 ngày"], ["4", "≥4 ngày"], ["5", "≥5 ngày"], ["7", "≥7 ngày"], ["14", "≥14 ngày"]
 ];
+const DEFAULT_MATRIX_AGES = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
+const MODAL_VIS_MAP = AGE_CATEGORY_SPECS.map(([s, val]) => ({ id: `modal-vis-col-${s}`, val }));
+const MODAL_CFG_MAP = AGE_CATEGORY_SPECS.map(([s, val]) => ({ id: `modal-cfg-col-${s}`, val }));
+const SETTINGS_MAP = AGE_CATEGORY_SPECS.map(([s, val]) => ({ id: `cfg-col-${s}`, val }));
 
-const MODAL_CFG_MAP = [
-    { id: "modal-cfg-col-0", val: "<1 ngày" },
-    { id: "modal-cfg-col-1", val: "≥1 ngày" },
-    { id: "modal-cfg-col-1-5", val: "≥1.5 ngày" },
-    { id: "modal-cfg-col-2", val: "≥2 ngày" },
-    { id: "modal-cfg-col-3", val: "≥3 ngày" },
-    { id: "modal-cfg-col-4", val: "≥4 ngày" },
-    { id: "modal-cfg-col-5", val: "≥5 ngày" },
-    { id: "modal-cfg-col-7", val: "≥7 ngày" },
-    { id: "modal-cfg-col-14", val: "≥14 ngày" }
-];
-
-const SETTINGS_MAP = [
-    { id: "cfg-col-0", val: "<1 ngày" },
-    { id: "cfg-col-1", val: "≥1 ngày" },
-    { id: "cfg-col-1-5", val: "≥1.5 ngày" },
-    { id: "cfg-col-2", val: "≥2 ngày" },
-    { id: "cfg-col-3", val: "≥3 ngày" },
-    { id: "cfg-col-4", val: "≥4 ngày" },
-    { id: "cfg-col-5", val: "≥5 ngày" },
-    { id: "cfg-col-7", val: "≥7 ngày" },
-    { id: "cfg-col-14", val: "≥14 ngày" }
-];
+let matrixConfigInitialized = false;
+let settingsViewInitialized = false;
 
 function openMatrixConfigModal(initialTab = "cols") {
     const matrixTotalModal = document.getElementById("matrix-total-modal");
@@ -2810,36 +2519,15 @@ function switchMatrixConfigTab(tabName) {
 
     if (!tabBtnCols || !tabBtnTotal || !panelCols || !panelTotal) return;
 
-    if (tabName === "cols") {
-        tabBtnCols.classList.add("active");
-        tabBtnCols.style.background = "var(--accent-emerald)";
-        tabBtnCols.style.color = "white";
-        tabBtnCols.style.border = "none";
-
-        tabBtnTotal.classList.remove("active");
-        tabBtnTotal.style.background = "var(--bg-primary)";
-        tabBtnTotal.style.color = "var(--text-secondary)";
-        tabBtnTotal.style.border = "1px solid var(--border-color)";
-
-        panelCols.style.display = "block";
-        panelTotal.style.display = "none";
-    } else {
-        tabBtnTotal.classList.add("active");
-        tabBtnTotal.style.background = "var(--accent-emerald)";
-        tabBtnTotal.style.color = "white";
-        tabBtnTotal.style.border = "none";
-
-        tabBtnCols.classList.remove("active");
-        tabBtnCols.style.background = "var(--bg-primary)";
-        tabBtnCols.style.color = "var(--text-secondary)";
-        tabBtnCols.style.border = "1px solid var(--border-color)";
-
-        panelCols.style.display = "none";
-        panelTotal.style.display = "block";
-    }
+    const isCols = tabName === "cols";
+    tabBtnCols.classList.toggle("active", isCols);
+    tabBtnTotal.classList.toggle("active", !isCols);
+    panelCols.style.display = isCols ? "block" : "none";
+    panelTotal.style.display = isCols ? "none" : "block";
 }
 
 function initMatrixTotalQuickConfig() {
+    if (matrixConfigInitialized) return;
     const matrixTotalModal = document.getElementById("matrix-total-modal");
     const btnCloseMatrixTotalModal = document.getElementById("btn-close-matrix-total-modal");
     const btnCancelMatrixTotalModal = document.getElementById("btn-cancel-matrix-total-modal");
@@ -2847,92 +2535,43 @@ function initMatrixTotalQuickConfig() {
     const btnConfigMatrixCols = document.getElementById("btn-config-matrix-columns");
 
     if (!matrixTotalModal) return;
+    matrixConfigInitialized = true;
 
-    // Toolbar button to open modal on Tab 1
-    if (btnConfigMatrixCols) {
-        btnConfigMatrixCols.addEventListener("click", () => {
-            openMatrixConfigModal("cols");
-        });
-    }
+    if (btnConfigMatrixCols) btnConfigMatrixCols.addEventListener("click", () => openMatrixConfigModal("cols"));
 
-    // Modal Tab buttons
     const tabBtnCols = document.getElementById("tab-btn-cfg-cols");
     const tabBtnTotal = document.getElementById("tab-btn-cfg-total");
     if (tabBtnCols) tabBtnCols.addEventListener("click", () => switchMatrixConfigTab("cols"));
     if (tabBtnTotal) tabBtnTotal.addEventListener("click", () => switchMatrixConfigTab("total"));
 
-    // Quick Select Buttons
-    const btnQuickColsAll = document.getElementById("btn-quick-cols-all");
-    const btnQuickColsDef = document.getElementById("btn-quick-cols-default");
-    const btnQuickTotalAll = document.getElementById("btn-quick-total-all");
-    const btnQuickTotalDef = document.getElementById("btn-quick-total-default");
-
-    if (btnQuickColsAll) {
-        btnQuickColsAll.addEventListener("click", () => {
-            MODAL_VIS_MAP.forEach(item => {
+    const bindQuickSelect = (btnId, map, onlyDefaults) => {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.addEventListener("click", () => {
+            map.forEach(item => {
                 const el = document.getElementById(item.id);
-                if (el) el.checked = true;
+                if (el) el.checked = onlyDefaults ? DEFAULT_MATRIX_AGES.includes(item.val) : true;
             });
         });
-    }
-
-    if (btnQuickColsDef) {
-        btnQuickColsDef.addEventListener("click", () => {
-            const def = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
-            MODAL_VIS_MAP.forEach(item => {
-                const el = document.getElementById(item.id);
-                if (el) el.checked = def.includes(item.val);
-            });
-        });
-    }
-
-    if (btnQuickTotalAll) {
-        btnQuickTotalAll.addEventListener("click", () => {
-            MODAL_CFG_MAP.forEach(item => {
-                const el = document.getElementById(item.id);
-                if (el) el.checked = true;
-            });
-        });
-    }
-
-    if (btnQuickTotalDef) {
-        btnQuickTotalDef.addEventListener("click", () => {
-            const def = ["≥3 ngày", "≥4 ngày", "≥5 ngày", "≥7 ngày", "≥14 ngày"];
-            MODAL_CFG_MAP.forEach(item => {
-                const el = document.getElementById(item.id);
-                if (el) el.checked = def.includes(item.val);
-            });
-        });
-    }
-
-    const closeModal = () => {
-        matrixTotalModal.style.display = "none";
     };
+    bindQuickSelect("btn-quick-cols-all", MODAL_VIS_MAP, false);
+    bindQuickSelect("btn-quick-cols-default", MODAL_VIS_MAP, true);
+    bindQuickSelect("btn-quick-total-all", MODAL_CFG_MAP, false);
+    bindQuickSelect("btn-quick-total-default", MODAL_CFG_MAP, true);
 
+    const closeModal = () => { matrixTotalModal.style.display = "none"; };
     if (btnCloseMatrixTotalModal) btnCloseMatrixTotalModal.addEventListener("click", closeModal);
     if (btnCancelMatrixTotalModal) btnCancelMatrixTotalModal.addEventListener("click", closeModal);
 
-    // Save Config
     if (btnSaveMatrixTotalModal) {
         btnSaveMatrixTotalModal.addEventListener("click", () => {
-            const selectedVis = [];
-            MODAL_VIS_MAP.forEach(item => {
-                const el = document.getElementById(item.id);
-                if (el && el.checked) selectedVis.push(item.val);
-            });
-
+            const selectedVis = MODAL_VIS_MAP.filter(i => document.getElementById(i.id)?.checked).map(i => i.val);
             if (selectedVis.length === 0) {
                 showToast("Phải chọn ít nhất một cột để hiển thị trên ma trận.", "warning");
                 switchMatrixConfigTab("cols");
                 return;
             }
-
-            const selectedTot = [];
-            MODAL_CFG_MAP.forEach(item => {
-                const el = document.getElementById(item.id);
-                if (el && el.checked) selectedTot.push(item.val);
-            });
-
+            const selectedTot = MODAL_CFG_MAP.filter(i => document.getElementById(i.id)?.checked).map(i => i.val);
             if (selectedTot.length === 0) {
                 showToast("Phải chọn ít nhất một cột để tính tổng tồn.", "warning");
                 switchMatrixConfigTab("total");
@@ -2941,19 +2580,13 @@ function initMatrixTotalQuickConfig() {
 
             localStorage.setItem("matrix_visible_columns", JSON.stringify(selectedVis));
             localStorage.setItem("matrix_total_columns", JSON.stringify(selectedTot));
-
-            // Sync with Settings view
             SETTINGS_MAP.forEach(item => {
                 const el = document.getElementById(item.id);
                 if (el) el.checked = selectedTot.includes(item.val);
             });
 
             closeModal();
-
-            if (cachedSummaryData) {
-                renderSummary(cachedSummaryData);
-            }
-
+            if (cachedSummaryData) renderSummary(cachedSummaryData);
             showToast("Đã lưu cấu hình cột ma trận và tổng tồn.", "success");
         });
     }
@@ -3028,28 +2661,20 @@ function initSettingsView() {
             { btn: tabBtnDinhvi, panel: panelDinhvi, name: "dinhvi" },
             { btn: tabBtnPosConfig, panel: panelPosConfig, name: "pos" }
         ];
-
         tabs.forEach(t => {
             if (!t.btn || !t.panel) return;
-            if (t.name === tabName) {
-                t.btn.classList.add("active");
-                t.btn.style.color = "var(--accent-emerald)";
-                t.btn.style.borderBottom = "3px solid var(--accent-emerald)";
-                t.panel.style.display = "block";
-            } else {
-                t.btn.classList.remove("active");
-                t.btn.style.color = "var(--text-muted)";
-                t.btn.style.borderBottom = "none";
-                t.panel.style.display = "none";
-            }
+            const isActive = t.name === tabName;
+            t.btn.classList.toggle("active", isActive);
+            t.panel.style.display = isActive ? "block" : "none";
         });
-
         if (usersHeaderActions) {
             usersHeaderActions.style.display = tabName === "users" ? "flex" : "none";
         }
     };
 
     activateTab("users");
+    if (settingsViewInitialized) return;
+    settingsViewInitialized = true;
 
     tabBtnUsers.addEventListener("click", () => activateTab("users"));
     tabBtnDinhvi.addEventListener("click", () => activateTab("dinhvi"));
@@ -3289,38 +2914,16 @@ function initDataNoteModal() {
     if (!modal) return;
 
     const switchTab = (activeTab) => {
-        [tabBtnSummary, tabBtnItems, tabBtnInfo].forEach(btn => {
-            if (!btn) return;
-            btn.style.background = "var(--bg-primary)";
-            btn.style.color = "var(--text-secondary)";
-            btn.style.border = "1px solid var(--border-color)";
+        const map = {
+            summary: [tabBtnSummary, panelSummary],
+            items: [tabBtnItems, panelItems],
+            info: [tabBtnInfo, panelInfo]
+        };
+        Object.entries(map).forEach(([key, [btn, panel]]) => {
+            const isActive = key === activeTab;
+            if (btn) btn.classList.toggle("active", isActive);
+            if (panel) panel.style.display = isActive ? "block" : "none";
         });
-        [panelSummary, panelItems, panelInfo].forEach(p => {
-            if (p) p.style.display = "none";
-        });
-
-        if (activeTab === "summary") {
-            if (tabBtnSummary) {
-                tabBtnSummary.style.background = "var(--accent-emerald)";
-                tabBtnSummary.style.color = "white";
-                tabBtnSummary.style.border = "none";
-            }
-            if (panelSummary) panelSummary.style.display = "block";
-        } else if (activeTab === "items") {
-            if (tabBtnItems) {
-                tabBtnItems.style.background = "var(--accent-emerald)";
-                tabBtnItems.style.color = "white";
-                tabBtnItems.style.border = "none";
-            }
-            if (panelItems) panelItems.style.display = "block";
-        } else if (activeTab === "info") {
-            if (tabBtnInfo) {
-                tabBtnInfo.style.background = "var(--accent-emerald)";
-                tabBtnInfo.style.color = "white";
-                tabBtnInfo.style.border = "none";
-            }
-            if (panelInfo) panelInfo.style.display = "block";
-        }
     };
 
     if (tabBtnSummary) tabBtnSummary.addEventListener("click", () => switchTab("summary"));
@@ -3328,32 +2931,19 @@ function initDataNoteModal() {
     if (tabBtnInfo) tabBtnInfo.addEventListener("click", () => switchTab("info"));
 
     const openModal = async () => {
-        const modalEl = document.getElementById("data-note-modal");
-        if (modalEl) {
-            modalEl.style.display = "flex";
-            modalEl.style.zIndex = "99999";
-            switchTab("summary");
-            await loadBcktSummaryData();
-        }
+        modal.style.display = "flex";
+        switchTab("summary");
+        await loadBcktSummaryData();
     };
 
     window.openDataNoteModal = openModal;
 
     if (btnOpen) {
         btnOpen.addEventListener("click", async (e) => {
-            if (e) e.preventDefault();
+            e.preventDefault();
             await openModal();
         });
     }
-
-    // Global document-level click delegation fallback to ensure button is ALWAYS interactive
-    document.addEventListener("click", async (e) => {
-        const targetBtn = e.target.closest("#btn-open-data-note-modal");
-        if (targetBtn) {
-            e.preventDefault();
-            await openModal();
-        }
-    });
 
     const closeModal = () => {
         modal.style.display = "none";
@@ -4222,7 +3812,14 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
         let colSoHieu = 1;      // Cột B (mặc định)
         let colTrangThai = 24;  // Cột Y (mặc định)
         let colViTri = 23;      // Cột X (mặc định)
+        let colBcPhat = 23;     // Cột X: Kết quả hiện tại -> Bưu cục phát
         let headerRowIdx = -1;
+
+        const extractPostmanFromBcPhat = (text) => {
+            if (!text) return '';
+            const m = String(text).match(/(?:Bưu|Buu)\s*(?:tá|ta)\s*:\s*(.*?)(?:\.\s*[ĐÐD]T\s*:|[ĐÐD]T\s*:|$)/i);
+            return m ? m[1].replace(/\.+$/, '').trim() : '';
+        };
 
         // Quét tìm hàng header thực sự trong 15 dòng đầu tiên
         for (let r = 0; r < Math.min(15, rawRows.length); r++) {
@@ -4309,6 +3906,39 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
                     }
                 }
             }
+            // 4. Xác định cột Bưu cục phát (ưu tiên cột thuộc nhóm "Kết quả hiện tại")
+            const subRow = rawRows[headerRowIdx + 1] || [];
+            const normCell = cell => String(cell || '').trim().toLowerCase();
+            const isBcPhat = s => s.includes('bưu cục phát') || s.includes('buu cuc phat');
+            const hasSubHeader = subRow.length > 0 && !normCell(subRow[colSoHieu]);
+            let foundBcPhat = false;
+            const kqIdx = hRow.findIndex(c => {
+                const s = normCell(c);
+                return s.includes('kết quả hiện tại') || s.includes('ket qua hien tai');
+            });
+            if (kqIdx !== -1 && hasSubHeader) {
+                for (let c = kqIdx; c < subRow.length; c++) {
+                    if (c > kqIdx && normCell(hRow[c]) !== '') break;
+                    if (isBcPhat(normCell(subRow[c]))) {
+                        colBcPhat = c;
+                        foundBcPhat = true;
+                        break;
+                    }
+                }
+            }
+            if (!foundBcPhat) {
+                for (const rScan of hasSubHeader ? [subRow, hRow] : [hRow]) {
+                    for (let c = rScan.length - 1; c >= 0; c--) {
+                        if (isBcPhat(normCell(rScan[c]))) {
+                            colBcPhat = c;
+                            foundBcPhat = true;
+                            break;
+                        }
+                    }
+                    if (foundBcPhat) break;
+                }
+            }
+            if (!foundBcPhat) colBcPhat = colTrangThai > 0 ? colTrangThai - 1 : 23;
         }
 
         const dataStartRow = headerRowIdx !== -1 ? headerRowIdx + 1 : 1;
@@ -4320,6 +3950,7 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
 
             let tt = String(row[colTrangThai] || '').trim();
             let vt = String(row[colViTri] || '').trim();
+            const bt = extractPostmanFromBcPhat(row[colBcPhat]);
 
             // Fallback 1: Nếu tt rỗng, kiểm tra các cột vị trí quen thuộc trong VNPost trace (24, 25, 23, 22, 26, 21)
             if (!tt) {
@@ -4368,7 +3999,7 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
                 }
             }
 
-            dinhViMap.set(soHieu, { tt, vt });
+            dinhViMap.set(soHieu, { tt, vt, bt });
         }
     }
 
@@ -4413,9 +4044,11 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
         const dvInfo = dinhViMap.get(maBG);
         let ttcc = '';
         let vtcc = '';
+        let btDinhVi = '';
         if (typeof dvInfo === 'object' && dvInfo !== null) {
             ttcc = dvInfo.tt || dvInfo.trangThai || '';
             vtcc = dvInfo.vt || dvInfo.viTri || '';
+            btDinhVi = dvInfo.bt || '';
         } else {
             ttcc = String(dvInfo || '').trim();
         }
@@ -4449,6 +4082,10 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
         const codVal = Number(getVal(item, ['COD', 'Tiền COD', 'Tien COD', 'Số tiền thu hộ', 'cod_amount'], 0)) || 0;
         const tlVal = Number(getVal(item, ['Trọng lượng', 'Khối lượng', 'TL', 'weight', 'TL_2'], 0)) || 0;
 
+        const rawBuuTa = String(getVal(item, ['Bưu tá phát', 'Bưu tá', 'postman_name', 'PostManName', 'Người ký nhận', 'Người nhận', 'Nguoi nhan'])).trim();
+        const isMissingBuuTa = !rawBuuTa || rawBuuTa === '-' || rawBuuTa.toLowerCase() === 'chưa phân tuyến';
+        const buuTaPhat = isMissingBuuTa ? (btDinhVi || rawBuuTa) : rawBuuTa;
+
         const rowData = {
             'Mã bưu gửi': maBG,
             'Mã BC phát': maBCHangTon,
@@ -4463,8 +4100,7 @@ async function processExcelLocTonInBrowser(hangtonFile, dinhViFile, onStage) {
             'Vị trí cuối cùng': effectiveLocation || vtcc,
             'Thời gian cập nhật': String(getVal(item, ['Thời gian quét', 'Thời gian cập nhật', 'TG quet', 'updated_at'])).trim(),
             'Thời gian quét': String(getVal(item, ['Thời gian quét', 'Thời gian cập nhật', 'TG quet', 'updated_at'])).trim(),
-            'Người ký nhận': String(getVal(item, ['Người ký nhận', 'Người nhận', 'Nguoi nhan', 'Bưu tá', 'postman_name'])).trim(),
-            'Bưu tá': String(getVal(item, ['Bưu tá', 'Người ký nhận', 'Người nhận', 'postman_name'])).trim(),
+            'Bưu tá phát': buuTaPhat,
             'Tiền COD': codVal,
             'COD': codVal,
             'Khối lượng': tlVal,
@@ -4778,17 +4414,7 @@ function setLoctonTab(tabNum) {
 
     [1, 2, 3].forEach(n => {
         const btn = document.getElementById(`tab-locton-${n}`);
-        if (btn) {
-            if (n === tabNum) {
-                btn.classList.add("active");
-                btn.style.color = "var(--accent-emerald)";
-                btn.style.borderBottom = "3px solid var(--accent-emerald)";
-            } else {
-                btn.classList.remove("active");
-                btn.style.color = "var(--text-muted)";
-                btn.style.borderBottom = "none";
-            }
-        }
+        if (btn) btn.classList.toggle("active", n === tabNum);
     });
 
     let currentSource = [];
@@ -4954,7 +4580,7 @@ function renderLoctonTable() {
                 <th>Trạng thái định vị</th>
                 <th>Vị trí cuối cùng</th>
                 <th style="width: 140px;">TG cập nhật</th>
-                <th>Người nhận</th>
+                <th>Bưu tá phát</th>
                 <th class="text-right" style="width: 110px;">Tiền COD</th>
                 <th class="text-right" style="width: 90px;">TL (g)</th>
             </tr>
@@ -4980,7 +4606,7 @@ function renderLoctonTable() {
                     <td><span class="badge" style="${statusBadgeClass} font-size: 11.5px; padding: 3px 8px; border-radius: 4px; font-weight: 600;">${r["Trạng thái hiện tại"] || r["Trạng thái cuối cùng"] || "Chưa có thông tin"}</span></td>
                     <td><span style="font-size: 12.5px; color: var(--text-primary); font-weight: 500;">${r["Vị trí cuối cùng"] || "-"}</span></td>
                     <td style="font-size: 12px; color: var(--text-muted);">${r["Thời gian cập nhật"] || r["Thời gian quét"] || ""}</td>
-                    <td>${r["Người ký nhận"] || r["Bưu tá"] || ""}</td>
+                    <td>${r["Bưu tá phát"] || r["Bưu tá"] || r["Người ký nhận"] || ""}</td>
                     <td class="text-right" style="font-weight: 600;">${formatCurrency(r["Tiền COD"] || r["COD"] || 0)}</td>
                     <td class="text-right">${formatNumber(r["Khối lượng"] || r["Trọng lượng"] || 0)}</td>
                 </tr>
@@ -5114,11 +4740,31 @@ function resetLoctonState() {
 let thongkeData = null;
 let thongkeChartTrend = null;
 let thongkeChartAge = null;
+let thongkeChartPostmen = null;
+let thongkeChartCustomer = null;
 let thongkeInited = false;
+
+// Trạng thái bộ lọc Drill-down tra cứu bưu gửi chi tiết
+let drilldownState = {
+    target_date: "",
+    pos_code: "",
+    pos_name: "",
+    postman_name: "",
+    loai_ton: "",
+    status_name: "",
+    nhom_kh: "",
+    search: "",
+    page: 1,
+    limit: 50,
+    total: 0,
+    total_pages: 1,
+    current_items: []
+};
 
 function initThongKeView() {
     if (!thongkeInited) {
         setupThongKeControls();
+        setupDrilldownControls();
         thongkeInited = true;
     }
     populateThongKeFilters();
@@ -5130,6 +4776,16 @@ function setupThongKeControls() {
     if (targetDateInput && !targetDateInput.value) {
         const todayStr = new Date().toISOString().split("T")[0];
         targetDateInput.value = todayStr;
+    }
+
+    const btnToday = document.getElementById("btn-thongke-today");
+    if (btnToday) {
+        btnToday.addEventListener("click", () => {
+            if (targetDateInput) {
+                targetDateInput.value = new Date().toISOString().split("T")[0];
+                loadThongKeData();
+            }
+        });
     }
 
     const btnApply = document.getElementById("btn-thongke-filter-apply");
@@ -5160,6 +4816,97 @@ function setupThongKeControls() {
     const matrixType = document.getElementById("thongke-matrix-type");
     if (matrixType) {
         matrixType.addEventListener("change", filterAndRenderThongKeMatrix);
+    }
+
+    // Health Card Quick Clicks -> Drilldown
+    const cardPostman = document.getElementById("thongke-kpi-card-postman");
+    if (cardPostman) {
+        cardPostman.addEventListener("click", () => {
+            openDrilldownModal({
+                status_name: "Đã giao cho bưu tá",
+                title: "Bưu gửi đang giao bưu tá phát (Tuyến phát)"
+            });
+        });
+    }
+
+    const cardCritical = document.getElementById("thongke-kpi-card-critical");
+    if (cardCritical) {
+        cardCritical.addEventListener("click", () => {
+            openDrilldownModal({
+                loai_ton: "≥7 ngày",
+                title: "Bưu gửi tồn nguy cấp (≥7 - 14 ngày - Ưu tiên xử lý)"
+            });
+        });
+    }
+}
+
+function setupDrilldownControls() {
+    const modal = document.getElementById("thongke-drilldown-modal");
+    const btnClose1 = document.getElementById("btn-close-drilldown-modal");
+    const btnClose2 = document.getElementById("btn-close-drilldown-footer");
+
+    const closeModal = () => {
+        if (modal) modal.style.display = "none";
+    };
+
+    if (btnClose1) btnClose1.addEventListener("click", closeModal);
+    if (btnClose2) btnClose2.addEventListener("click", closeModal);
+    if (modal) {
+        modal.addEventListener("click", (e) => {
+            if (e.target === modal) closeModal();
+        });
+    }
+
+    let searchTimeout = null;
+    const searchInput = document.getElementById("drilldown-search");
+    if (searchInput) {
+        searchInput.addEventListener("input", () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                drilldownState.search = searchInput.value.trim();
+                drilldownState.page = 1;
+                loadDrilldownData();
+            }, 300);
+        });
+    }
+
+    const filterAge = document.getElementById("drilldown-filter-age");
+    if (filterAge) {
+        filterAge.addEventListener("change", () => {
+            drilldownState.loai_ton = filterAge.value;
+            drilldownState.page = 1;
+            loadDrilldownData();
+        });
+    }
+
+    const btnCopyCodes = document.getElementById("btn-drilldown-copy-codes");
+    if (btnCopyCodes) {
+        btnCopyCodes.addEventListener("click", copyDrilldownCodes);
+    }
+
+    const btnExportExcel = document.getElementById("btn-drilldown-export-excel");
+    if (btnExportExcel) {
+        btnExportExcel.addEventListener("click", exportDrilldownExcel);
+    }
+
+    const btnPrev = document.getElementById("btn-drilldown-prev");
+    if (btnPrev) {
+        btnPrev.addEventListener("click", () => {
+            if (drilldownState.page > 1) {
+                drilldownState.page--;
+                loadDrilldownData();
+            }
+        });
+    }
+
+    const btnNext = document.getElementById("btn-drilldown-next");
+    if (btnNext) {
+        btnNext.addEventListener("click", () => {
+            if (drilldownState.page < drilldownState.total_pages) {
+                drilldownState.page++;
+                loadDrilldownData();
+            }
+        });
     }
 }
 
@@ -5219,7 +4966,7 @@ async function loadThongKeData() {
 
     const tbody = document.getElementById("thongke-matrix-tbody");
     if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="12" class="text-center text-muted" style="padding: 30px;"><i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px; color: var(--accent-emerald);"></i> Đang tính toán dữ liệu đối chiếu đa mốc thời gian...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="13" class="text-center text-muted" style="padding: 30px;"><i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px; color: var(--accent-emerald);"></i> Đang phân tích dữ liệu thống kê trực quan...</td></tr>`;
     }
 
     try {
@@ -5240,126 +4987,109 @@ async function loadThongKeData() {
         thongkeData = await res.json();
 
         // Render sections
-        renderThongKeKPIs(thongkeData.milestones);
-        renderThongKeCharts(thongkeData.timeline_trend, thongkeData.age_breakdown);
+        renderThongKeKPIs(thongkeData.milestones, thongkeData.kpi_summary);
+        renderThongKeCharts(
+            thongkeData.timeline_trend,
+            thongkeData.age_breakdown,
+            thongkeData.top_postmen,
+            thongkeData.customer_groups
+        );
         filterAndRenderThongKeMatrix();
 
     } catch (err) {
         console.error("Error loading ThongKe data:", err);
         showToast("Lỗi tải dữ liệu thống kê: " + err.message, "error");
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="12" class="text-center text-red" style="padding: 24px;"><i class="fa-solid fa-circle-exclamation"></i> Không thể tải dữ liệu: ${err.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="13" class="text-center text-red" style="padding: 24px;"><i class="fa-solid fa-circle-exclamation"></i> Không thể tải dữ liệu: ${err.message}</td></tr>`;
         }
     }
 }
 
-function renderThongKeKPIs(milestones) {
+function renderThongKeKPIs(milestones, kpiSummary) {
     if (!milestones) return;
 
-    const t = milestones.t || { qty: 0, cod: 0, date: "" };
-    const t1 = milestones.t_minus_1 || { qty: 0, cod: 0, diff_qty: 0, pct_qty: 0, diff_cod: 0 };
-    const t5 = milestones.t_minus_5 || { qty: 0, cod: 0, diff_qty: 0, pct_qty: 0, diff_cod: 0 };
-    const t7 = milestones.t_minus_7 || { qty: 0, cod: 0, diff_qty: 0, pct_qty: 0, diff_cod: 0 };
-    const t14 = milestones.t_minus_14 || { qty: 0, cod: 0, diff_qty: 0, pct_qty: 0, diff_cod: 0 };
+    const t = milestones.t || { qty: 0, cod: 0, weight: 0, date: "" };
+    const t1 = milestones.t1 || { qty: 0, cod: 0, diff_qty: 0, pct_qty: 0, diff_cod: 0 };
+    const summary = kpiSummary || {};
 
-    const fmt = n => (n || 0).toLocaleString("vi-VN");
+    const fmt = n => (Math.round(n) || 0).toLocaleString("vi-VN");
+    const fmtCodShort = n => {
+        const val = n || 0;
+        if (Math.abs(val) >= 1_000_000_000) {
+            return (val / 1_000_000_000).toFixed(2) + " Tỷ";
+        }
+        if (Math.abs(val) >= 1_000_000) {
+            return (val / 1_000_000).toFixed(1) + " Tr";
+        }
+        return fmt(val);
+    };
 
     function formatPill(diffQty, pctQty) {
         if (diffQty < 0) {
             return {
-                html: `<i class="fa-solid fa-arrow-down"></i> ${fmt(diffQty)} (${pctQty > 0 ? '-' : ''}${Math.abs(pctQty)}%)`,
-                style: `background: rgba(16, 185, 129, 0.15); color: #10b981;`
+                html: `<i class="fa-solid fa-arrow-down"></i> ${fmt(Math.abs(diffQty))} (-${Math.abs(pctQty)}%)`,
+                cls: "badge badge-delta-down"
             };
         } else if (diffQty > 0) {
             return {
                 html: `<i class="fa-solid fa-arrow-up"></i> +${fmt(diffQty)} (+${pctQty}%)`,
-                style: `background: rgba(239, 68, 68, 0.15); color: #ef4444;`
-            };
-        } else {
-            return {
-                html: `0 (0.0%)`,
-                style: `background: rgba(100, 116, 139, 0.15); color: var(--text-secondary);`
+                cls: "badge badge-delta-up"
             };
         }
+        return { html: `0 (0.0%)`, cls: "badge badge-delta-flat" };
     }
 
     function formatCodDiff(diffCod) {
         if (diffCod > 0) {
-            return `<span style="color: #ef4444;">+${fmt(diffCod)} đ (Tăng)</span>`;
+            return `<span class="delta-up">+${fmtCodShort(diffCod)} đ (Tăng)</span>`;
         } else if (diffCod < 0) {
-            return `<span style="color: #10b981;">${fmt(diffCod)} đ (Giảm)</span>`;
+            return `<span class="delta-down">-${fmtCodShort(Math.abs(diffCod))} đ (Giảm)</span>`;
         }
-        return `<span>0 đ</span>`;
+        return `<span class="text-muted">0 đ</span>`;
     }
 
-    // Card 1: T vs T-1
+    // Card 1: Tổng bưu gửi tồn & Biến động
     const badgeT1 = document.getElementById("thongke-kpi-badge-t1");
     const valT = document.getElementById("thongke-kpi-val-t");
     const valT1 = document.getElementById("thongke-kpi-val-t1");
-    const diffCodT1 = document.getElementById("thongke-kpi-diff-cod-t1");
+    const valWeight = document.getElementById("thongke-kpi-val-weight");
 
     if (valT) valT.textContent = `${fmt(t.qty)} bưu gửi`;
     if (valT1) valT1.textContent = `${fmt(t1.qty)} bg (${t1.date || 'T-1'})`;
     if (badgeT1) {
         const p1 = formatPill(t1.diff_qty, t1.pct_qty);
         badgeT1.innerHTML = p1.html;
-        badgeT1.style.cssText = `font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 12px; ${p1.style}`;
+        badgeT1.className = p1.cls;
+        badgeT1.removeAttribute("style");
     }
+    if (valWeight) valWeight.textContent = `${fmt(t.weight || summary.total_weight)} kg`;
+
+    // Card 2: Dòng tiền COD đọng
+    const valCod = document.getElementById("thongke-kpi-val-cod");
+    const diffCodT1 = document.getElementById("thongke-kpi-diff-cod-t1");
+    if (valCod) valCod.textContent = `${fmt(t.cod)} đ`;
     if (diffCodT1) diffCodT1.innerHTML = formatCodDiff(t1.diff_cod);
 
-    // Card 2: T vs T-5
-    const badgeT5 = document.getElementById("thongke-kpi-badge-t5");
-    const subvalT5 = document.getElementById("thongke-kpi-subval-t-5");
-    const valT5 = document.getElementById("thongke-kpi-val-t5");
-    const diffCodT5 = document.getElementById("thongke-kpi-diff-cod-t5");
+    // Card 3: Đang giao bưu tá phát
+    const valOnDelivery = document.getElementById("thongke-kpi-val-ondelivery");
+    const valFailed = document.getElementById("thongke-kpi-val-failed");
+    if (valOnDelivery) valOnDelivery.textContent = `${fmt(summary.on_delivery_qty || 0)} bưu gửi`;
+    if (valFailed) valFailed.textContent = `${fmt(summary.failed_delivery_qty || 0)} bg`;
 
-    if (subvalT5) subvalT5.textContent = `${fmt(t.qty)} bưu gửi`;
-    if (valT5) valT5.textContent = `${fmt(t5.qty)} bg (${t5.date || 'T-5'})`;
-    if (badgeT5) {
-        const p5 = formatPill(t5.diff_qty, t5.pct_qty);
-        badgeT5.innerHTML = p5.html;
-        badgeT5.style.cssText = `font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 12px; ${p5.style}`;
-    }
-    if (diffCodT5) diffCodT5.innerHTML = formatCodDiff(t5.diff_cod);
-
-    // Card 3: T vs T-7
-    const badgeT7 = document.getElementById("thongke-kpi-badge-t7");
-    const subvalT7 = document.getElementById("thongke-kpi-subval-t-7");
-    const valT7 = document.getElementById("thongke-kpi-val-t7");
-    const diffCodT7 = document.getElementById("thongke-kpi-diff-cod-t7");
-
-    if (subvalT7) subvalT7.textContent = `${fmt(t.qty)} bưu gửi`;
-    if (valT7) valT7.textContent = `${fmt(t7.qty)} bg (${t7.date || 'T-7'})`;
-    if (badgeT7) {
-        const p7 = formatPill(t7.diff_qty, t7.pct_qty);
-        badgeT7.innerHTML = p7.html;
-        badgeT7.style.cssText = `font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 12px; ${p7.style}`;
-    }
-    if (diffCodT7) diffCodT7.innerHTML = formatCodDiff(t7.diff_cod);
-
-    // Card 4: T vs T-14
-    const badgeT14 = document.getElementById("thongke-kpi-badge-t14");
-    const subvalT14 = document.getElementById("thongke-kpi-subval-t-14");
-    const valT14 = document.getElementById("thongke-kpi-val-t14");
-    const diffCodT14 = document.getElementById("thongke-kpi-diff-cod-t14");
-
-    if (subvalT14) subvalT14.textContent = `${fmt(t.qty)} bưu gửi`;
-    if (valT14) valT14.textContent = `${fmt(t14.qty)} bg (${t14.date || 'T-14'})`;
-    if (badgeT14) {
-        const p14 = formatPill(t14.diff_qty, t14.pct_qty);
-        badgeT14.innerHTML = p14.html;
-        badgeT14.style.cssText = `font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 12px; ${p14.style}`;
-    }
-    if (diffCodT14) diffCodT14.innerHTML = formatCodDiff(t14.diff_cod);
+    // Card 4: Tồn nguy cấp (≥7 - 14 ngày)
+    const valCritical = document.getElementById("thongke-kpi-val-critical");
+    if (valCritical) valCritical.textContent = `${fmt(summary.critical_age_qty || 0)} bưu gửi`;
 }
 
-function renderThongKeCharts(timelineTrend, ageBreakdown) {
+function renderThongKeCharts(timelineTrend, ageBreakdown, topPostmen, customerGroups) {
     if (typeof Chart === "undefined") {
         console.warn("Chart.js is not loaded yet.");
         return;
     }
 
-    // 1. Line Trend Chart
+    const fmt = n => (n || 0).toLocaleString("vi-VN");
+
+    // 1. Line Trend Chart (Xu hướng 14 ngày: Sản lượng & Tiền COD)
     const canvasTrend = document.getElementById("thongke-chart-trend");
     if (canvasTrend) {
         if (thongkeChartTrend) {
@@ -5371,37 +5101,65 @@ function renderThongKeCharts(timelineTrend, ageBreakdown) {
             const parts = item.date.split("-");
             return parts.length === 3 ? `${parts[2]}/${parts[1]}` : item.date;
         });
-        const dataValues = (timelineTrend || []).map(item => item.qty);
+        const qtyValues = (timelineTrend || []).map(item => item.qty);
+        const codValues = (timelineTrend || []).map(item => Math.round((item.cod || 0) / 1_000_000)); // Triệu đồng
 
         const ctxTrend = canvasTrend.getContext("2d");
         thongkeChartTrend = new Chart(ctxTrend, {
             type: "line",
             data: {
                 labels: labels,
-                datasets: [{
-                    label: "Số bưu gửi tồn",
-                    data: dataValues,
-                    borderColor: "#10b981",
-                    backgroundColor: "rgba(16, 185, 129, 0.12)",
-                    fill: true,
-                    tension: 0.35,
-                    borderWidth: 2.5,
-                    pointBackgroundColor: "#10b981",
-                    pointBorderColor: "#ffffff",
-                    pointBorderWidth: 1.5,
-                    pointRadius: 4,
-                    pointHoverRadius: 6
-                }]
+                datasets: [
+                    {
+                        label: "Sản lượng tồn (Bưu gửi)",
+                        data: qtyValues,
+                        borderColor: "#10b981",
+                        backgroundColor: "rgba(16, 185, 129, 0.12)",
+                        fill: true,
+                        tension: 0.35,
+                        borderWidth: 2.5,
+                        pointBackgroundColor: "#10b981",
+                        pointBorderColor: "#ffffff",
+                        pointBorderWidth: 1.5,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        yAxisID: "y"
+                    },
+                    {
+                        label: "Tiền COD đọng (Triệu đ)",
+                        data: codValues,
+                        borderColor: "#f59e0b",
+                        backgroundColor: "rgba(245, 158, 11, 0.2)",
+                        type: "bar",
+                        barPercentage: 0.45,
+                        borderRadius: 4,
+                        yAxisID: "y1"
+                    }
+                ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: "index",
+                    intersect: false
+                },
                 plugins: {
-                    legend: { display: false },
+                    legend: {
+                        display: true,
+                        position: "top",
+                        labels: {
+                            boxWidth: 12,
+                            font: { size: 11.5, weight: "600" }
+                        }
+                    },
                     tooltip: {
                         callbacks: {
                             label: function(ctx) {
-                                return ` Tồn: ${ctx.parsed.y.toLocaleString("vi-VN")} bưu gửi`;
+                                if (ctx.datasetIndex === 0) {
+                                    return ` Tồn: ${ctx.parsed.y.toLocaleString("vi-VN")} bưu gửi`;
+                                }
+                                return ` Tiền COD: ${(ctx.parsed.y).toLocaleString("vi-VN")} Triệu đ`;
                             }
                         }
                     }
@@ -5412,13 +5170,23 @@ function renderThongKeCharts(timelineTrend, ageBreakdown) {
                         ticks: { font: { size: 11 } }
                     },
                     y: {
-                        beginAtZero: false,
-                        grid: { color: "rgba(148, 163, 184, 0.15)" },
+                        type: "linear",
+                        display: true,
+                        position: "left",
+                        grid: { color: "rgba(148, 163, 184, 0.12)" },
                         ticks: {
                             font: { size: 11 },
-                            callback: function(val) {
-                                return val >= 1000 ? `${(val/1000).toFixed(1)}k` : val;
-                            }
+                            callback: val => val >= 1000 ? `${(val/1000).toFixed(1)}k` : val
+                        }
+                    },
+                    y1: {
+                        type: "linear",
+                        display: true,
+                        position: "right",
+                        grid: { drawOnChartArea: false },
+                        ticks: {
+                            font: { size: 11 },
+                            callback: val => `${val} Tr`
                         }
                     }
                 }
@@ -5436,7 +5204,21 @@ function renderThongKeCharts(timelineTrend, ageBreakdown) {
 
         const ageLabels = (ageBreakdown || []).map(a => a.loai_ton);
         const ageValues = (ageBreakdown || []).map(a => a.qty);
-        const palette = ["#10b981", "#3b82f6", "#f59e0b", "#ec4899", "#8b5cf6", "#64748b", "#ef4444"];
+
+        // Standardized visual logistics palette (zero violet/lavender)
+        const colorMap = {
+            "<1 ngày": "#0f766e",
+            "≥1 ngày": "#0d9488",
+            "≥1.5 ngày": "#0284c7",
+            "≥2 ngày": "#1d4ed8",
+            "≥3 ngày": "#ca8a04",
+            "≥4 ngày": "#d97706",
+            "≥5 ngày": "#ea580c",
+            "≥7 ngày": "#dc2626",
+            "≥14 ngày": "#991b1b"
+        };
+        const fallbackAgePalette = ["#0f766e", "#0284c7", "#475569", "#d97706", "#dc2626"];
+        const bgColors = ageLabels.map((lbl, idx) => colorMap[lbl] || fallbackAgePalette[idx % fallbackAgePalette.length]);
 
         const ctxAge = canvasAge.getContext("2d");
         thongkeChartAge = new Chart(ctxAge, {
@@ -5445,9 +5227,9 @@ function renderThongKeCharts(timelineTrend, ageBreakdown) {
                 labels: ageLabels,
                 datasets: [{
                     data: ageValues,
-                    backgroundColor: palette.slice(0, ageLabels.length),
+                    backgroundColor: bgColors,
                     borderWidth: 2,
-                    hoverOffset: 4
+                    hoverOffset: 6
                 }]
             },
             options: {
@@ -5459,7 +5241,7 @@ function renderThongKeCharts(timelineTrend, ageBreakdown) {
                         labels: {
                             boxWidth: 12,
                             font: { size: 11 },
-                            padding: 10
+                            padding: 8
                         }
                     },
                     tooltip: {
@@ -5468,12 +5250,161 @@ function renderThongKeCharts(timelineTrend, ageBreakdown) {
                                 const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
                                 const val = ctx.parsed;
                                 const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
-                                return ` ${ctx.label}: ${val.toLocaleString("vi-VN")} bg (${pct}%)`;
+                                return ` ${ctx.label}: ${fmt(val)} bg (${pct}%)`;
                             }
                         }
                     }
                 },
-                cutout: "60%"
+                cutout: "55%",
+                onClick: (evt, elements) => {
+                    if (elements && elements.length > 0) {
+                        const idx = elements[0].index;
+                        const selectedAge = ageLabels[idx];
+                        openDrilldownModal({
+                            loai_ton: selectedAge,
+                            title: `Bưu gửi tồn nhóm tuổi: ${selectedAge}`
+                        });
+                    }
+                }
+            }
+        });
+    }
+
+    // 3. Top 10 Bưu tá Horizontal Bar Chart
+    const canvasPostmen = document.getElementById("thongke-chart-postmen");
+    if (canvasPostmen) {
+        if (thongkeChartPostmen) {
+            thongkeChartPostmen.destroy();
+            thongkeChartPostmen = null;
+        }
+
+        const postmenList = (topPostmen || []).slice(0, 10);
+        const postmenNames = postmenList.map(p => p.postman_name);
+        const postmenQtys = postmenList.map(p => p.qty);
+
+        const ctxPostmen = canvasPostmen.getContext("2d");
+        thongkeChartPostmen = new Chart(ctxPostmen, {
+            type: "bar",
+            data: {
+                labels: postmenNames,
+                datasets: [{
+                    label: "Số bưu gửi tồn",
+                    data: postmenQtys,
+                    backgroundColor: "rgba(245, 158, 11, 0.75)",
+                    borderColor: "#f59e0b",
+                    borderWidth: 1.5,
+                    borderRadius: 5,
+                    hoverBackgroundColor: "#f59e0b"
+                }]
+            },
+            options: {
+                indexAxis: "y",
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: (ctx) => {
+                                const p = postmenList[ctx[0].dataIndex];
+                                return `${p.postman_name} (${p.pos_name || 'Bưu cục'})`;
+                            },
+                            label: (ctx) => {
+                                const p = postmenList[ctx.dataIndex];
+                                const codMil = ((p.cod_total || 0) / 1_000_000).toFixed(1);
+                                return [
+                                    ` Bưu gửi tồn: ${fmt(p.qty)}`,
+                                    ` Tiền COD đọng: ${codMil} Triệu đ`,
+                                    ` Phát thất bại: ${fmt(p.failed_qty)} đơn`
+                                ];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: "rgba(148, 163, 184, 0.12)" },
+                        ticks: { font: { size: 11 } }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { font: { size: 11.5, weight: "600" } }
+                    }
+                },
+                onClick: (evt, elements) => {
+                    if (elements && elements.length > 0) {
+                        const idx = elements[0].index;
+                        const p = postmenList[idx];
+                        openDrilldownModal({
+                            postman_name: p.postman_name,
+                            title: `Chi tiết bưu gửi - Bưu tá: ${p.postman_name} (${p.pos_name})`
+                        });
+                    }
+                }
+            }
+        });
+    }
+
+    // 4. Customer Groups Donut Chart
+    const canvasCustomer = document.getElementById("thongke-chart-customer");
+    if (canvasCustomer) {
+        if (thongkeChartCustomer) {
+            thongkeChartCustomer.destroy();
+            thongkeChartCustomer = null;
+        }
+
+        const custLabels = (customerGroups || []).map(c => c.nhom_kh);
+        const custQtys = (customerGroups || []).map(c => c.qty);
+        const palette = ["#0f766e", "#1d4ed8", "#d97706", "#be123c", "#0284c7", "#475569", "#15803d"];
+
+        const ctxCust = canvasCustomer.getContext("2d");
+        thongkeChartCustomer = new Chart(ctxCust, {
+            type: "doughnut",
+            data: {
+                labels: custLabels,
+                datasets: [{
+                    data: custQtys,
+                    backgroundColor: palette.slice(0, custLabels.length),
+                    borderWidth: 2,
+                    hoverOffset: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: "bottom",
+                        labels: {
+                            boxWidth: 12,
+                            font: { size: 11 },
+                            padding: 8
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                const val = ctx.parsed;
+                                const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                                const item = (customerGroups || [])[ctx.dataIndex];
+                                const codMil = ((item.cod_total || 0) / 1_000_000).toFixed(1);
+                                return ` ${ctx.label}: ${fmt(val)} bg (${pct}%) - COD: ${codMil} Tr`;
+                            }
+                        }
+                    }
+                },
+                cutout: "55%",
+                onClick: (evt, elements) => {
+                    if (elements && elements.length > 0) {
+                        const idx = elements[0].index;
+                        const c = (customerGroups || [])[idx];
+                        openDrilldownModal({
+                            nhom_kh: c.nhom_kh,
+                            title: `Bưu gửi thuộc nhóm: ${c.nhom_kh}`
+                        });
+                    }
+                }
             }
         });
     }
@@ -5505,11 +5436,12 @@ function renderThongKeMatrixRows(list) {
     if (!tbody) return;
 
     if (!list || list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="12" class="text-center text-muted" style="padding: 24px;">Không tìm thấy bưu cục nào phù hợp với bộ lọc tìm kiếm.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="13" class="text-center text-muted" style="padding: 24px;">Không tìm thấy bưu cục nào phù hợp với bộ lọc tìm kiếm.</td></tr>`;
         return;
     }
 
     const fmt = n => (n || 0).toLocaleString("vi-VN");
+    const maxQty = Math.max(...list.map(i => i.qty_t || 0), 1);
 
     const rowsHtml = list.map((item, idx) => {
         // Delta T-1 styling
@@ -5543,13 +5475,23 @@ function renderThongKeMatrixRows(list) {
             ? `<span style="background: rgba(16,185,129,0.12); color: #10b981; font-weight: 700; font-size: 11px; padding: 2px 6px; border-radius: 4px;">BCP</span>`
             : `<span style="background: rgba(59,130,246,0.12); color: #3b82f6; font-weight: 700; font-size: 11px; padding: 2px 6px; border-radius: 4px;">BCKT</span>`;
 
+        // Mini Data-Bar for visual load representation
+        const loadPct = Math.min(100, Math.round((item.qty_t / maxQty) * 100));
+
         return `
             <tr>
                 <td class="text-center" style="color: var(--text-muted); font-size: 12px;">${idx + 1}</td>
                 <td class="text-center" style="font-family: var(--font-mono); font-weight: 700; font-size: 12.5px;">${item.pos_code}</td>
                 <td style="font-weight: 600;">${item.pos_name}</td>
                 <td class="text-center">${typeBadge}</td>
-                <td class="text-right" style="font-family: var(--font-mono); font-weight: 800; color: var(--accent-emerald); font-size: 13.5px;">${fmt(item.qty_t)}</td>
+                <td class="text-right" style="position: relative; padding-right: 12px;">
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;">
+                        <span style="font-family: var(--font-mono); font-weight: 800; color: var(--accent-emerald); font-size: 13.5px;">${fmt(item.qty_t)}</span>
+                        <div style="width: 100px; height: 4px; background: rgba(16,185,129,0.15); border-radius: 2px; overflow: hidden;">
+                            <div style="width: ${loadPct}%; height: 100%; background: var(--accent-emerald); border-radius: 2px;"></div>
+                        </div>
+                    </div>
+                </td>
                 <td class="text-right" style="font-family: var(--font-mono);">${fmt(item.qty_t1)}</td>
                 <td class="text-center">${diffHtml}</td>
                 <td class="text-right" style="font-family: var(--font-mono); color: var(--text-secondary);">${fmt(item.qty_t5)}</td>
@@ -5557,11 +5499,223 @@ function renderThongKeMatrixRows(list) {
                 <td class="text-right" style="font-family: var(--font-mono); color: var(--text-secondary);">${fmt(item.qty_t14)}</td>
                 <td class="text-right" style="font-family: var(--font-mono); font-weight: 600; color: #f59e0b;">${fmt(item.cod_t)} đ</td>
                 <td class="text-center">${evalHtml}</td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="openDrilldownModal({ pos_code: '${item.pos_code}', pos_name: '${item.pos_name.replace(/'/g, "\\'")}' })" style="padding: 3px 8px; font-size: 11.5px; border-radius: 6px; font-weight: 600;" title="Xem danh sách bưu gửi của bưu cục này">
+                        <i class="fa-solid fa-list-ul"></i> Chi tiết
+                    </button>
+                </td>
             </tr>
         `;
     }).join("");
 
     tbody.innerHTML = rowsHtml;
+}
+
+// --- DRILL-DOWN MODAL LOGIC ---
+
+window.openDrilldownModal = function(params) {
+    const targetDateInput = document.getElementById("thongke-target-date");
+    const targetDate = targetDateInput ? targetDateInput.value : "";
+
+    drilldownState.target_date = targetDate;
+    drilldownState.pos_code = params.pos_code || "";
+    drilldownState.pos_name = params.pos_name || "";
+    drilldownState.postman_name = params.postman_name || "";
+    drilldownState.loai_ton = params.loai_ton || "";
+    drilldownState.status_name = params.status_name || "";
+    drilldownState.nhom_kh = params.nhom_kh || "";
+    drilldownState.search = "";
+    drilldownState.page = 1;
+
+    // Update modal title
+    const modal = document.getElementById("thongke-drilldown-modal");
+    const titleEl = document.getElementById("drilldown-modal-title");
+    const subtitleEl = document.getElementById("drilldown-modal-subtitle");
+    const searchInput = document.getElementById("drilldown-search");
+    const ageSelect = document.getElementById("drilldown-filter-age");
+
+    if (titleEl) {
+        titleEl.textContent = params.title || (drilldownState.pos_name ? `Bưu cục: ${drilldownState.pos_name}` : "Chi tiết bưu gửi tồn");
+    }
+    if (subtitleEl) {
+        let subText = `Ngày đối chiếu: ${drilldownState.target_date || 'Hôm nay'}`;
+        if (drilldownState.postman_name) subText += ` | Bưu tá: ${drilldownState.postman_name}`;
+        if (drilldownState.pos_code) subText += ` | Mã BC: ${drilldownState.pos_code}`;
+        subtitleEl.textContent = subText;
+    }
+    if (searchInput) searchInput.value = "";
+    if (ageSelect) ageSelect.value = drilldownState.loai_ton || "";
+
+    if (modal) modal.style.display = "flex";
+    loadDrilldownData();
+};
+
+async function loadDrilldownData() {
+    const tbody = document.getElementById("drilldown-table-tbody");
+    if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 24px;"><i class="fa-solid fa-spinner fa-spin" style="margin-right: 6px; color: var(--accent-emerald);"></i> Đang tải dữ liệu bưu gửi chi tiết...</td></tr>`;
+    }
+
+    try {
+        const queryParams = new URLSearchParams();
+        if (drilldownState.target_date) queryParams.set("target_date", drilldownState.target_date);
+        if (drilldownState.pos_code) queryParams.set("pos_code", drilldownState.pos_code);
+        if (drilldownState.postman_name) queryParams.set("postman_name", drilldownState.postman_name);
+        if (drilldownState.loai_ton) queryParams.set("loai_ton", drilldownState.loai_ton);
+        if (drilldownState.status_name) queryParams.set("status_name", drilldownState.status_name);
+        if (drilldownState.nhom_kh) queryParams.set("nhom_kh", drilldownState.nhom_kh);
+        if (drilldownState.search) queryParams.set("search", drilldownState.search);
+        queryParams.set("page", drilldownState.page);
+        queryParams.set("limit", drilldownState.limit);
+
+        const res = await fetch(`/api/thongke/drilldown?${queryParams.toString()}`, {
+            headers: getHeaders()
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        drilldownState.total = data.total || 0;
+        drilldownState.total_pages = data.total_pages || 1;
+        drilldownState.current_items = data.items || [];
+
+        renderDrilldownRows(data.items);
+        updateDrilldownPagination();
+
+    } catch (err) {
+        console.error("Error loading drilldown:", err);
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-red" style="padding: 20px;">Lỗi tải bưu gửi: ${err.message}</td></tr>`;
+        }
+    }
+}
+
+function renderDrilldownRows(items) {
+    const tbody = document.getElementById("drilldown-table-tbody");
+    if (!tbody) return;
+
+    if (!items || items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 24px;">Không tìm thấy bưu gửi nào thỏa mãn điều kiện lọc.</td></tr>`;
+        return;
+    }
+
+    const fmt = n => (n || 0).toLocaleString("vi-VN");
+    const startIndex = (drilldownState.page - 1) * drilldownState.limit;
+
+    const rowsHtml = items.map((item, idx) => {
+        let ageStyle = "background: rgba(100,116,139,0.15); color: var(--text-secondary);";
+        if (item.loai_ton.includes("≥14")) {
+            ageStyle = "background: rgba(239,68,68,0.18); color: #ef4444; font-weight: 700;";
+        } else if (item.loai_ton.includes("≥7")) {
+            ageStyle = "background: rgba(249,115,22,0.18); color: #ea580c; font-weight: 700;";
+        } else if (item.loai_ton.includes("≥3") || item.loai_ton.includes("≥4") || item.loai_ton.includes("≥5")) {
+            ageStyle = "background: rgba(245,158,11,0.18); color: #d97706; font-weight: 600;";
+        } else if (item.loai_ton.includes("<1")) {
+            ageStyle = "background: rgba(16,185,129,0.15); color: #10b981; font-weight: 600;";
+        }
+
+        return `
+            <tr>
+                <td class="text-center" style="color: var(--text-muted); font-size: 12px;">${startIndex + idx + 1}</td>
+                <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-blue); font-size: 12.5px;">${item.item_code}</td>
+                <td>${item.pos_name}</td>
+                <td style="font-weight: 600;">${item.postman_name}</td>
+                <td class="text-center">
+                    <span style="font-size: 11px; padding: 2px 7px; border-radius: 10px; ${ageStyle}">${item.loai_ton || '--'}</span>
+                </td>
+                <td style="font-size: 12.5px; color: var(--text-secondary);">${item.status_name}</td>
+                <td><span style="font-size: 11.5px; background: rgba(59,130,246,0.1); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px;">${item.nhom_kh || 'Khác'}</span></td>
+                <td class="text-right" style="font-family: var(--font-mono); font-weight: 700; color: #f59e0b;">${fmt(item.cod_amount)} đ</td>
+            </tr>
+        `;
+    }).join("");
+
+    tbody.innerHTML = rowsHtml;
+}
+
+function updateDrilldownPagination() {
+    const infoEl = document.getElementById("drilldown-pagination-info");
+    const indicatorEl = document.getElementById("drilldown-page-indicator");
+    const btnPrev = document.getElementById("btn-drilldown-prev");
+    const btnNext = document.getElementById("btn-drilldown-next");
+
+    const start = drilldownState.total > 0 ? (drilldownState.page - 1) * drilldownState.limit + 1 : 0;
+    const end = Math.min(drilldownState.page * drilldownState.limit, drilldownState.total);
+
+    if (infoEl) {
+        infoEl.textContent = `Hiển thị: ${start} - ${end} / Tổng ${drilldownState.total.toLocaleString("vi-VN")} bưu gửi`;
+    }
+    if (indicatorEl) {
+        indicatorEl.textContent = `${drilldownState.page} / ${drilldownState.total_pages}`;
+    }
+    if (btnPrev) btnPrev.disabled = (drilldownState.page <= 1);
+    if (btnNext) btnNext.disabled = (drilldownState.page >= drilldownState.total_pages);
+}
+
+function copyDrilldownCodes() {
+    if (!drilldownState.current_items || drilldownState.current_items.length === 0) {
+        showToast("Không có mã bưu gửi nào để sao chép", "warning");
+        return;
+    }
+    const codes = drilldownState.current_items.map(i => i.item_code).join("\n");
+    navigator.clipboard.writeText(codes).then(() => {
+        showToast(`Đã sao chép ${drilldownState.current_items.length} mã bưu gửi vào clipboard!`, "success");
+    }).catch(e => {
+        showToast("Không thể sao chép: " + e.message, "error");
+    });
+}
+
+async function exportDrilldownExcel() {
+    const btn = document.getElementById("btn-drilldown-export-excel");
+    const origHtml = btn ? btn.innerHTML : "";
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Xuất Excel...`;
+    }
+
+    try {
+        const queryParams = new URLSearchParams();
+        if (drilldownState.target_date) queryParams.set("target_date", drilldownState.target_date);
+        if (drilldownState.pos_code) queryParams.set("pos_code", drilldownState.pos_code);
+        if (drilldownState.postman_name) queryParams.set("postman_name", drilldownState.postman_name);
+        if (drilldownState.loai_ton) queryParams.set("loai_ton", drilldownState.loai_ton);
+        if (drilldownState.status_name) queryParams.set("status_name", drilldownState.status_name);
+        if (drilldownState.nhom_kh) queryParams.set("nhom_kh", drilldownState.nhom_kh);
+        if (drilldownState.search) queryParams.set("search", drilldownState.search);
+
+        const res = await fetch(`/api/thongke/drilldown/export?${queryParams.toString()}`, {
+            headers: getHeaders()
+        });
+
+        if (!res.ok) {
+            const errText = await res.text().catch(() => "");
+            throw new Error(`HTTP ${res.status}: ${errText.slice(0, 100)}`);
+        }
+
+        const blob = await res.blob();
+        const filename = `Chi_tiet_buu_gui_ton_${drilldownState.target_date || 'hom_nay'}.xlsx`;
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        showToast("Đã tải xuống file Excel danh sách bưu gửi thành công!", "success");
+    } catch (err) {
+        console.error("Lỗi xuất Excel Drilldown:", err);
+        showToast("Lỗi xuất Excel: " + err.message, "error");
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    }
 }
 
 async function exportThongKeExcel() {
