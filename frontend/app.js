@@ -3343,6 +3343,11 @@ let loctonFilterStatus = "";
 let loctonFilterCOD = "";
 let loctonCurrentPage = 1;
 let loctonPageSize = 50;
+let loctonSortState = {
+    1: { col: null, dir: 'desc' },
+    2: { col: null, dir: 'desc' },
+    3: { col: 'Tổng tồn', dir: 'desc' }
+};
 let isLoctonInitialized = false;
 
 function initLoctonView() {
@@ -3528,6 +3533,26 @@ function initLoctonView() {
             renderLoctonTable();
         });
     }
+
+    // Header click-to-sort delegation cho bảng Lọc tồn (Bảng 1, 2, 3)
+    const loctonThead = document.getElementById("locton-thead");
+    if (loctonThead) {
+        loctonThead.addEventListener("click", (e) => {
+            const th = e.target.closest("th.sortable[data-sort-col]");
+            if (!th) return;
+            const col = th.dataset.sortCol;
+            const type = th.dataset.sortType || "text";
+            const st = loctonSortState[loctonActiveTab];
+            if (st.col === col) {
+                st.dir = st.dir === "asc" ? "desc" : "asc";
+            } else {
+                st.col = col;
+                st.dir = (type === "number" || type === "age" || type === "date") ? "desc" : "asc";
+            }
+            loctonCurrentPage = 1;
+            renderLoctonTable();
+        });
+    }
 }
 
 const LOCTON_EXCLUDE_STATUSES = new Set([
@@ -3587,6 +3612,71 @@ function sortLoctonRows(rows) {
         const bcB = String(b['Mã bưu cục'] || b['Mã BC phát'] || b['Mã BC'] || '');
         return bcB.localeCompare(bcA, undefined, { numeric: true });
     });
+}
+
+function parseLoctonDateMs(val) {
+    if (!val) return 0;
+    const s = String(val).trim();
+    const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (dmy) {
+        const year = dmy[3].length === 2 ? 2000 + Number(dmy[3]) : Number(dmy[3]);
+        return new Date(year, Number(dmy[2]) - 1, Number(dmy[1]), Number(dmy[4] || 0), Number(dmy[5] || 0), Number(dmy[6] || 0)).getTime() || 0;
+    }
+    const ts = Date.parse(s);
+    return Number.isNaN(ts) ? 0 : ts;
+}
+
+function getLoctonSortValue(row, col) {
+    switch (col) {
+        case 'ma_bc': return row['Mã BC phát'] || row['Mã bưu cục'] || row['Mã BC'] || '';
+        case 'ten_bc': return row['Tên BC phát'] || row['Bưu cục Phát'] || row['Tên bưu cục'] || '';
+        case 'ngay_den': return row['Ngày đến BC phát'] || row['DK1'] || '';
+        case 'tg_ton': return row['Thời gian tồn'] || '';
+        case 'trang_thai': return row['Trạng thái hiện tại'] || row['Trạng thái cuối cùng'] || '';
+        case 'vi_tri': return row['Vị trí cuối cùng'] || '';
+        case 'tg_cap_nhat': return row['Thời gian cập nhật'] || row['Thời gian quét'] || '';
+        case 'buu_ta': return row['Bưu tá phát'] || row['Bưu tá'] || row['Người ký nhận'] || '';
+        case 'cod': return Number(row['Tiền COD'] !== undefined ? row['Tiền COD'] : (row['COD'] || 0)) || 0;
+        case 'tl': return Number(row['Khối lượng'] !== undefined ? row['Khối lượng'] : (row['Trọng lượng'] || 0)) || 0;
+        default: return row[col] !== undefined && row[col] !== null ? row[col] : '';
+    }
+}
+
+function sortLoctonDisplayRows(rows, tab, sortState) {
+    if (!sortState || !sortState.col) {
+        return (tab === 1 || tab === 2) ? sortLoctonRows(rows) : [...rows];
+    }
+    const { col, dir } = sortState;
+    const mult = dir === 'asc' ? 1 : -1;
+    const numericCols = new Set([
+        'cod', 'tl', 'SL Tồn 3N', 'Tiền COD 3N', 'SL Tồn 5N', 'Tiền COD 5N',
+        'SL Tồn 7N', 'Tiền COD 7N', 'SL Tồn 14N', 'Tiền COD 14N', 'Tổng tồn', 'Tổng tiền COD'
+    ]);
+    const isTotalRowFn = r => String(r['Mã BC']).includes('TOÀN TỈNH') || r['Mã BC'] === 'TONG' || r['Mã BC'] === '67';
+
+    const compare = (a, b) => {
+        const va = getLoctonSortValue(a, col);
+        const vb = getLoctonSortValue(b, col);
+        if (col === 'tg_ton') {
+            return (getThoiGianTonWeight(va) - getThoiGianTonWeight(vb)) * mult;
+        }
+        if (col === 'ngay_den' || col === 'tg_cap_nhat') {
+            const da = parseLoctonDateMs(va);
+            const db = parseLoctonDateMs(vb);
+            if (da !== db) return (da - db) * mult;
+        }
+        if (numericCols.has(col)) {
+            return ((Number(va) || 0) - (Number(vb) || 0)) * mult;
+        }
+        return String(va).localeCompare(String(vb), 'vi', { numeric: true, sensitivity: 'base' }) * mult;
+    };
+
+    if (tab === 3) {
+        const pinned = rows.filter(isTotalRowFn);
+        const rest = rows.filter(r => !isTotalRowFn(r)).sort(compare);
+        return [...pinned, ...rest];
+    }
+    return [...rows].sort(compare);
 }
 
 function hasTargetBcPrefix(vt) {
@@ -4496,10 +4586,8 @@ function renderLoctonTable() {
         return true;
     });
 
-    // Luôn đảm bảo sắp xếp theo thứ tự: Thời gian tồn giảm dần -> Tiền COD giảm dần -> Mã BC giảm dần
-    if (loctonActiveTab === 1 || loctonActiveTab === 2) {
-        filtered = sortLoctonRows(filtered);
-    }
+    // Sắp xếp theo cột người dùng chọn (hoặc mặc định cho Bảng 1 & 2)
+    filtered = sortLoctonDisplayRows(filtered, loctonActiveTab, loctonSortState[loctonActiveTab]);
 
     const totalRows = filtered.length;
     const totalPages = Math.ceil(totalRows / loctonPageSize) || 1;
@@ -4521,23 +4609,33 @@ function renderLoctonTable() {
     if (btnPrev) btnPrev.disabled = loctonCurrentPage <= 1;
     if (btnNext) btnNext.disabled = loctonCurrentPage >= totalPages;
 
+    const renderSortTh = (label, col, type = 'text', cls = '', style = '') => {
+        const st = loctonSortState[loctonActiveTab];
+        const isActive = st && st.col === col;
+        const icon = isActive ? (st.dir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort';
+        const activeStyle = isActive ? 'opacity: 1; color: var(--accent-emerald);' : '';
+        const classAttr = cls ? `sortable ${cls}` : 'sortable';
+        const styleAttr = style ? ` style="${style}"` : '';
+        return `<th class="${classAttr}" data-sort-col="${col}" data-sort-type="${type}"${styleAttr}>${label} <i class="fa-solid ${icon}" style="${activeStyle}"></i></th>`;
+    };
+
     // Render Headers & Rows theo Tab
     if (loctonActiveTab === 3) {
         thead.innerHTML = `
             <tr>
                 <th style="width: 50px;" class="text-center">STT</th>
-                <th style="width: 100px;">Mã BC</th>
-                <th>Tên bưu cục</th>
-                <th class="text-right">SL 3N</th>
-                <th class="text-right">Tiền COD 3N</th>
-                <th class="text-right">SL 5N</th>
-                <th class="text-right">Tiền COD 5N</th>
-                <th class="text-right">SL 7N</th>
-                <th class="text-right">Tiền COD 7N</th>
-                <th class="text-right">SL 14N</th>
-                <th class="text-right">Tiền COD 14N</th>
-                <th class="text-right" style="color: var(--accent-emerald); font-weight: 700;">Tổng tồn</th>
-                <th class="text-right" style="color: var(--accent-emerald); font-weight: 700;">Tổng COD</th>
+                ${renderSortTh('Mã BC', 'Mã BC', 'text', '', 'width: 100px;')}
+                ${renderSortTh('Tên bưu cục', 'Tên bưu cục', 'text')}
+                ${renderSortTh('SL 3N', 'SL Tồn 3N', 'number', 'text-right')}
+                ${renderSortTh('Tiền COD 3N', 'Tiền COD 3N', 'number', 'text-right')}
+                ${renderSortTh('SL 5N', 'SL Tồn 5N', 'number', 'text-right')}
+                ${renderSortTh('Tiền COD 5N', 'Tiền COD 5N', 'number', 'text-right')}
+                ${renderSortTh('SL 7N', 'SL Tồn 7N', 'number', 'text-right')}
+                ${renderSortTh('Tiền COD 7N', 'Tiền COD 7N', 'number', 'text-right')}
+                ${renderSortTh('SL 14N', 'SL Tồn 14N', 'number', 'text-right')}
+                ${renderSortTh('Tiền COD 14N', 'Tiền COD 14N', 'number', 'text-right')}
+                ${renderSortTh('Tổng tồn', 'Tổng tồn', 'number', 'text-right', 'color: var(--accent-emerald); font-weight: 700;')}
+                ${renderSortTh('Tổng COD', 'Tổng tiền COD', 'number', 'text-right', 'color: var(--accent-emerald); font-weight: 700;')}
             </tr>
         `;
 
@@ -4572,17 +4670,17 @@ function renderLoctonTable() {
         thead.innerHTML = `
             <tr>
                 <th style="width: 50px;" class="text-center">STT</th>
-                <th style="width: 140px;">Mã bưu gửi</th>
-                <th style="width: 90px;">Mã BC</th>
-                <th>Tên bưu cục phát</th>
-                <th style="width: 110px;">Ngày đến BC</th>
-                <th style="width: 100px;">TG tồn</th>
-                <th>Trạng thái định vị</th>
-                <th>Vị trí cuối cùng</th>
-                <th style="width: 140px;">TG cập nhật</th>
-                <th>Bưu tá phát</th>
-                <th class="text-right" style="width: 110px;">Tiền COD</th>
-                <th class="text-right" style="width: 90px;">TL (g)</th>
+                ${renderSortTh('Mã bưu gửi', 'Mã bưu gửi', 'text', '', 'width: 140px;')}
+                ${renderSortTh('Mã BC', 'ma_bc', 'text', '', 'width: 90px;')}
+                ${renderSortTh('Tên bưu cục phát', 'ten_bc', 'text')}
+                ${renderSortTh('Ngày đến BC', 'ngay_den', 'date', '', 'width: 110px;')}
+                ${renderSortTh('TG tồn', 'tg_ton', 'age', '', 'width: 100px;')}
+                ${renderSortTh('Trạng thái định vị', 'trang_thai', 'text')}
+                ${renderSortTh('Vị trí cuối cùng', 'vi_tri', 'text')}
+                ${renderSortTh('TG cập nhật', 'tg_cap_nhat', 'date', '', 'width: 140px;')}
+                ${renderSortTh('Bưu tá phát', 'buu_ta', 'text')}
+                ${renderSortTh('Tiền COD', 'cod', 'number', 'text-right', 'width: 110px;')}
+                ${renderSortTh('TL (g)', 'tl', 'number', 'text-right', 'width: 90px;')}
             </tr>
         `;
 
@@ -4697,6 +4795,11 @@ function resetLoctonState() {
     loctonFilterStatus = "";
     loctonFilterCOD = "";
     loctonCurrentPage = 1;
+    loctonSortState = {
+        1: { col: null, dir: 'desc' },
+        2: { col: null, dir: 'desc' },
+        3: { col: 'Tổng tồn', dir: 'desc' }
+    };
 
     const inputHangton = document.getElementById("input-locton-hangton");
     const labelHangton = document.getElementById("label-locton-hangton");
